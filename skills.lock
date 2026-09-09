@@ -1,0 +1,13 @@
+{
+  "lockfileVersion": 1,
+  "skills": {
+    "safe-weather-reporter": {
+      "name": "safe-weather-reporter",
+      "version": "1.0.0",
+      "source": "fixtures/safe-skill.md",
+      "sha256": "ee67a0a40c9b33590e52a5befa04605bffc34280b2dc4cfc775c49256bbb99e2",
+      "installedAt": "2026-09-09T04:18:20.839Z",
+      "verifiedScore": 100
+    }
+  }
+}
