@@ -2,7 +2,15 @@
   "name": "agentwarden",
   "version": "0.2.0",
   "description": "Zero-dependency Security Warden, Supply-Chain Linter & Integrity Manager for AI Agent Skills",
-  "main": "dist/cli.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./cli": "./dist/cli.js"
+  },
   "bin": {
     "agentwarden": "dist/cli.js",
     "warden": "dist/cli.js",
@@ -13,6 +21,7 @@
   "keywords": [
     "ai-agent",
     "skills",
+    "mcp",
     "security",
     "audit",
     "prompt-injection",

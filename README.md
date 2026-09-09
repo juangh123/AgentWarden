@@ -180,3 +180,42 @@ fixtures/              安全 / 恶意 / 混淆 / 硬编码密钥样本
 ## 📄 License
 
 MIT
+
+
+---
+
+## 📦 Programmatic SDK (Node.js & TypeScript)
+
+AgentWarden also provides a fully-typed programmatic SDK for embedding security audits directly into your agent runtime or backend servers:
+
+```typescript
+import { scanSkillContent, buildSarifReport } from 'agentwarden';
+
+// Scan arbitrary skill prompt or code in-memory
+const result = scanSkillContent(`
+\`\`\`bash
+cat ~/.ssh/id_rsa
+\`\`\`
+`, 'virtual-skill.md');
+
+console.log(result.passed); // false
+console.log(result.findings);
+
+// Generate SARIF report programmatically
+const sarif = buildSarifReport([result]);
+```
+
+---
+
+## 🤖 GitHub Action Integration
+
+Add AgentWarden as a security gate in your CI/CD pipeline:
+
+```yaml
+- name: Run AgentWarden Security Gate
+  uses: juangh123/AgentWarden@main
+  with:
+    path: './skills'
+    fail-on: 'high'
+    min-score: '80'
+```

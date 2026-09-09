@@ -9,6 +9,51 @@ export function renderScanReport(result: ScanResult, format: ReportFormat = 'pre
   renderScanReports([result], format);
 }
 
+export function buildSarifReport(results: ScanResult[]) {
+  const allFindings = results.flatMap(r => r.findings);
+  const ruleIds = Array.from(new Set(allFindings.map(f => f.ruleId)));
+  return {
+    $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+    version: '2.1.0',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'AgentWarden',
+            informationUri: 'https://github.com/juangh123/AgentWarden',
+            version: readPackageVersion(),
+            rules: ruleIds.map(id => {
+              const sample = allFindings.find(f => f.ruleId === id);
+              return {
+                id,
+                name: sample?.title || id,
+                shortDescription: { text: sample?.title || id },
+                fullDescription: { text: sample?.description || '' },
+                defaultConfiguration: {
+                  level: sample?.severity === 'critical' || sample?.severity === 'high' ? 'error' : sample?.severity === 'medium' ? 'warning' : 'note'
+                }
+              };
+            })
+          }
+        },
+        results: allFindings.map(f => ({
+          ruleId: f.ruleId,
+          level: f.severity === 'critical' || f.severity === 'high' ? 'error' : f.severity === 'medium' ? 'warning' : 'note',
+          message: { text: f.description },
+          locations: [
+            {
+              physicalLocation: {
+                artifactLocation: { uri: results.find(r => r.findings.includes(f))?.filePath || 'unknown' },
+                region: { startLine: f.line || 1 }
+              }
+            }
+          ]
+        }))
+      }
+    ]
+  };
+}
+
 export function renderScanReports(results: ScanResult[], format: ReportFormat = 'pretty'): void {
   if (format === 'json') {
     if (results.length === 1) {

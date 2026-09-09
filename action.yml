@@ -1,0 +1,30 @@
+name: AgentWarden Security Gate
+
+description: 'Scan and gate AI Agent skills and MCP configurations against prompt injections and supply chain risks'
+author: 'juangh123'
+
+inputs:
+  path:
+    description: 'Path or pattern to skills or MCP configs to scan'
+    required: false
+    default: '.'
+  fail-on:
+    description: 'Failure severity threshold: critical, high, medium, low'
+    required: false
+    default: 'high'
+  min-score:
+    description: 'Minimum required security score (0-100)'
+    required: false
+    default: '80'
+  sarif:
+    description: 'Path to write SARIF output report for GitHub Security Tab'
+    required: false
+    default: 'agentwarden-results.sarif'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run AgentWarden Scanner
+      shell: bash
+      run: |
+        npx --yes agentwarden scan ${{ inputs.path }} --fail-on ${{ inputs.fail-on }} --min-score ${{ inputs.min-score }} --sarif > ${{ inputs.sarif }}

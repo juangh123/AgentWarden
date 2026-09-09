@@ -1,6 +1,8 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
-export type FindingCategory = 'credential' | 'destructive_command' | 'prompt_injection' | 'exfiltration';
+export type FindingCategory = 'credential' | 'destructive_command' | 'prompt_injection' | 'exfiltration' | 'mcp_misconfig';
+
+export type SkillKind = 'skill' | 'mcp' | 'agent-instruction';
 
 export interface CodeBlock {
   language: string;
@@ -17,6 +19,13 @@ export interface ParsedSkill {
   promptText: string;
   codeBlocks: CodeBlock[];
   rawContent: string;
+  kind?: SkillKind;
+  mcpServers?: Array<{
+    name: string;
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>;
 }
 
 export interface Finding {
