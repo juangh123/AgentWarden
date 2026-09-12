@@ -57,6 +57,10 @@ const VALUE_OPTIONS = new Set([
   'exclude',
   'baseline',
   'output',
+  'owner',
+  'note',
+  'expires-in',
+  'expires-at',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'force',
@@ -336,6 +340,10 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--fail-on-diff')}         Exit 1 when policy diff detects changes
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
   ${chalk.yellow('--output <file>')}        Baseline output path (default: ${DEFAULT_BASELINE_NAME})
+  ${chalk.yellow('--owner <name>')}         Baseline review owner or team
+  ${chalk.yellow('--expires-in <days>')}    Expire a new baseline after 1-3650 days
+  ${chalk.yellow('--expires-at <date>')}    Explicit baseline expiry date
+  ${chalk.yellow('--note <text>')}          Baseline review note
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
   ${chalk.yellow('--no-color')}             Disable ANSI colors (also honors NO_COLOR env)
   ${chalk.yellow('--no-redact')}            Include raw snippets and file content in reports
@@ -747,6 +755,32 @@ function cmdUninstall(name: string, format: ReportFormat): void {
   }
 }
 
+function resolveBaselineExpiry(options: ParsedArgs['options']): string | undefined {
+  const expiresIn = options['expires-in'];
+  const expiresAt = options['expires-at'];
+  if (expiresIn !== undefined && expiresAt !== undefined) {
+    usageError('Use either --expires-in or --expires-at, not both');
+  }
+
+  if (expiresIn !== undefined) {
+    const days = Number(expiresIn);
+    if (!Number.isFinite(days) || days < 1 || days > 3650) {
+      usageError(`Invalid --expires-in "${String(expiresIn)}" (expected 1-3650 days)`);
+    }
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  if (expiresAt !== undefined) {
+    const timestamp = Date.parse(String(expiresAt));
+    if (!Number.isFinite(timestamp)) {
+      usageError(`Invalid --expires-at "${String(expiresAt)}" (expected ISO date)`);
+    }
+    return new Date(timestamp).toISOString();
+  }
+
+  return undefined;
+}
+
 function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: ReportFormat): void {
   const config = buildConfig(options, true);
   const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
@@ -759,7 +793,12 @@ function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: 
   }
 
   const results = files.map((file) => scanSkillFile(file, config));
-  const baseline = createBaseline(results);
+  const expiresAt = resolveBaselineExpiry(options);
+  const baseline = createBaseline(results, process.cwd(), {
+    owner: options.owner !== undefined ? String(options.owner) : undefined,
+    expiresAt,
+    note: options.note !== undefined ? String(options.note) : undefined,
+  });
   const output = String(options.output || DEFAULT_BASELINE_NAME);
   const resolvedOutput = path.resolve(process.cwd(), output);
 
@@ -790,6 +829,8 @@ function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: 
   console.log(chalk.green.bold(`\n✓ Baseline created: ${resolvedOutput}`));
   console.log(`  Files: ${files.length}`);
   console.log(`  Accepted findings: ${baseline.entries.length}`);
+  if (baseline.review?.owner) console.log(`  Review owner: ${baseline.review.owner}`);
+  if (baseline.review?.expiresAt) console.log(`  Expires at: ${baseline.review.expiresAt}`);
   console.log(chalk.gray('  Enable it with --baseline <file> or the "baseline" config field.\n'));
 }
 

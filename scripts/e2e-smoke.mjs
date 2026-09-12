@@ -159,6 +159,77 @@ check(
 r = run(['-C', tmp, 'baseline', 'malicious-skill.md', '--output', 'baseline.json', '--json']);
 check('baseline refuses implicit overwrite', r.status === 1, `status=${r.status}`);
 
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'malicious-skill.md',
+  '--output',
+  'reviewed-baseline.json',
+  '--owner',
+  'security-platform',
+  '--expires-in',
+  '30',
+  '--note',
+  'Accepted during credential migration.',
+  '--json',
+]);
+const reviewedBaseline = JSON.parse(r.stdout).baseline;
+check(
+  'baseline command records review metadata',
+  r.status === 0 &&
+    reviewedBaseline.baselineVersion === 2 &&
+    reviewedBaseline.review?.owner === 'security-platform' &&
+    reviewedBaseline.review?.expiresAt &&
+    reviewedBaseline.review?.note === 'Accepted during credential migration.',
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'scan', 'malicious-skill.md', '--baseline', 'reviewed-baseline.json', '--json']);
+check(
+  'active reviewed baseline suppresses findings',
+  r.status === 0 && JSON.parse(r.stdout).baseline?.expired === false,
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'malicious-skill.md',
+  '--output',
+  'expired-baseline.json',
+  '--expires-at',
+  '2020-01-01T00:00:00.000Z',
+  '--json',
+]);
+check('expired baseline can be generated explicitly', r.status === 0, `status=${r.status}`);
+r = run(['-C', tmp, 'scan', 'malicious-skill.md', '--baseline', 'expired-baseline.json', '--json']);
+const expiredBaselineScan = JSON.parse(r.stdout);
+check(
+  'expired baseline stops suppressing findings',
+  r.status === 1 &&
+    expiredBaselineScan.baseline?.expired === true &&
+    expiredBaselineScan.findings.length > 0 &&
+    expiredBaselineScan.suppressedFindings.length === 0,
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'malicious-skill.md',
+  '--output',
+  'invalid-baseline.json',
+  '--expires-in',
+  '30',
+  '--expires-at',
+  '2030-01-01',
+  '--json',
+]);
+check('baseline rejects conflicting expiry options', r.status === 2, `status=${r.status}`);
+
 r = run(['-C', tmp, 'rules', '--json']);
 const rulesJson = JSON.parse(r.stdout);
 check('rules catalog lists security rules', r.status === 0 && rulesJson.count >= 10, `status=${r.status}`);

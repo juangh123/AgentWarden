@@ -127,9 +127,19 @@ export function renderScanReports(
     console.log(`• File Path:    ${chalk.gray(result.filePath)}`);
     console.log(`• SHA256:       ${chalk.gray(result.sha256.slice(0, 16) + '...')}`);
     if (result.baseline) {
+      const expiredLabel = result.baseline.expired
+        ? chalk.red.bold('EXPIRED') + ', '
+        : '';
+      const expiryLabel = result.baseline.expiresAt
+        ? `, expires ${result.baseline.expiresAt}`
+        : '';
+      const ownerLabel = result.baseline.owner
+        ? `, owner ${result.baseline.owner}`
+        : '';
       console.log(
         `• Baseline:     ${chalk.gray(result.baseline.path)} ` +
-          `(${chalk.yellow(String(result.baseline.suppressed))} accepted, ${chalk.gray(String(result.baseline.unmatched) + ' unmatched')})`,
+          `(${expiredLabel}${chalk.yellow(String(result.baseline.suppressed))} accepted, ` +
+          `${chalk.gray(String(result.baseline.unmatched) + ' unmatched')}${expiryLabel}${ownerLabel})`,
       );
     }
 
@@ -138,6 +148,9 @@ export function renderScanReports(
     console.log(chalk.gray('═'.repeat(60)));
 
     if (result.findings.length === 0) {
+      if (result.baseline?.expired) {
+        console.log(chalk.yellow.bold('\n⚠️  [WARNING] The configured baseline has expired; current findings are no longer suppressed.\n'));
+      }
       if (result.baseline && result.baseline.suppressed > 0) {
         console.log(
           chalk.green.bold(

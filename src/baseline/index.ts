@@ -6,6 +6,7 @@ import { calculateScore, passesPolicy } from '../scanner/scoring.ts';
 
 export const DEFAULT_BASELINE_NAME = '.agentwarden-baseline.json';
 const VALID_SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+const MAX_REVIEW_NOTE_LENGTH = 500;
 
 export interface BaselineEntry {
   fingerprint: string;
@@ -15,10 +16,27 @@ export interface BaselineEntry {
   severity: Severity;
 }
 
+export interface BaselineReview {
+  reviewedAt: string;
+  owner?: string;
+  expiresAt?: string;
+  note?: string;
+}
+
+export type BaselineVersion = 1 | 2;
+
 export interface BaselineSchema {
-  baselineVersion: 1;
+  baselineVersion: BaselineVersion;
   createdAt: string;
+  review?: BaselineReview;
   entries: BaselineEntry[];
+}
+
+export interface CreateBaselineOptions {
+  owner?: string;
+  expiresAt?: string | Date;
+  note?: string;
+  reviewedAt?: string | Date;
 }
 
 export interface ApplyBaselineOptions {
@@ -26,6 +44,7 @@ export interface ApplyBaselineOptions {
   cwd?: string;
   failOn?: Severity;
   minScore?: number;
+  now?: string | Date;
 }
 
 function toBaselinePath(filePath: string, cwd: string): string {
@@ -58,7 +77,44 @@ function fingerprintsForResult(result: ScanResult, cwd: string): string[] {
   });
 }
 
-export function createBaseline(results: ScanResult[], cwd: string = process.cwd()): BaselineSchema {
+function normalizeTimestamp(value: string | Date, field: string): string {
+  const timestamp = value instanceof Date ? value.getTime() : Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    throw new Error(`Invalid baseline review ${field}: expected an ISO date`);
+  }
+  return new Date(timestamp).toISOString();
+}
+
+function cleanReviewText(value: string | undefined, field: string): string | undefined {
+  if (value === undefined) return undefined;
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  if (!cleaned) return undefined;
+  if (cleaned.length > MAX_REVIEW_NOTE_LENGTH) {
+    throw new Error(`Invalid baseline review ${field}: maximum length is ${MAX_REVIEW_NOTE_LENGTH}`);
+  }
+  return cleaned;
+}
+
+function createReview(options: CreateBaselineOptions): BaselineReview {
+  const owner = cleanReviewText(options.owner, 'owner');
+  const note = cleanReviewText(options.note, 'note');
+  return {
+    reviewedAt: options.reviewedAt
+      ? normalizeTimestamp(options.reviewedAt, 'reviewedAt')
+      : new Date().toISOString(),
+    ...(owner ? { owner } : {}),
+    ...(options.expiresAt
+      ? { expiresAt: normalizeTimestamp(options.expiresAt, 'expiresAt') }
+      : {}),
+    ...(note ? { note } : {}),
+  };
+}
+
+export function createBaseline(
+  results: ScanResult[],
+  cwd: string = process.cwd(),
+  options: CreateBaselineOptions = {},
+): BaselineSchema {
   const entries: BaselineEntry[] = [];
 
   for (const result of results) {
@@ -75,8 +131,9 @@ export function createBaseline(results: ScanResult[], cwd: string = process.cwd(
   }
 
   return {
-    baselineVersion: 1,
+    baselineVersion: 2,
     createdAt: new Date().toISOString(),
+    review: createReview(options),
     entries: entries.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint)),
   };
 }
@@ -94,8 +151,33 @@ function parseBaseline(raw: string, baselinePath: string): BaselineSchema {
   }
 
   const candidate = parsed as Partial<BaselineSchema>;
-  if (candidate.baselineVersion !== 1 || !Array.isArray(candidate.entries) || typeof candidate.createdAt !== 'string') {
+  if (
+    (candidate.baselineVersion !== 1 && candidate.baselineVersion !== 2) ||
+    !Array.isArray(candidate.entries) ||
+    typeof candidate.createdAt !== 'string'
+  ) {
     throw new Error(`Invalid baseline at ${baselinePath}: unsupported schema.`);
+  }
+
+  if (candidate.baselineVersion === 2) {
+    const review = candidate.review;
+    if (!review || typeof review !== 'object' || Array.isArray(review) || typeof review.reviewedAt !== 'string') {
+      throw new Error(`Invalid baseline at ${baselinePath}: review metadata is malformed.`);
+    }
+    try {
+      normalizeTimestamp(review.reviewedAt, 'reviewedAt');
+      if (review.expiresAt !== undefined) normalizeTimestamp(review.expiresAt, 'expiresAt');
+      cleanReviewText(review.owner, 'owner');
+      cleanReviewText(review.note, 'note');
+    } catch (error) {
+      throw new Error(`Invalid baseline at ${baselinePath}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (
+      (review.owner !== undefined && typeof review.owner !== 'string') ||
+      (review.note !== undefined && typeof review.note !== 'string')
+    ) {
+      throw new Error(`Invalid baseline at ${baselinePath}: review metadata is malformed.`);
+    }
   }
 
   for (const [index, entry] of candidate.entries.entries()) {
@@ -131,8 +213,9 @@ export function writeBaseline(
 ): string {
   const resolvedPath = path.resolve(cwd, filePath);
   const sorted: BaselineSchema = {
-    baselineVersion: 1,
+    baselineVersion: baseline.baselineVersion,
     createdAt: baseline.createdAt,
+    ...(baseline.review ? { review: { ...baseline.review } } : {}),
     entries: [...baseline.entries].sort((a, b) => a.fingerprint.localeCompare(b.fingerprint)),
   };
   fs.writeFileSync(resolvedPath, JSON.stringify(sorted, null, 2) + '\n', 'utf8');
@@ -146,6 +229,29 @@ export function applyBaseline(
 ): ScanResult {
   const baselinePath = options.baselinePath ?? DEFAULT_BASELINE_NAME;
   const cwd = options.cwd ?? process.cwd();
+  const now = options.now ? normalizeTimestamp(options.now, 'now') : new Date().toISOString();
+  const expiresAt = baseline.review?.expiresAt;
+  const expired = expiresAt !== undefined && Date.parse(now) >= Date.parse(expiresAt);
+
+  if (expired) {
+    const metadata: BaselineMetadata = {
+      path: baselinePath,
+      suppressed: 0,
+      unmatched: baseline.entries.length,
+      expired: true,
+      expiresAt,
+      ...(baseline.review?.owner ? { owner: baseline.review.owner } : {}),
+    };
+    return {
+      ...result,
+      findings: result.findings,
+      suppressedFindings: [],
+      baseline: metadata,
+      score: calculateScore(result.findings),
+      passed: passesPolicy(result.findings, options.failOn, options.minScore),
+    };
+  }
+
   const fingerprints = new Set(baseline.entries.map((entry) => entry.fingerprint));
   const currentFingerprints = fingerprintsForResult(result, cwd);
   const suppressedFindings: Finding[] = [];
@@ -166,6 +272,9 @@ export function applyBaseline(
     path: baselinePath,
     suppressed: suppressedFindings.length,
     unmatched: baseline.entries.length - matched.size,
+    expired: false,
+    ...(expiresAt ? { expiresAt } : {}),
+    ...(baseline.review?.owner ? { owner: baseline.review.owner } : {}),
   };
 
   return {

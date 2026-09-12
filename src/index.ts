@@ -6,8 +6,12 @@ export {
   readBaseline,
   writeBaseline,
   applyBaseline,
+  type ApplyBaselineOptions,
   type BaselineEntry,
+  type BaselineReview,
   type BaselineSchema,
+  type BaselineVersion,
+  type CreateBaselineOptions,
 } from './baseline/index.ts';
 export { parseSkillMarkdown } from './parser/skillParser.ts';
 export { allRules } from './rules/index.ts';

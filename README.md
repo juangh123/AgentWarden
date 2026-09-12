@@ -19,7 +19,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
 - 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills 与常见 MCP 配置，并可通过 `include` / `exclude` glob 精确限定审计范围。
-- 🧱 **可审计基线**：用稳定指纹接受既有告警，同时继续阻断新发现；基线不保存原始敏感片段。
+- 🧱 **可审计基线**：用稳定指纹接受既有告警，支持责任人、审核备注和过期时间；过期后自动恢复阻断，基线不保存原始敏感片段。
 - 🕶️ **默认安全报告**：JSON、SARIF 与终端输出自动隐藏密钥、认证头、私钥、敏感配置值和原始文件内容。
 - 🧩 **规则治理**：查看完整规则目录，并按规则覆盖有效严重级别，无需修改源码或直接关闭规则。
 
@@ -86,6 +86,7 @@ node dist/cli.js scan . --config .agentwarden/policy.json
 
 # 生成或应用已接受发现的基线
 node dist/cli.js baseline skills/ --output .agentwarden-baseline.json
+node dist/cli.js baseline skills/ --owner security-platform --expires-in 30 --note "Migration tracked in SEC-142"
 node dist/cli.js scan skills/ --baseline .agentwarden-baseline.json
 
 # 帮助与版本
@@ -110,6 +111,10 @@ node dist/cli.js --version
 | `--fail-on-diff` | `policy diff` 检测到差异时返回退出码 `1` |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
 | `--output <file>` | `baseline` 命令输出路径（默认 `.agentwarden-baseline.json`） |
+| `--owner <name>` | 基线责任人、团队或审核工单标识 |
+| `--expires-in <days>` | 新建基线在指定天数后过期，范围 `1-3650` |
+| `--expires-at <date>` | 使用 ISO 日期显式设置基线过期时间 |
+| `--note <text>` | 保存简短审核备注，最多 500 字符 |
 | `--no-redact` | 在报告中保留原始片段和完整文件内容，仅用于受信任的本地调试 |
 | `-C, --cwd <dir>` | 指定工作目录（lockfile 与相对路径均基于该目录解析） |
 | `--no-color` | 关闭 ANSI 颜色（同时遵循 `NO_COLOR` 环境变量） |
@@ -222,12 +227,17 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 
 ```bash
 agentwarden baseline skills/ --output .agentwarden-baseline.json
+agentwarden baseline skills/ --owner security-platform --expires-in 30 --note "SEC-142 migration"
 agentwarden scan skills/ --baseline .agentwarden-baseline.json
 ```
 
 指纹由规则、类别、级别、规范化文件路径和规范化告警片段共同生成，因此普通行号移动不会导致基线失效，但规则内容、文件位置或匹配片段变化后必须重新审查。基线仅保存 SHA-256 指纹、规则 ID、文件、行号和级别，不保存原始敏感片段。
 
 基线不会自动启用。必须通过 `--baseline <file>` 或配置项 `baseline` 显式指定；覆盖已有基线必须使用 `--force`。
+
+基线 v2 会在 `review` 中保存审核时间、`owner`、可选 `expiresAt` 和审核备注。超过 `expiresAt` 后，该基线不再抑制任何发现，所有当前告警重新进入策略判断，因此 CI 会自动恢复阻断。旧版 v1 基线仍可读取和应用，但不会过期。
+
+审核备注会原样写入基线文件，不应包含密钥、Token 或其他敏感数据。扫描报告只投影 `owner`、`expiresAt` 和过期状态，不包含备注正文。
 
 ### 报告脱敏
 
@@ -328,7 +338,11 @@ const policyDelta = diffPolicyConfigs(POLICY_PROFILES.legacy, POLICY_PROFILES.st
 console.log(policyDelta.changes);
 
 // Build and apply a baseline in memory or persist it with writeBaseline()
-const baseline = createBaseline(results);
+const baseline = createBaseline(results, process.cwd(), {
+  owner: 'security-platform',
+  expiresAt: '2026-12-31T23:59:59.000Z',
+  note: 'Temporary migration exemption',
+});
 const newResults = results.map((result) => applyBaseline(result, baseline));
 
 // SARIF reports are redacted by default; pass { redact: false } only for trusted local tooling.

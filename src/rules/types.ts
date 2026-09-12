@@ -70,4 +70,7 @@ export interface BaselineMetadata {
   path: string;
   suppressed: number;
   unmatched: number;
+  expired?: boolean;
+  expiresAt?: string;
+  owner?: string;
 }
