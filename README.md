@@ -14,9 +14,12 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
   - 破坏性命令执行检测（`rm -rf`、反弹 Shell、无头脚本下载执行 `curl | sh`、`eval`/`base64 -d | bash` 解码执行链）
   - 提示词越狱检测（系统角色覆盖、Jailbreak 词库、编码混淆载荷）
   - 隐蔽数据偷放与反向链接识别（Raw IP 外带、webhook.site 等数据收集端点、本地文件上传）
-- 🔒 **完整性指纹锁定 (`skills.lock`)**：类比 `package-lock.json`，记录 SHA-256 签名与安全得分，一键审计本地文件篡改。
+- 🔒 **完整性指纹锁定 (`skills.lock`)**：类比 `package-lock.json`，记录 SHA-256 签名与安全得分，一键审计本地文件篡改；锁文件损坏或字段缺失会直接报错，不会静默降级为空。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
 - 🎛️ **策略化配置**：`.wardenrc.json / .skillguardrc.json` 支持 `failOn` 阈值、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
+- 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills，以及 `.mcp.json`、`.cursor/mcp.json`、`.vscode/mcp.json` 等常见 MCP 配置。
+- 🧱 **可审计基线**：用稳定指纹接受既有告警，同时继续阻断新发现；基线不保存原始敏感片段。
+- 🕶️ **默认安全报告**：JSON、SARIF 与终端输出自动隐藏密钥、认证头、私钥、敏感配置值和原始文件内容。
 
 ---
 
@@ -44,6 +47,7 @@ npm run smoke
 # 扫描单个 Skill 文件或整个目录（支持多个路径）
 node dist/cli.js scan fixtures/malicious-skill.md
 node dist/cli.js scan fixtures/ --format sarif
+node dist/cli.js scan . --json
 node dist/cli.js scan a.md b.md --json
 
 # 以 JSON / SARIF 导出（适配 CI/CD 与 GitHub Code Scanning）
@@ -57,12 +61,16 @@ node dist/cli.js install fixtures/safe-skill.md --force   # 跳过阻断，强�
 # 校验单个技能文件是否与 lockfile 匹配
 node dist/cli.js verify fixtures/safe-skill.md
 
-# 全局审计所有已安装技能的本地完整性
+# 审计所有已安装技能的本地完整性，并按当前策略重新扫描
 node dist/cli.js audit
 
 # 查看已安装列表 / 卸载
 node dist/cli.js list
 node dist/cli.js uninstall safe-weather-reporter
+
+# 生成或应用已接受发现的基线
+node dist/cli.js baseline skills/ --output .agentwarden-baseline.json
+node dist/cli.js scan skills/ --baseline .agentwarden-baseline.json
 
 # 帮助与版本
 node dist/cli.js help
@@ -78,6 +86,9 @@ node dist/cli.js --version
 | `--fail-on <sev>` | 判定失败的严重级别阈值：`critical`/`high`/`medium`/`low`/`info`（默认 `high`） |
 | `--min-score <0-100>` | 最低安全得分（默认 `60`） |
 | `--ignore-rule <id>` | 跳过指定规则，可重复传入 |
+| `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
+| `--output <file>` | `baseline` 命令输出路径（默认 `.agentwarden-baseline.json`） |
+| `--no-redact` | 在报告中保留原始片段和完整文件内容，仅用于受信任的本地调试 |
 | `-C, --cwd <dir>` | 指定工作目录（lockfile 与相对路径均基于该目录解析） |
 | `--no-color` | 关闭 ANSI 颜色（同时遵循 `NO_COLOR` 环境变量） |
 
@@ -86,7 +97,7 @@ node dist/cli.js --version
 | 退出码 | 含义 |
 | :--- | :--- |
 | `0` | 扫描通过 / 操作成功 |
-| `1` | 存在安全风险（扫描未通过、校验篡改、安装阻断） |
+| `1` | 存在安全风险（扫描未通过、校验篡改、当前策略失败、安装阻断） |
 | `2` | 用法错误 / 文件不存在 / 非法参数 |
 
 ---
@@ -100,7 +111,8 @@ node dist/cli.js --version
   "failOn": "medium",
   "minScore": 75,
   "ignoreRules": ["SEC-INJ-002"],
-  "allowedDomains": ["api.open-meteo.com", "company-internal.example"]
+  "allowedDomains": ["api.open-meteo.com", "company-internal.example"],
+  "baseline": ".agentwarden-baseline.json"
 }
 ```
 
@@ -108,6 +120,7 @@ node dist/cli.js --version
 - `minScore`：得分低于该值即失败（0-100，自动收敛）。
 - `ignoreRules`：按规则 ID 忽略检测（例如误报豁免）。
 - `allowedDomains`：网络类规则的域名白名单（含子域名匹配）；命中白名单的 URL 不会被 `SEC-EXFIL-002` 等外带规则标记。
+- `baseline`：显式启用发现基线；不存在或格式损坏时会直接失败，不会静默忽略。
 
 配置文件非法或缺失字段时自动回退到默认值（`failOn: high`、`minScore: 60`），不会中断运行。
 
@@ -129,6 +142,39 @@ node dist/cli.js --version
 | `SEC-INJ-003` | 提示词安全 | MEDIUM | 编码 / 混淆载荷标记（atob、fromCharCode、hex 转义） |
 | `SEC-EXFIL-001` | 网络安全 | CRITICAL | 异常数据外带或反弹连接尝试 |
 | `SEC-EXFIL-002` | 网络安全 | HIGH | 数据收集端点（webhook.site 等）或本地文件上传外带 |
+| `SEC-MCP-001` | MCP 配置 | CRITICAL | MCP Server 使用原始 shell、下载器或未固定版本包运行 |
+| `SEC-MCP-002` | MCP 配置 | HIGH | MCP 配置在 `env` 中硬编码明文密钥 |
+| `SEC-MCP-003` | MCP 配置 | HIGH | MCP JSON 无法解析或缺少有效 Server 映射 |
+| `SEC-SUPPLY-001` | 供应链 | HIGH | 未校验哈希便下载并执行远程脚本 |
+| `SEC-SUPPLY-002` | 供应链 | MEDIUM | 指向仿冒官方仓库或下载源的相似域名 |
+
+目录扫描会跳过 `node_modules`、`dist`、`.git` 等构建/版本目录；除已列入白名单的 `.cursor`、`.vscode`、`.claude`、`.codex` 外，不会深入隐藏目录。显式传入的文件无论扩展名如何都会被扫描。
+
+`audit` 同时执行两层检查：锁文件 SHA-256 完整性，以及按当前配置重新扫描后的安全策略。即使用 `install --force` 锁定了高风险技能，只要内容未改但策略检查失败，`audit` 仍会返回退出码 `1`。
+
+### 扫描基线
+
+基线用于接受经过审查的既有发现，适合在已有大型 Skill 仓库中逐步接入安全门禁：
+
+```bash
+agentwarden baseline skills/ --output .agentwarden-baseline.json
+agentwarden scan skills/ --baseline .agentwarden-baseline.json
+```
+
+指纹由规则、类别、级别、规范化文件路径和规范化告警片段共同生成，因此普通行号移动不会导致基线失效，但规则内容、文件位置或匹配片段变化后必须重新审查。基线仅保存 SHA-256 指纹、规则 ID、文件、行号和级别，不保存原始敏感片段。
+
+基线不会自动启用。必须通过 `--baseline <file>` 或配置项 `baseline` 显式指定；覆盖已有基线必须使用 `--force`。
+
+### 报告脱敏
+
+报告默认脱敏，避免安全扫描结果本身泄露凭证：
+
+- API Key、GitHub/OpenAI/Slack/AWS/JWT 等常见 Token 会被替换为 `[REDACTED]`。
+- `Authorization`、Bearer/Basic Token、URL 内嵌密码和敏感 key/value 会被隐藏。
+- 私钥内容以及没有结束标记的私钥头会被替换。
+- `rawContent`、`promptText` 和代码内容会经过脱敏后再进入 JSON/SARIF。
+
+仅在受信任的本地调试环境下使用 `--no-redact`。CI 日志、Issue、SARIF 上传和共享终端输出不应关闭脱敏。
 
 ---
 
@@ -162,7 +208,9 @@ echo "exit code: $?"   # 0=通过 1=存在风险 2=用法错误
 ```text
 src/
   cli.ts               CLI 入口与参数解析（命令、选项、退出码）
+  baseline/            发现基线生成、校验、应用与稳定指纹
   scanner/             扫描编排与评分
+  reporter/redaction.ts 报告脱敏与安全输出投影
   parser/              Markdown / Frontmatter 解析
   rules/               安全规则实现（credentials / commands / injection / exfiltration）
   manifest/            skills.lock 读写与路径解析
@@ -177,19 +225,18 @@ fixtures/              安全 / 恶意 / 混淆 / 硬编码密钥样本
 
 构建产物为真实编译的 CommonJS-free ESM JavaScript，`dist/cli.js` 直接可执行；源代码使用 Node 原生 TypeScript 支持，测试无需额外运行时。
 
-## 📄 License
-
-MIT
-
-
----
-
 ## 📦 Programmatic SDK (Node.js & TypeScript)
 
 AgentWarden also provides a fully-typed programmatic SDK for embedding security audits directly into your agent runtime or backend servers:
 
 ```typescript
-import { scanSkillContent, buildSarifReport } from 'agentwarden';
+import {
+  scanSkillContent,
+  scanSkillPaths,
+  createBaseline,
+  applyBaseline,
+  buildSarifReport,
+} from 'agentwarden';
 
 // Scan arbitrary skill prompt or code in-memory
 const result = scanSkillContent(`
@@ -201,8 +248,16 @@ cat ~/.ssh/id_rsa
 console.log(result.passed); // false
 console.log(result.findings);
 
-// Generate SARIF report programmatically
-const sarif = buildSarifReport([result]);
+// Discover and scan Markdown skills plus MCP JSON configs from disk
+const results = scanSkillPaths('./skills');
+console.log(`Scanned ${results.length} assets`);
+
+// Build and apply a baseline in memory or persist it with writeBaseline()
+const baseline = createBaseline(results);
+const newResults = results.map((result) => applyBaseline(result, baseline));
+
+// SARIF reports are redacted by default; pass { redact: false } only for trusted local tooling.
+const sarif = buildSarifReport(newResults);
 ```
 
 ---
@@ -218,4 +273,12 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
     path: './skills'
     fail-on: 'high'
     min-score: '80'
+    baseline: '.agentwarden-baseline.json'
+    node-version: '22'
 ```
+
+---
+
+## 📄 License
+
+MIT

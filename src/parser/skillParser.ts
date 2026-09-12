@@ -4,7 +4,7 @@ function parseMcpJson(raw: string, defaultName: string): ParsedSkill {
   let parsed: any;
   try {
     parsed = JSON.parse(raw);
-  } catch {
+  } catch (err) {
     return {
       name: defaultName || 'invalid-mcp-json',
       description: 'Malformed MCP JSON configuration',
@@ -14,15 +14,19 @@ function parseMcpJson(raw: string, defaultName: string): ParsedSkill {
       codeBlocks: [],
       rawContent: raw,
       kind: 'mcp',
+      parseError: err instanceof Error ? err.message : String(err),
     };
   }
 
-  const serversObj = parsed?.mcpServers || parsed?.servers || {};
+  const serversObj = parsed?.mcpServers || parsed?.servers || parsed?.mcp?.servers || {};
+  const hasServersObject =
+    serversObj !== null && typeof serversObj === 'object' && !Array.isArray(serversObj);
+  const safeServersObj = hasServersObject ? serversObj : {};
   const mcpServers: ParsedSkill['mcpServers'] = [];
   const codeBlocks: CodeBlock[] = [];
   let lineCounter = 1;
 
-  for (const [serverName, srv] of Object.entries<any>(serversObj)) {
+  for (const [serverName, srv] of Object.entries<any>(safeServersObj)) {
     const command = typeof srv?.command === 'string' ? srv.command : '';
     const args = Array.isArray(srv?.args) ? srv.args.map((a: any) => String(a)) : [];
     const env = (srv?.env && typeof srv.env === 'object') ? srv.env : {};
@@ -51,20 +55,26 @@ function parseMcpJson(raw: string, defaultName: string): ParsedSkill {
 
   return {
     name: parsed?.name || defaultName || 'mcp-server-config',
-    description: parsed?.description || `MCP Server configuration defining ${Object.keys(serversObj).length} server(s)`,
+    description: parsed?.description || `MCP Server configuration defining ${Object.keys(safeServersObj).length} server(s)`,
     version: parsed?.version || '1.0.0',
     frontmatter: {},
     promptText: JSON.stringify(serversObj, null, 2),
     codeBlocks,
     rawContent: raw,
     kind: 'mcp',
+    parseError: hasServersObject
+      ? undefined
+      : 'MCP configuration must define an object at "mcpServers", "servers", or "mcp.servers".',
     mcpServers,
   };
 }
 
 export function parseSkillMarkdown(content: string, defaultName: string = 'Unnamed-Skill'): ParsedSkill {
   const trimmed = content.trim();
-  if (trimmed.startsWith('{') && (trimmed.includes('"mcpServers"') || trimmed.includes('"servers"'))) {
+  if (
+    trimmed.startsWith('{') &&
+    (trimmed.includes('"mcpServers"') || trimmed.includes('"servers"') || trimmed.includes('"mcp"'))
+  ) {
     return parseMcpJson(content, defaultName);
   }
 

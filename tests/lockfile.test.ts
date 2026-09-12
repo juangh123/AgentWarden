@@ -38,4 +38,22 @@ describe('lockfile', () => {
     assert.equal(removeLockfileSkill('DEMO', dir), false);
     assert.equal(readLockfile(dir).skills.Demo, undefined);
   });
+
+  it('rejects malformed lockfiles instead of treating them as empty', () => {
+    const dir = tempDir();
+    fs.writeFileSync(path.join(dir, LOCKFILE_NAME), '{"skills":', 'utf8');
+
+    assert.throws(() => readLockfile(dir), /Invalid skills\.lock JSON/);
+  });
+
+  it('rejects lock entries with missing integrity fields', () => {
+    const dir = tempDir();
+    fs.writeFileSync(
+      path.join(dir, LOCKFILE_NAME),
+      JSON.stringify({ lockfileVersion: 1, skills: { demo: { name: 'demo', source: 'demo.md' } } }),
+      'utf8',
+    );
+
+    assert.throws(() => readLockfile(dir), /entry "demo" has missing or invalid fields/);
+  });
 });

@@ -2,16 +2,41 @@ import * as path from 'node:path';
 import { chalk } from './chalk.ts';
 import type { ScanResult } from '../rules/types.ts';
 import { readPackageVersion } from '../version.ts';
+import {
+  toReportScanResult,
+  toReportScanResults,
+  type ReportOptions,
+} from './redaction.ts';
 
 export type ReportFormat = 'pretty' | 'json' | 'sarif';
+export { toReportScanResult, toReportScanResults, redactText } from './redaction.ts';
+export type { ReportOptions } from './redaction.ts';
 
-export function renderScanReport(result: ScanResult, format: ReportFormat = 'pretty'): void {
-  renderScanReports([result], format);
+export function renderScanReport(
+  result: ScanResult,
+  format: ReportFormat = 'pretty',
+  options: ReportOptions = {},
+): void {
+  renderScanReports([result], format, options);
 }
 
-export function buildSarifReport(results: ScanResult[]) {
-  const allFindings = results.flatMap(r => r.findings);
+function toArtifactUri(filePath: string): string {
+  const rel = path.isAbsolute(filePath) ? path.relative(process.cwd(), filePath) : filePath;
+  const uri = (rel && !rel.startsWith('..') ? rel : filePath).replace(/\\/g, '/');
+  return uri || 'unknown';
+}
+
+export function buildSarifReport(results: ScanResult[], options: ReportOptions = {}) {
+  const reportResults = toReportScanResults(results, options);
+  const allFindings = reportResults.flatMap(r => r.findings);
   const ruleIds = Array.from(new Set(allFindings.map(f => f.ruleId)));
+  const ruleIndexById = new Map(ruleIds.map((id, index) => [id, index]));
+  const levelFor = (severity: string): 'error' | 'warning' | 'note' => {
+    if (severity === 'critical' || severity === 'high') return 'error';
+    if (severity === 'medium') return 'warning';
+    return 'note';
+  };
+
   return {
     $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
     version: '2.1.0',
@@ -30,126 +55,105 @@ export function buildSarifReport(results: ScanResult[]) {
                 shortDescription: { text: sample?.title || id },
                 fullDescription: { text: sample?.description || '' },
                 defaultConfiguration: {
-                  level: sample?.severity === 'critical' || sample?.severity === 'high' ? 'error' : sample?.severity === 'medium' ? 'warning' : 'note'
-                }
+                  level: levelFor(sample?.severity || 'warning'),
+                },
+                help: { text: sample?.suggestion || '' },
+                properties: {
+                  category: sample?.category || '',
+                  severity: sample?.severity || '',
+                },
               };
             })
           }
         },
-        results: allFindings.map(f => ({
-          ruleId: f.ruleId,
-          level: f.severity === 'critical' || f.severity === 'high' ? 'error' : f.severity === 'medium' ? 'warning' : 'note',
-          message: { text: f.description },
-          locations: [
-            {
-              physicalLocation: {
-                artifactLocation: { uri: results.find(r => r.findings.includes(f))?.filePath || 'unknown' },
-                region: { startLine: f.line || 1 }
-              }
-            }
-          ]
-        }))
-      }
-    ]
+        results: reportResults.flatMap(result => {
+          const uri = toArtifactUri(result.filePath);
+          return result.findings.map(finding => ({
+            ruleId: finding.ruleId,
+            ruleIndex: ruleIndexById.get(finding.ruleId) ?? 0,
+            level: levelFor(finding.severity),
+            message: { text: `${finding.description} (Category: ${finding.category})` },
+            locations: [
+              {
+                physicalLocation: {
+                  artifactLocation: { uri },
+                  region: {
+                    startLine: Math.max(1, finding.line || 1),
+                    snippet: { text: finding.snippet || '' },
+                  },
+                },
+              },
+            ],
+          }));
+        }),
+      },
+    ],
   };
 }
 
-export function renderScanReports(results: ScanResult[], format: ReportFormat = 'pretty'): void {
+export function renderScanReports(
+  results: ScanResult[],
+  format: ReportFormat = 'pretty',
+  options: ReportOptions = {},
+): void {
   if (format === 'json') {
-    if (results.length === 1) {
-      console.log(JSON.stringify(results[0], null, 2));
+    const reportResults = toReportScanResults(results, options);
+    if (reportResults.length === 1) {
+      console.log(JSON.stringify(reportResults[0], null, 2));
     } else {
       console.log(JSON.stringify({
-        totalScanned: results.length,
-        passedCount: results.filter(r => r.passed).length,
-        failedCount: results.filter(r => !r.passed).length,
-        results
+        totalScanned: reportResults.length,
+        passedCount: reportResults.filter(r => r.passed).length,
+        failedCount: reportResults.filter(r => !r.passed).length,
+        results: reportResults
       }, null, 2));
     }
     return;
   }
 
   if (format === 'sarif') {
-    const allFindings = results.flatMap(r => r.findings);
-    const ruleIds = Array.from(new Set(allFindings.map(f => f.ruleId)));
-    const sarifReport = {
-      $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
-      version: '2.1.0',
-      runs: [
-        {
-          tool: {
-            driver: {
-              name: 'AgentWarden',
-              informationUri: 'https://github.com/juangh123/AgentWarden',
-              version: readPackageVersion(),
-              rules: ruleIds.map(id => {
-                const sample = allFindings.find(f => f.ruleId === id);
-                return {
-                  id,
-                  shortDescription: { text: sample?.title || id },
-                  fullDescription: { text: sample?.description || '' },
-                  help: { text: sample?.suggestion || '' }
-                };
-              })
-            }
-          },
-          results: results.flatMap(r => {
-            const levelMap: Record<string, string> = {
-              critical: 'error',
-              high: 'error',
-              medium: 'warning',
-              low: 'note',
-              info: 'note'
-            };
-            const rel = path.relative(process.cwd(), r.filePath);
-            const uri = (rel && !rel.startsWith('..') ? rel : r.filePath).replace(/\\/g, '/');
-            return r.findings.map(f => ({
-              ruleId: f.ruleId,
-              level: levelMap[f.severity] || 'warning',
-              message: {
-                text: `${f.description} (Category: ${f.category})`
-              },
-              locations: [
-                {
-                  physicalLocation: {
-                    artifactLocation: { uri },
-                    region: {
-                      startLine: f.line || 1,
-                      snippet: {
-                        text: f.snippet || ''
-                      }
-                    }
-                  }
-                }
-              ]
-            }));
-          })
-        }
-      ]
-    };
-    console.log(JSON.stringify(sarifReport, null, 2));
+    console.log(JSON.stringify(buildSarifReport(results, options), null, 2));
     return;
   }
 
+  const reportResults = toReportScanResults(results, options);
+
   // Pretty terminal output
-  for (const result of results) {
+  for (const result of reportResults) {
     console.log('\n' + chalk.bold.cyan('🛡️  AgentWarden Security Scan Report'));
     console.log(chalk.gray('═'.repeat(60)));
     console.log(`• Skill Name:   ${chalk.bold.white(result.parsedSkill.name)}`);
     console.log(`• Description:  ${chalk.gray(result.parsedSkill.description)}`);
     console.log(`• File Path:    ${chalk.gray(result.filePath)}`);
     console.log(`• SHA256:       ${chalk.gray(result.sha256.slice(0, 16) + '...')}`);
+    if (result.baseline) {
+      console.log(
+        `• Baseline:     ${chalk.gray(result.baseline.path)} ` +
+          `(${chalk.yellow(String(result.baseline.suppressed))} accepted, ${chalk.gray(String(result.baseline.unmatched) + ' unmatched')})`,
+      );
+    }
 
     const scoreColor = result.score >= 80 ? chalk.green : result.score >= 60 ? chalk.yellow : chalk.red;
     console.log(`• Safety Score: ${scoreColor(result.score.toString() + '/100')}`);
     console.log(chalk.gray('═'.repeat(60)));
 
     if (result.findings.length === 0) {
-      console.log(chalk.green.bold('\n✅ [PASS] No security vulnerabilities or prompt injection detected!\n'));
+      if (result.baseline && result.baseline.suppressed > 0) {
+        console.log(
+          chalk.green.bold(
+            `\n✅ [PASS] No new findings; ${result.baseline.suppressed} baseline finding(s) were accepted.\n`,
+          ),
+        );
+      } else {
+        console.log(chalk.green.bold('\n✅ [PASS] No security vulnerabilities or prompt injection detected!\n'));
+      }
       continue;
     }
 
     console.log(`\nFound ${chalk.bold.red(result.findings.length.toString())} security issues:`);
+    if (result.baseline && result.baseline.suppressed > 0) {
+      console.log(chalk.gray(`Baseline accepted ${result.baseline.suppressed} existing finding(s).`));
+    }
 
     result.findings.forEach((finding, idx) => {
       const sevBadge =
@@ -184,10 +188,10 @@ export function renderScanReports(results: ScanResult[], format: ReportFormat = 
     }
   }
 
-  if (results.length > 1) {
-    const totalFailed = results.filter(r => !r.passed).length;
+  if (reportResults.length > 1) {
+    const totalFailed = reportResults.filter(r => !r.passed).length;
     console.log(chalk.gray('═'.repeat(60)));
-    console.log(chalk.bold(`Scan Summary: ${results.length} skills scanned, ${results.length - totalFailed} passed, ${totalFailed} blocked.`));
+    console.log(chalk.bold(`Scan Summary: ${reportResults.length} skills scanned, ${reportResults.length - totalFailed} passed, ${totalFailed} blocked.`));
     console.log(chalk.gray('═'.repeat(60)) + '\n');
   }
 }

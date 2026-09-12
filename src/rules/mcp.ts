@@ -2,6 +2,28 @@ import type { Rule, Finding, ParsedSkill } from './types.ts';
 
 export const mcpRules: Rule[] = [
   {
+    id: 'SEC-MCP-003',
+    title: 'Malformed or Incomplete MCP Configuration',
+    category: 'mcp_misconfig',
+    severity: 'high',
+    description: 'MCP configuration cannot be parsed or does not define a valid server map.',
+    suggestion: 'Fix the JSON syntax and define servers under "mcpServers", "servers", or "mcp.servers".',
+    check: (parsed: ParsedSkill): Finding[] => {
+      if (parsed.kind !== 'mcp' || !parsed.parseError) return [];
+      return [
+        {
+          ruleId: 'SEC-MCP-003',
+          title: 'Malformed or Incomplete MCP Configuration',
+          category: 'mcp_misconfig',
+          severity: 'high',
+          description: `Invalid MCP configuration: ${parsed.parseError}`,
+          snippet: parsed.parseError,
+          suggestion: 'Validate the MCP file as JSON and provide a server map before installation.',
+        },
+      ];
+    },
+  },
+  {
     id: 'SEC-MCP-001',
     title: 'MCP Server Dangerous Command Invocation',
     category: 'mcp_misconfig',

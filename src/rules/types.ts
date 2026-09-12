@@ -20,6 +20,7 @@ export interface ParsedSkill {
   codeBlocks: CodeBlock[];
   rawContent: string;
   kind?: SkillKind;
+  parseError?: string;
   mcpServers?: Array<{
     name: string;
     command?: string;
@@ -58,7 +59,15 @@ export interface ScanResult {
   filePath: string;
   parsedSkill: ParsedSkill;
   findings: Finding[];
+  suppressedFindings?: Finding[];
+  baseline?: BaselineMetadata;
   score: number; // 0 to 100
   passed: boolean;
   sha256: string;
+}
+
+export interface BaselineMetadata {
+  path: string;
+  suppressed: number;
+  unmatched: number;
 }

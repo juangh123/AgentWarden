@@ -17,6 +17,47 @@ export interface LockfileSchema {
 
 export const LOCKFILE_NAME = 'skills.lock';
 
+function parseLockfile(raw: string, lockPath: string): LockfileSchema {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`Invalid ${LOCKFILE_NAME} JSON at ${lockPath}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: expected a top-level object.`);
+  }
+
+  const candidate = parsed as Partial<LockfileSchema>;
+  if (!candidate.skills || typeof candidate.skills !== 'object' || Array.isArray(candidate.skills)) {
+    throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: missing "skills" object.`);
+  }
+
+  const skills = candidate.skills as Record<string, unknown>;
+  for (const [name, skill] of Object.entries(skills)) {
+    if (!skill || typeof skill !== 'object' || Array.isArray(skill)) {
+      throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" must be an object.`);
+    }
+    const entry = skill as Record<string, unknown>;
+    if (
+      typeof entry.name !== 'string' ||
+      typeof entry.version !== 'string' ||
+      typeof entry.source !== 'string' ||
+      typeof entry.sha256 !== 'string' ||
+      typeof entry.installedAt !== 'string' ||
+      typeof entry.verifiedScore !== 'number'
+    ) {
+      throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has missing or invalid fields.`);
+    }
+  }
+
+  return {
+    lockfileVersion: typeof candidate.lockfileVersion === 'number' ? candidate.lockfileVersion : 1,
+    skills: candidate.skills as Record<string, LockedSkill>,
+  };
+}
+
 export function normalizePath(p: string): string {
   return p.replace(/\\/g, '/');
 }
@@ -35,12 +76,7 @@ export function readLockfile(cwd: string = process.cwd()): LockfileSchema {
   if (!fs.existsSync(lockPath)) {
     return { lockfileVersion: 1, skills: {} };
   }
-  try {
-    const raw = fs.readFileSync(lockPath, 'utf8');
-    return JSON.parse(raw) as LockfileSchema;
-  } catch {
-    return { lockfileVersion: 1, skills: {} };
-  }
+  return parseLockfile(fs.readFileSync(lockPath, 'utf8'), lockPath);
 }
 
 export function writeLockfile(data: LockfileSchema, cwd: string = process.cwd()): void {

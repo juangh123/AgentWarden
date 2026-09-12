@@ -7,6 +7,7 @@ export interface SkillGuardConfig {
   failOn?: Severity;
   minScore?: number;
   allowedDomains?: string[];
+  baseline?: string;
 }
 
 export type AgentWardenConfig = SkillGuardConfig;
@@ -44,6 +45,9 @@ export function normalizeConfig(raw?: Partial<SkillGuardConfig>): SkillGuardConf
     failOn,
     minScore,
     allowedDomains: [...new Set(cleanStringList(source.allowedDomains).map((d) => d.toLowerCase().replace(/^\./, '')))],
+    ...(typeof source.baseline === 'string' && source.baseline.trim()
+      ? { baseline: source.baseline.trim() }
+      : {}),
   };
 }
 

@@ -3,7 +3,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chalk, setColorEnabled } from './reporter/chalk.ts';
 import { scanSkillFile } from './scanner/index.ts';
-import { renderScanReport, renderScanReports, type ReportFormat } from './reporter/index.ts';
+import { discoverSkillFiles } from './scanner/discovery.ts';
+import {
+  renderScanReport,
+  renderScanReports,
+  toReportScanResult,
+  type ReportFormat,
+  type ReportOptions,
+} from './reporter/index.ts';
 import {
   readLockfile,
   updateLockfileSkill,
@@ -17,6 +24,7 @@ import {
 import { loadConfig, normalizeConfig, type SkillGuardConfig } from './config/index.ts';
 import { readPackageVersion } from './version.ts';
 import type { ScanResult, Severity } from './rules/types.ts';
+import { DEFAULT_BASELINE_NAME, createBaseline, writeBaseline } from './baseline/index.ts';
 
 const VERSION = readPackageVersion();
 
@@ -27,8 +35,8 @@ const EXIT_USAGE = 2;
 const VALID_FORMATS = new Set(['pretty', 'json', 'sarif']);
 const VALID_FAIL_ON: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
-const VALUE_OPTIONS = new Set(['format', 'fail-on', 'min-score', 'cwd', 'ignore-rule']);
-const BOOLEAN_OPTIONS = new Set(['force', 'help', 'version', 'json', 'sarif', 'no-color']);
+const VALUE_OPTIONS = new Set(['format', 'fail-on', 'min-score', 'cwd', 'ignore-rule', 'baseline', 'output']);
+const BOOLEAN_OPTIONS = new Set(['force', 'help', 'version', 'json', 'sarif', 'no-color', 'no-redact']);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 
 interface ParsedArgs {
@@ -99,7 +107,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function usageError(message: string): never {
   console.error(chalk.red(`Error: ${message}`));
-  console.error(`Run ${chalk.yellow('"skillguard help"')} for usage.`);
+  console.error(`Run ${chalk.yellow('"agentwarden help"')} for usage.`);
   process.exit(EXIT_USAGE);
 }
 
@@ -114,7 +122,11 @@ function resolveFormat(options: ParsedArgs['options'], isJson = false): ReportFo
   return 'pretty';
 }
 
-function buildConfig(options: ParsedArgs['options']): SkillGuardConfig {
+function reportOptions(options: ParsedArgs['options']): ReportOptions {
+  return { redact: !options['no-redact'] };
+}
+
+function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): SkillGuardConfig {
   const base = loadConfig();
   const override: Partial<SkillGuardConfig> = {};
 
@@ -130,11 +142,16 @@ function buildConfig(options: ParsedArgs['options']): SkillGuardConfig {
   }
 
   const extraIgnores = (options.ignoreRule as string[] | undefined) ?? [];
-  return normalizeConfig({
+  if (options.baseline !== undefined) override.baseline = String(options.baseline);
+
+  const merged: Partial<SkillGuardConfig> = {
     ...base,
     ...override,
     ignoreRules: [...(base.ignoreRules ?? []), ...extraIgnores],
-  });
+  };
+  if (ignoreBaseline) delete merged.baseline;
+
+  return normalizeConfig(merged);
 }
 
 function resolvePath(target: string): string {
@@ -144,26 +161,6 @@ function resolvePath(target: string): string {
     process.exit(EXIT_USAGE);
   }
   return fullPath;
-}
-
-function collectSkillFiles(targetPath: string): string[] {
-  const stat = fs.statSync(targetPath);
-  if (stat.isFile()) return [targetPath];
-  if (!stat.isDirectory()) return [];
-
-  const results: string[] = [];
-  const entries = fs.readdirSync(targetPath, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
-    const full = path.join(targetPath, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...collectSkillFiles(full));
-    } else if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.markdown'))) {
-      results.push(full);
-    }
-    // Symlinks are intentionally skipped for safety.
-  }
-  return results;
 }
 
 function printHelp(): void {
@@ -181,18 +178,22 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
+  ${chalk.green('baseline [path...]')}   Create an explicit baseline of accepted findings
   ${chalk.green('help')}                 Show this help manual
 
 ${chalk.bold('OPTIONS:')}
-  ${chalk.yellow('-f, --force')}            Bypass high-risk installation warning and force lock
+  ${chalk.yellow('-f, --force')}            Bypass install warning or overwrite an existing baseline
   ${chalk.yellow('--format <type>')}        Report format: pretty (default), json, sarif
   ${chalk.yellow('--json')}                 Shorthand for --format json
   ${chalk.yellow('--sarif')}                Shorthand for --format sarif
   ${chalk.yellow('--fail-on <sev>')}        Fail threshold: critical|high|medium|low|info (default: high)
   ${chalk.yellow('--min-score <n>')}        Minimum safety score 0-100 (default: 60)
   ${chalk.yellow('--ignore-rule <id>')}     Skip a rule id (repeatable)
+  ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
+  ${chalk.yellow('--output <file>')}        Baseline output path (default: ${DEFAULT_BASELINE_NAME})
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
   ${chalk.yellow('--no-color')}             Disable ANSI colors (also honors NO_COLOR env)
+  ${chalk.yellow('--no-redact')}            Include raw snippets and file content in reports
   ${chalk.yellow('-v, --version')}          Show version
 
 ${chalk.bold('EXIT CODES:')}
@@ -200,19 +201,21 @@ ${chalk.bold('EXIT CODES:')}
 `);
 }
 
-function scanTargets(targets: string[], config: SkillGuardConfig, format: ReportFormat): void {
-  const files: string[] = [];
-  for (const target of targets) {
-    files.push(...collectSkillFiles(resolvePath(target)));
-  }
+function scanTargets(
+  targets: string[],
+  config: SkillGuardConfig,
+  format: ReportFormat,
+  options: ParsedArgs['options'],
+): void {
+  const files = discoverSkillFiles(targets.map(resolvePath));
 
   if (files.length === 0) {
-    console.error(chalk.yellow(`No markdown skill files found in: ${targets.join(', ')}`));
+    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
     process.exit(EXIT_FAIL);
   }
 
   const scanResults: ScanResult[] = files.map((file) => scanSkillFile(file, config));
-  renderScanReports(scanResults, format);
+  renderScanReports(scanResults, format, reportOptions(options));
 
   if (scanResults.some((r) => !r.passed)) process.exit(EXIT_FAIL);
 }
@@ -227,9 +230,18 @@ function cmdInstall(target: string, options: ParsedArgs['options'], format: Repo
   }
   const result = scanSkillFile(fullPath, config);
   if (format === 'json') {
-    console.log(JSON.stringify({ ...result, installAborted: !result.passed && !force }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          ...toReportScanResult(result, reportOptions(options)),
+          installAborted: !result.passed && !force,
+        },
+        null,
+        2,
+      ),
+    );
   } else {
-    renderScanReport(result, format);
+    renderScanReport(result, format, reportOptions(options));
   }
 
   if (!result.passed && !force) {
@@ -295,12 +307,14 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     hashMatch: boolean;
     lockedScore: number;
     currentScore: number | null;
+    policyPassed: boolean;
+    currentFindingCount: number | null;
   }
   const auditResult: { auditedAt: string; passed?: boolean; skills: Record<string, AuditEntry> } = {
     auditedAt: new Date().toISOString(),
     skills: {},
   };
-  let hasTampered = false;
+  let hasFailure = false;
 
   for (const name of keys) {
     const item = lock.skills[name];
@@ -308,14 +322,18 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     const exists = fs.existsSync(resolvedPath);
     let hashMatch = false;
     let currentScore: number | null = null;
+    let policyPassed = false;
+    let currentFindingCount: number | null = null;
 
     if (exists) {
       const currentResult = scanSkillFile(resolvedPath, config);
       hashMatch = currentResult.sha256 === item.sha256;
       currentScore = currentResult.score;
-      if (!hashMatch) hasTampered = true;
+      policyPassed = currentResult.passed;
+      currentFindingCount = currentResult.findings.length;
+      if (!hashMatch || !policyPassed) hasFailure = true;
     } else {
-      hasTampered = true;
+      hasFailure = true;
     }
 
     auditResult.skills[name] = {
@@ -326,13 +344,15 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
       hashMatch,
       lockedScore: item.verifiedScore,
       currentScore,
+      policyPassed,
+      currentFindingCount,
     };
   }
 
   if (format === 'json') {
-    auditResult.passed = !hasTampered;
+    auditResult.passed = !hasFailure;
     console.log(JSON.stringify(auditResult, null, 2));
-    if (hasTampered) process.exit(EXIT_FAIL);
+    if (hasFailure) process.exit(EXIT_FAIL);
     return;
   }
 
@@ -357,17 +377,28 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     } else {
       console.log(chalk.green('  ✓ Content integrity verified against locked SHA256.'));
     }
+    if (!entry.exists) {
+      console.log(chalk.red.bold('  ✗ Current policy check could not run because the source file is missing.'));
+    } else if (!entry.policyPassed) {
+      console.log(
+        chalk.red.bold(
+          `  ✗ Current policy check FAILED (${entry.currentFindingCount ?? 0} findings, score ${entry.currentScore ?? 0}/100).`,
+        ),
+      );
+    } else {
+      console.log(chalk.green('  ✓ Current security policy check passed.'));
+    }
     if (entry.currentScore !== null && entry.currentScore !== entry.lockedScore) {
       console.log(chalk.yellow(`  ℹ️  Re-scan score drift: locked ${entry.lockedScore}/100, now ${entry.currentScore}/100 (rule updates may affect this).`));
     }
   }
 
   console.log('\n' + chalk.gray('═'.repeat(60)));
-  if (hasTampered) {
-    console.log(chalk.red.bold('❌ Audit completed: TAMPERING DETECTED in installed skills!\n'));
+  if (hasFailure) {
+    console.log(chalk.red.bold('❌ Audit completed: integrity or security policy failures detected!\n'));
     process.exit(EXIT_FAIL);
   }
-  console.log(chalk.green.bold('✅ All installed skills are verified, secure & untampered.\n'));
+  console.log(chalk.green.bold('✅ All installed skills passed integrity and current policy checks.\n'));
 }
 
 function cmdList(lock: LockfileSchema, format: ReportFormat): void {
@@ -411,6 +442,49 @@ function cmdUninstall(name: string, format: ReportFormat): void {
   }
 }
 
+function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: ReportFormat): void {
+  const files = discoverSkillFiles(targets.map(resolvePath));
+  if (files.length === 0) {
+    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
+    process.exit(EXIT_FAIL);
+  }
+
+  const config = buildConfig(options, true);
+  const results = files.map((file) => scanSkillFile(file, config));
+  const baseline = createBaseline(results);
+  const output = String(options.output || DEFAULT_BASELINE_NAME);
+  const resolvedOutput = path.resolve(process.cwd(), output);
+
+  if (fs.existsSync(resolvedOutput) && !options.force) {
+    console.error(chalk.red(`Error: Baseline already exists at ${resolvedOutput}. Use --force to overwrite.`));
+    process.exit(EXIT_FAIL);
+  }
+
+  writeBaseline(baseline, output);
+
+  if (format === 'json') {
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          output: resolvedOutput,
+          filesScanned: files.length,
+          findingsAccepted: baseline.entries.length,
+          baseline,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  console.log(chalk.green.bold(`\n✓ Baseline created: ${resolvedOutput}`));
+  console.log(`  Files: ${files.length}`);
+  console.log(`  Accepted findings: ${baseline.entries.length}`);
+  console.log(chalk.gray('  Enable it with --baseline <file> or the "baseline" config field.\n'));
+}
+
 function main(): void {
   const { positionals, options, errors } = parseArgs(process.argv.slice(2));
 
@@ -445,7 +519,7 @@ function main(): void {
   if (command === 'scan') {
     const targets = positionals.slice(1);
     if (targets.length === 0) usageError(`Missing file or directory path to scan. Usage: skillguard scan <path> [--format pretty|json|sarif]`);
-    scanTargets(targets, buildConfig(options), resolveFormat(options));
+    scanTargets(targets, buildConfig(options), resolveFormat(options), options);
     return;
   }
 
@@ -477,6 +551,12 @@ function main(): void {
     const name = positionals[1];
     if (!name) usageError(`Missing skill name to uninstall. Usage: skillguard uninstall <name>`);
     cmdUninstall(name, resolveFormat(options));
+    return;
+  }
+
+  if (command === 'baseline') {
+    const targets = positionals.slice(1);
+    cmdBaseline(targets.length > 0 ? targets : ['.'], options, resolveFormat(options));
     return;
   }
 

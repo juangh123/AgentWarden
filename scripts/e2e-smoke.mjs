@@ -21,8 +21,56 @@ function check(name, cond, extra = '') {
 
 fs.copyFileSync(path.join(root, 'fixtures', 'safe-skill.md'), path.join(tmp, 'safe-skill.md'));
 fs.copyFileSync(path.join(root, 'fixtures', 'malicious-skill.md'), path.join(tmp, 'malicious-skill.md'));
+fs.copyFileSync(path.join(root, 'fixtures', 'hardcoded-secrets.md'), path.join(tmp, 'hardcoded-secrets.md'));
+fs.writeFileSync(
+  path.join(tmp, '.mcp.json'),
+  JSON.stringify({ mcpServers: { unsafe: { command: 'npx', args: ['unpinned-tool'] } } }, null, 2),
+);
 
-let r = run(['-C', tmp, 'install', 'safe-skill.md', '--json']);
+let r = run(['-C', tmp, 'scan', '.', '--json']);
+const directoryScan = JSON.parse(r.stdout);
+check(
+  'directory scan includes MCP config',
+  r.status === 1 && directoryScan.results.some((result) => result.parsedSkill.kind === 'mcp'),
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'scan', 'hardcoded-secrets.md', '--json']);
+check(
+  'JSON reports are redacted by default',
+  r.status === 1 && !r.stdout.includes('sk-proj-EXAMPLETOKEN1234567890abcdef'),
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'scan', 'hardcoded-secrets.md', '--json', '--no-redact']);
+check(
+  'explicit no-redact preserves raw report data',
+  r.status === 1 && r.stdout.includes('sk-proj-EXAMPLETOKEN1234567890abcdef'),
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'baseline', 'malicious-skill.md', '--output', 'baseline.json', '--json']);
+const baselineJson = JSON.parse(r.stdout);
+check(
+  'baseline command records findings without raw snippets',
+  r.status === 0 && baselineJson.findingsAccepted > 0 && !r.stdout.includes('id_rsa'),
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'scan', 'malicious-skill.md', '--baseline', 'baseline.json', '--json']);
+const baselinedScan = JSON.parse(r.stdout);
+check(
+  'explicit baseline suppresses existing findings',
+  r.status === 0 &&
+    baselinedScan.findings.length === 0 &&
+    baselinedScan.suppressedFindings.length === baselineJson.findingsAccepted,
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'baseline', 'malicious-skill.md', '--output', 'baseline.json', '--json']);
+check('baseline refuses implicit overwrite', r.status === 1, `status=${r.status}`);
+
+r = run(['-C', tmp, 'install', 'safe-skill.md', '--json']);
 check('install success exit 0', r.status === 0, `status=${r.status}`);
 const installJson = JSON.parse(r.stdout);
 check('install json fields', installJson.parsedSkill?.name === 'safe-weather-reporter' && installJson.sha256?.length === 64);
@@ -52,6 +100,27 @@ r = run(['-C', tmp, 'uninstall', 'safe-weather-reporter', '--json']);
 check('uninstall ok', r.status === 0 && JSON.parse(r.stdout).removed === 'safe-weather-reporter');
 r = run(['-C', tmp, 'list', '--json']);
 check('list empty after uninstall', JSON.parse(r.stdout).count === 0);
+
+r = run(['-C', tmp, 'install', 'malicious-skill.md', '--force', '--json']);
+check('force install locks risky skill', r.status === 0, `status=${r.status}`);
+r = run(['-C', tmp, 'audit', '--json']);
+const policyAudit = JSON.parse(r.stdout);
+check(
+  'audit rejects unchanged skill that fails current policy',
+  r.status === 1 &&
+    policyAudit.passed === false &&
+    policyAudit.skills['evil-credential-stealer']?.hashMatch === true &&
+    policyAudit.skills['evil-credential-stealer']?.policyPassed === false,
+  `status=${r.status}`,
+);
+
+fs.writeFileSync(path.join(tmp, 'skills.lock'), '{"skills":', 'utf8');
+r = run(['-C', tmp, 'audit', '--json']);
+check(
+  'malformed lockfile fails closed',
+  r.status === 1 && r.stderr.includes('Invalid skills.lock JSON'),
+  `status=${r.status}`,
+);
 
 r = run(['scan']);
 check('usage error exit 2', r.status === 2);

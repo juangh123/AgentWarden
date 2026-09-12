@@ -4,8 +4,12 @@ description: 'Scan and gate AI Agent skills and MCP configurations against promp
 author: 'juangh123'
 
 inputs:
+  node-version:
+    description: 'Node.js version used to build and run AgentWarden'
+    required: false
+    default: '22'
   path:
-    description: 'Path or pattern to skills or MCP configs to scan'
+    description: 'Path to a skill, MCP config, or directory to scan'
     required: false
     default: '.'
   fail-on:
@@ -16,6 +20,10 @@ inputs:
     description: 'Minimum required security score (0-100)'
     required: false
     default: '80'
+  baseline:
+    description: 'Optional baseline file containing reviewed findings to suppress'
+    required: false
+    default: ''
   sarif:
     description: 'Path to write SARIF output report for GitHub Security Tab'
     required: false
@@ -24,7 +32,29 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Run AgentWarden Scanner
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    - name: Build AgentWarden
       shell: bash
       run: |
-        npx --yes agentwarden scan ${{ inputs.path }} --fail-on ${{ inputs.fail-on }} --min-score ${{ inputs.min-score }} --sarif > ${{ inputs.sarif }}
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH"
+        npm ci --ignore-scripts
+        npm run build
+    - name: Run AgentWarden Scanner
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_SARIF: ${{ inputs.sarif }}
+      run: |
+        set -euo pipefail
+        args=(scan "$INPUT_PATH" --fail-on "$INPUT_FAIL_ON" --min-score "$INPUT_MIN_SCORE" --sarif)
+        if [[ -n "$INPUT_BASELINE" ]]; then
+          args+=(--baseline "$INPUT_BASELINE")
+        fi
+        node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}" > "$INPUT_SARIF"

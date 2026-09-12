@@ -1,4 +1,14 @@
-export { scanSkillFile, scanSkillContent } from './scanner/index.ts';
+export { scanSkillFile, scanSkillContent, scanSkillPaths } from './scanner/index.ts';
+export { discoverSkillFiles } from './scanner/discovery.ts';
+export {
+  DEFAULT_BASELINE_NAME,
+  createBaseline,
+  readBaseline,
+  writeBaseline,
+  applyBaseline,
+  type BaselineEntry,
+  type BaselineSchema,
+} from './baseline/index.ts';
 export { parseSkillMarkdown } from './parser/skillParser.ts';
 export { allRules } from './rules/index.ts';
 export { loadConfig, normalizeConfig, type SkillGuardConfig, type AgentWardenConfig } from './config/index.ts';
@@ -11,7 +21,16 @@ export {
   type LockedSkill,
   type LockfileSchema,
 } from './manifest/lockfile.ts';
-export { renderScanReport, renderScanReports, buildSarifReport, type ReportFormat } from './reporter/index.ts';
+export {
+  renderScanReport,
+  renderScanReports,
+  buildSarifReport,
+  toReportScanResult,
+  toReportScanResults,
+  redactText,
+  type ReportFormat,
+  type ReportOptions,
+} from './reporter/index.ts';
 export { readPackageVersion } from './version.ts';
 export type {
   Rule,
@@ -22,4 +41,5 @@ export type {
   ParsedSkill,
   CodeBlock,
   SkillKind,
+  BaselineMetadata,
 } from './rules/types.ts';

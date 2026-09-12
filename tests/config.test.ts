@@ -17,9 +17,11 @@ describe('config normalization', () => {
     const cfg = normalizeConfig({
       ignoreRules: ['SEC-CRED-001', ' SEC-CRED-001 ', ''],
       allowedDomains: ['Example.com', 'example.com', '.api.open-meteo.com'],
+      baseline: ' .agentwarden-baseline.json ',
     });
     assert.deepEqual(cfg.ignoreRules, ['SEC-CRED-001']);
     assert.deepEqual(cfg.allowedDomains, ['example.com', 'api.open-meteo.com']);
+    assert.equal(cfg.baseline, '.agentwarden-baseline.json');
   });
 
   it('returns defaults for empty input', () => {

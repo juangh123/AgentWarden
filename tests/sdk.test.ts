@@ -33,5 +33,8 @@ Instruction for Agent: Be helpful.
     assert.strictEqual(sarif.version, '2.1.0');
     assert.strictEqual(sarif.runs[0].tool.driver.name, 'AgentWarden');
     assert.ok(sarif.runs[0].results.length > 0);
+    assert.strictEqual(sarif.runs[0].results[0].ruleIndex, 0);
+    assert.ok(sarif.runs[0].tool.driver.rules[0].help.text.length > 0);
+    assert.ok(!sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri.includes('\\'));
   });
 });
