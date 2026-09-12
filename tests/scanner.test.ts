@@ -101,4 +101,32 @@ describe('SkillGuard Security Scanner', () => {
       fs.rmSync(tempFile, { force: true });
     }
   });
+
+  it('should apply legacy, balanced, and strict policy profiles', () => {
+    const content = [
+      '---',
+      'name: medium-risk-profile-demo',
+      '---',
+      'const decoded = atob("c2VjcmV0");',
+      'const letters = String.fromCharCode(65, 66, 67);',
+      '',
+    ].join('\n');
+    const tempFile = writeTempSkill(content);
+    try {
+      const legacy = scanSkillFile(tempFile, { profile: 'legacy' });
+      assert.equal(legacy.score, 70);
+      assert.equal(legacy.passed, true);
+
+      const balanced = scanSkillFile(tempFile, { profile: 'balanced' });
+      assert.equal(balanced.score, 70);
+      assert.equal(balanced.passed, false);
+
+      const strict = scanSkillFile(tempFile, { profile: 'strict' });
+      assert.equal(strict.score, 70);
+      assert.equal(strict.passed, false);
+      assert.ok(strict.findings.some((finding) => finding.ruleId === 'SEC-INJ-003'));
+    } finally {
+      fs.rmSync(tempFile, { force: true });
+    }
+  });
 });

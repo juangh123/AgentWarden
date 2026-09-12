@@ -3,25 +3,45 @@ import * as path from 'node:path';
 import type { Severity } from '../rules/types.ts';
 
 export interface SkillGuardConfig {
+  profile?: PolicyProfileName;
   ignoreRules?: string[];
   failOn?: Severity;
   minScore?: number;
   allowedDomains?: string[];
   baseline?: string;
   severityOverrides?: Record<string, Severity>;
+  include?: string[];
+  exclude?: string[];
 }
 
 export type AgentWardenConfig = SkillGuardConfig;
 
+export type PolicyProfileName = 'legacy' | 'balanced' | 'strict';
+
+export interface PolicyProfile {
+  failOn: Severity;
+  minScore: number;
+}
+
+export const POLICY_PROFILES: Readonly<Record<PolicyProfileName, PolicyProfile>> = {
+  legacy: { failOn: 'high', minScore: 60 },
+  balanced: { failOn: 'high', minScore: 80 },
+  strict: { failOn: 'medium', minScore: 90 },
+};
+
 export const DEFAULT_CONFIG: Readonly<SkillGuardConfig> = {
+  profile: 'legacy',
   ignoreRules: [],
   failOn: 'high',
   minScore: 60,
   allowedDomains: [],
   severityOverrides: {},
+  include: [],
+  exclude: [],
 };
 
 const VALID_FAIL_ON: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+const VALID_PROFILES: PolicyProfileName[] = ['legacy', 'balanced', 'strict'];
 
 function cleanStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -45,18 +65,22 @@ function cleanSeverityOverrides(value: unknown): Record<string, Severity> {
 /** Validate and clamp a raw (possibly partial) config into a safe, usable shape. */
 export function normalizeConfig(raw?: Partial<SkillGuardConfig>): SkillGuardConfig {
   const source = raw ?? {};
+  const requestedProfile = String(source.profile || '').trim().toLowerCase() as PolicyProfileName;
+  const profile = VALID_PROFILES.includes(requestedProfile) ? requestedProfile : DEFAULT_CONFIG.profile!;
+  const profileDefaults = POLICY_PROFILES[profile];
 
   const failOnRaw = source.failOn;
   const failOn: Severity =
-    failOnRaw && (VALID_FAIL_ON as string[]).includes(failOnRaw) ? failOnRaw : DEFAULT_CONFIG.failOn!;
+    failOnRaw && (VALID_FAIL_ON as string[]).includes(failOnRaw) ? failOnRaw : profileDefaults.failOn;
 
   const minScoreRaw = source.minScore;
   const minScore =
     typeof minScoreRaw === 'number' && Number.isFinite(minScoreRaw)
       ? Math.min(100, Math.max(0, Math.round(minScoreRaw)))
-      : DEFAULT_CONFIG.minScore!;
+      : profileDefaults.minScore;
 
   return {
+    profile,
     ignoreRules: cleanStringList(source.ignoreRules),
     failOn,
     minScore,
@@ -65,6 +89,8 @@ export function normalizeConfig(raw?: Partial<SkillGuardConfig>): SkillGuardConf
       ? { baseline: source.baseline.trim() }
       : {}),
     severityOverrides: cleanSeverityOverrides(source.severityOverrides),
+    include: cleanStringList(source.include),
+    exclude: cleanStringList(source.exclude),
   };
 }
 
@@ -84,7 +110,7 @@ export function loadConfig(cwd: string = process.cwd()): SkillGuardConfig {
       try {
         const raw = fs.readFileSync(file, 'utf8');
         const parsed = JSON.parse(raw) as Partial<SkillGuardConfig>;
-        return normalizeConfig({ ...DEFAULT_CONFIG, ...parsed });
+        return normalizeConfig(parsed);
       } catch {
         // Malformed config falls back to defaults
       }

@@ -26,12 +26,81 @@ fs.writeFileSync(
   path.join(tmp, '.mcp.json'),
   JSON.stringify({ mcpServers: { unsafe: { command: 'npx', args: ['unpinned-tool'] } } }, null, 2),
 );
+fs.mkdirSync(path.join(tmp, 'scope', 'included'), { recursive: true });
+fs.mkdirSync(path.join(tmp, 'scope', 'excluded'), { recursive: true });
+fs.copyFileSync(path.join(root, 'fixtures', 'safe-skill.md'), path.join(tmp, 'scope', 'included', 'safe.md'));
+fs.copyFileSync(
+  path.join(root, 'fixtures', 'malicious-skill.md'),
+  path.join(tmp, 'scope', 'excluded', 'malicious.md'),
+);
+fs.writeFileSync(
+  path.join(tmp, 'medium-profile.md'),
+  [
+    '---',
+    'name: medium-profile-demo',
+    '---',
+    'const decoded = atob("c2VjcmV0");',
+    'const letters = String.fromCharCode(65, 66, 67);',
+    '',
+  ].join('\n'),
+  'utf8',
+);
 
 let r = run(['-C', tmp, 'scan', '.', '--json']);
 const directoryScan = JSON.parse(r.stdout);
 check(
   'directory scan includes MCP config',
   r.status === 1 && directoryScan.results.some((result) => result.parsedSkill.kind === 'mcp'),
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'scan', '.', '--include', 'scope/**', '--exclude', 'scope/excluded/**', '--json']);
+const scopedScan = JSON.parse(r.stdout);
+check(
+  'include and exclude scope a directory scan',
+  r.status === 0 &&
+    scopedScan.parsedSkill.name === 'safe-weather-reporter' &&
+    !r.stdout.includes('evil-credential-stealer'),
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'scan', 'medium-profile.md', '--profile', 'legacy', '--json']);
+check('legacy profile tolerates medium finding below score floor', r.status === 0, `status=${r.status}`);
+
+r = run(['-C', tmp, 'scan', 'medium-profile.md', '--profile', 'balanced', '--json']);
+check('balanced profile enforces the 80 score floor', r.status === 1, `status=${r.status}`);
+
+r = run([
+  '-C',
+  tmp,
+  'scan',
+  'medium-profile.md',
+  '--profile',
+  'balanced',
+  '--min-score',
+  '50',
+  '--json',
+]);
+check('explicit CLI threshold overrides profile default', r.status === 0, `status=${r.status}`);
+
+r = run(['-C', tmp, 'scan', 'medium-profile.md', '--profile', 'unknown', '--json']);
+check('unknown profile is a usage error', r.status === 2, `status=${r.status}`);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'scope',
+  '--exclude',
+  'scope/excluded/**',
+  '--output',
+  'scope-baseline.json',
+  '--json',
+]);
+const scopedBaseline = JSON.parse(r.stdout);
+check(
+  'baseline honors directory exclusions',
+  r.status === 0 && scopedBaseline.filesScanned === 1 && scopedBaseline.findingsAccepted === 0,
   `status=${r.status}`,
 );
 

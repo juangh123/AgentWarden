@@ -22,6 +22,58 @@ const SKIPPED_DIRECTORIES = new Set([
   'node_modules',
 ]);
 
+export interface DiscoveryOptions {
+  include?: string[];
+  exclude?: string[];
+}
+
+function toRelativePosix(filePath: string, cwd: string): string {
+  const relative = path.isAbsolute(filePath) ? path.relative(cwd, filePath) : filePath;
+  return (relative || filePath).replace(/\\/g, '/');
+}
+
+function globToRegExp(pattern: string): RegExp {
+  const normalized = pattern.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  let source = '';
+
+  for (let index = 0; index < normalized.length; index++) {
+    const char = normalized[index];
+    if (char === '*') {
+      if (normalized[index + 1] === '*') {
+        index++;
+        if (normalized[index + 1] === '/') {
+          index++;
+          source += '(?:.*/)?';
+        } else {
+          source += '.*';
+        }
+      } else {
+        source += '[^/]*';
+      }
+    } else if (char === '?') {
+      source += '[^/]';
+    } else {
+      source += char.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+    }
+  }
+
+  return new RegExp(`(?:^|/)${source}$`);
+}
+
+function matchesAnyGlob(filePath: string, cwd: string, patterns: string[]): boolean {
+  if (patterns.length === 0) return false;
+  const relative = toRelativePosix(filePath, cwd);
+  return patterns.some((pattern) => globToRegExp(pattern).test(relative));
+}
+
+function isIncluded(filePath: string, cwd: string, options: DiscoveryOptions): boolean {
+  const include = options.include ?? [];
+  const exclude = options.exclude ?? [];
+  if (matchesAnyGlob(filePath, cwd, exclude)) return false;
+  if (include.length === 0) return true;
+  return matchesAnyGlob(filePath, cwd, include);
+}
+
 function containsMcpServers(content: string): boolean {
   if (!/"(?:mcpServers|servers|mcp)"\s*:/.test(content)) return false;
 
@@ -88,7 +140,11 @@ function collectDirectoryFiles(directory: string): string[] {
  * Discover Markdown skills and MCP JSON configuration files under one or more paths.
  * Explicit file paths are always returned, even when their extension is non-standard.
  */
-export function discoverSkillFiles(targetPaths: string | string[], cwd: string = process.cwd()): string[] {
+export function discoverSkillFiles(
+  targetPaths: string | string[],
+  cwd: string = process.cwd(),
+  options: DiscoveryOptions = {},
+): string[] {
   const targets = Array.isArray(targetPaths) ? targetPaths : [targetPaths];
   const discovered = new Set<string>();
 
@@ -100,7 +156,9 @@ export function discoverSkillFiles(targetPaths: string | string[], cwd: string =
       discovered.add(absolute);
     } else if (stat.isDirectory()) {
       for (const file of collectDirectoryFiles(absolute)) {
-        discovered.add(file);
+        if (isIncluded(file, cwd, options)) {
+          discovered.add(file);
+        }
       }
     }
   }

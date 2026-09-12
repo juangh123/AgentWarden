@@ -11,7 +11,16 @@ export {
 } from './baseline/index.ts';
 export { parseSkillMarkdown } from './parser/skillParser.ts';
 export { allRules } from './rules/index.ts';
-export { loadConfig, normalizeConfig, type SkillGuardConfig, type AgentWardenConfig } from './config/index.ts';
+export {
+  DEFAULT_CONFIG,
+  POLICY_PROFILES,
+  loadConfig,
+  normalizeConfig,
+  type AgentWardenConfig,
+  type PolicyProfile,
+  type PolicyProfileName,
+  type SkillGuardConfig,
+} from './config/index.ts';
 export {
   readLockfile,
   writeLockfile,

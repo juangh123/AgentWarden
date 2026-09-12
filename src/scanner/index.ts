@@ -85,5 +85,9 @@ export function scanSkillPaths(
   customConfig?: SkillGuardConfig,
   cwd: string = process.cwd(),
 ): ScanResult[] {
-  return discoverSkillFiles(targetPaths, cwd).map((filePath) => scanSkillFile(filePath, customConfig, cwd));
+  const config = normalizeConfig(customConfig || loadConfig(cwd));
+  return discoverSkillFiles(targetPaths, cwd, {
+    include: config.include,
+    exclude: config.exclude,
+  }).map((filePath) => scanSkillFile(filePath, config, cwd));
 }

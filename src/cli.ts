@@ -21,7 +21,13 @@ import {
   normalizePath,
   type LockfileSchema,
 } from './manifest/lockfile.ts';
-import { loadConfig, normalizeConfig, type SkillGuardConfig } from './config/index.ts';
+import {
+  loadConfig,
+  normalizeConfig,
+  POLICY_PROFILES,
+  type PolicyProfileName,
+  type SkillGuardConfig,
+} from './config/index.ts';
 import { readPackageVersion } from './version.ts';
 import type { ScanResult, Severity } from './rules/types.ts';
 import { DEFAULT_BASELINE_NAME, createBaseline, writeBaseline } from './baseline/index.ts';
@@ -40,14 +46,23 @@ const VALUE_OPTIONS = new Set([
   'format',
   'fail-on',
   'min-score',
+  'profile',
   'cwd',
   'ignore-rule',
   'severity-override',
+  'include',
+  'exclude',
   'baseline',
   'output',
 ]);
 const BOOLEAN_OPTIONS = new Set(['force', 'help', 'version', 'json', 'sarif', 'no-color', 'no-redact']);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
+const REPEATABLE_OPTIONS: Record<string, string> = {
+  'ignore-rule': 'ignoreRule',
+  'severity-override': 'severityOverride',
+  include: 'include',
+  exclude: 'exclude',
+};
 
 interface ParsedArgs {
   positionals: string[];
@@ -78,8 +93,9 @@ function parseArgs(argv: string[]): ParsedArgs {
           errors.push(`Option --${key} requires a value`);
           continue;
         }
-        if (key === 'ignore-rule' || key === 'severity-override') {
-          const optionKey = key === 'ignore-rule' ? 'ignoreRule' : 'severityOverride';
+        const repeatableKey = REPEATABLE_OPTIONS[key];
+        if (repeatableKey) {
+          const optionKey = repeatableKey;
           const list = (options[optionKey] as string[] | undefined) ?? [];
           list.push(value);
           options[optionKey] = list;
@@ -141,6 +157,15 @@ function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): Sk
   const base = loadConfig();
   const override: Partial<SkillGuardConfig> = {};
 
+  if (options.profile !== undefined) {
+    const value = String(options.profile).trim().toLowerCase() as PolicyProfileName;
+    if (!Object.hasOwn(POLICY_PROFILES, value)) {
+      usageError(`Invalid --profile "${String(options.profile)}" (expected legacy|balanced|strict)`);
+    }
+    override.profile = value;
+    override.failOn = POLICY_PROFILES[value].failOn;
+    override.minScore = POLICY_PROFILES[value].minScore;
+  }
   if (options['fail-on'] !== undefined) {
     const value = String(options['fail-on']).toLowerCase() as Severity;
     if (!VALID_FAIL_ON.includes(value)) usageError(`Invalid --fail-on "${String(options['fail-on'])}"`);
@@ -153,6 +178,8 @@ function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): Sk
   }
 
   const extraIgnores = (options.ignoreRule as string[] | undefined) ?? [];
+  const extraIncludes = (options.include as string[] | undefined) ?? [];
+  const extraExcludes = (options.exclude as string[] | undefined) ?? [];
   if (options.baseline !== undefined) override.baseline = String(options.baseline);
 
   const severityOverrides: Record<string, Severity> = { ...(base.severityOverrides ?? {}) };
@@ -174,6 +201,8 @@ function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): Sk
     ...base,
     ...override,
     ignoreRules: [...(base.ignoreRules ?? []), ...extraIgnores],
+    include: [...(base.include ?? []), ...extraIncludes],
+    exclude: [...(base.exclude ?? []), ...extraExcludes],
   };
   if (ignoreBaseline) delete merged.baseline;
 
@@ -213,10 +242,13 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--format <type>')}        Report format: pretty (default), json, sarif
   ${chalk.yellow('--json')}                 Shorthand for --format json
   ${chalk.yellow('--sarif')}                Shorthand for --format sarif
+  ${chalk.yellow('--profile <name>')}       Policy preset: legacy|balanced|strict (default: legacy)
   ${chalk.yellow('--fail-on <sev>')}        Fail threshold: critical|high|medium|low|info (default: high)
   ${chalk.yellow('--min-score <n>')}        Minimum safety score 0-100 (default: 60)
   ${chalk.yellow('--ignore-rule <id>')}     Skip a rule id (repeatable)
   ${chalk.yellow('--severity-override <rule=sev>')} Override a rule severity (repeatable)
+  ${chalk.yellow('--include <glob>')}       Limit directory scans to matching paths (repeatable)
+  ${chalk.yellow('--exclude <glob>')}       Exclude matching paths from directory scans (repeatable)
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
   ${chalk.yellow('--output <file>')}        Baseline output path (default: ${DEFAULT_BASELINE_NAME})
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
@@ -235,7 +267,10 @@ function scanTargets(
   format: ReportFormat,
   options: ParsedArgs['options'],
 ): void {
-  const files = discoverSkillFiles(targets.map(resolvePath));
+  const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
+    include: config.include,
+    exclude: config.exclude,
+  });
 
   if (files.length === 0) {
     console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
@@ -515,13 +550,16 @@ function cmdUninstall(name: string, format: ReportFormat): void {
 }
 
 function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: ReportFormat): void {
-  const files = discoverSkillFiles(targets.map(resolvePath));
+  const config = buildConfig(options, true);
+  const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
+    include: config.include,
+    exclude: config.exclude,
+  });
   if (files.length === 0) {
     console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
     process.exit(EXIT_FAIL);
   }
 
-  const config = buildConfig(options, true);
   const results = files.map((file) => scanSkillFile(file, config));
   const baseline = createBaseline(results);
   const output = String(options.output || DEFAULT_BASELINE_NAME);

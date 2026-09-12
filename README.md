@@ -16,8 +16,8 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
   - 隐蔽数据偷放与反向链接识别（Raw IP 外带、webhook.site 等数据收集端点、本地文件上传）
 - 🔒 **完整性指纹锁定 (`skills.lock`)**：类比 `package-lock.json`，记录 SHA-256 签名与安全得分，一键审计本地文件篡改；锁文件损坏或字段缺失会直接报错，不会静默降级为空。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
-- 🎛️ **策略化配置**：`.wardenrc.json / .skillguardrc.json` 支持 `failOn` 阈值、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
-- 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills，以及 `.mcp.json`、`.cursor/mcp.json`、`.vscode/mcp.json` 等常见 MCP 配置。
+- 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，并支持自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
+- 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills 与常见 MCP 配置，并可通过 `include` / `exclude` glob 精确限定审计范围。
 - 🧱 **可审计基线**：用稳定指纹接受既有告警，同时继续阻断新发现；基线不保存原始敏感片段。
 - 🕶️ **默认安全报告**：JSON、SARIF 与终端输出自动隐藏密钥、认证头、私钥、敏感配置值和原始文件内容。
 - 🧩 **规则治理**：查看完整规则目录，并按规则覆盖有效严重级别，无需修改源码或直接关闭规则。
@@ -50,6 +50,7 @@ node dist/cli.js scan fixtures/malicious-skill.md
 node dist/cli.js scan fixtures/ --format sarif
 node dist/cli.js scan . --json
 node dist/cli.js scan a.md b.md --json
+node dist/cli.js scan . --profile strict --include "skills/**" --exclude "skills/vendor/**"
 
 # 以 JSON / SARIF 导出（适配 CI/CD 与 GitHub Code Scanning）
 node dist/cli.js scan fixtures/ --sarif
@@ -89,10 +90,13 @@ node dist/cli.js --version
 | :--- | :--- |
 | `-f, --force` | 跳过高危阻断，强制写入 lockfile（仅 `install`） |
 | `--format pretty\|json\|sarif` | 输出格式（也支持 `--json` / `--sarif` 简写） |
-| `--fail-on <sev>` | 判定失败的严重级别阈值：`critical`/`high`/`medium`/`low`/`info`（默认 `high`） |
-| `--min-score <0-100>` | 最低安全得分（默认 `60`） |
+| `--profile <name>` | 策略档位：`legacy`/`balanced`/`strict`（默认 `legacy`） |
+| `--fail-on <sev>` | 判定失败的严重级别阈值：`critical`/`high`/`medium`/`low`/`info` |
+| `--min-score <0-100>` | 最低安全得分 |
 | `--ignore-rule <id>` | 跳过指定规则，可重复传入 |
 | `--severity-override <rule=sev>` | 覆盖指定规则的有效严重级别，可重复传入 |
+| `--include <glob>` | 将目录扫描限定到匹配路径，可重复传入 |
+| `--exclude <glob>` | 从目录扫描中排除匹配路径，可重复传入 |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
 | `--output <file>` | `baseline` 命令输出路径（默认 `.agentwarden-baseline.json`） |
 | `--no-redact` | 在报告中保留原始片段和完整文件内容，仅用于受信任的本地调试 |
@@ -115,10 +119,13 @@ node dist/cli.js --version
 
 ```json
 {
+  "profile": "balanced",
   "failOn": "medium",
   "minScore": 75,
   "ignoreRules": ["SEC-INJ-002"],
   "allowedDomains": ["api.open-meteo.com", "company-internal.example"],
+  "include": ["skills/**", "agents/**"],
+  "exclude": ["skills/vendor/**", "**/fixtures/**"],
   "baseline": ".agentwarden-baseline.json",
   "severityOverrides": {
     "SEC-CRED-003": "medium"
@@ -126,12 +133,16 @@ node dist/cli.js --version
 }
 ```
 
+- `profile`：策略档位。`legacy` 为 `failOn: high` / `minScore: 60`，`balanced` 为 `high` / `80`，`strict` 为 `medium` / `90`。
 - `failOn`：命中该级别及以上的发现即判定失败。
 - `minScore`：得分低于该值即失败（0-100，自动收敛）。
 - `ignoreRules`：按规则 ID 忽略检测（例如误报豁免）。
 - `allowedDomains`：网络类规则的域名白名单（含子域名匹配）；命中白名单的 URL 不会被 `SEC-EXFIL-002` 等外带规则标记。
+- `include` / `exclude`：相对于工作目录的 glob，仅约束目录扫描；`exclude` 优先于 `include`。
 - `baseline`：显式启用发现基线；不存在或格式损坏时会直接失败，不会静默忽略。
 - `severityOverrides`：按规则 ID 调整有效严重级别；影响评分、失败阈值、基线和 SARIF 输出。
+
+命令行中的 `--profile` 会先采用该档位的默认阈值；仅当同时显式传入 `--fail-on` 或 `--min-score` 时，对应 CLI 值才会覆盖档位默认值。重复传入的 `--include` / `--exclude` 会追加到配置文件的路径范围内。
 
 ### 规则治理
 
@@ -144,7 +155,7 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 
 严重级别覆盖会参与评分和 `failOn` 判断，因此修改级别或收敛基线前应经过代码审查。无效规则 ID 不会报错，但也不会出现在规则目录中；可通过 `rules --json` 检查目标规则是否显示 `overridden: true`，确认覆盖已实际生效。
 
-配置文件非法或缺失字段时自动回退到默认值（`failOn: high`、`minScore: 60`），不会中断运行。
+配置文件非法或缺失字段时自动回退到 `legacy` 档位（`failOn: high`、`minScore: 60`），不会中断运行。
 
 ---
 
@@ -170,7 +181,7 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 | `SEC-SUPPLY-001` | 供应链 | HIGH | 未校验哈希便下载并执行远程脚本 |
 | `SEC-SUPPLY-002` | 供应链 | MEDIUM | 指向仿冒官方仓库或下载源的相似域名 |
 
-目录扫描会跳过 `node_modules`、`dist`、`.git` 等构建/版本目录；除已列入白名单的 `.cursor`、`.vscode`、`.claude`、`.codex` 外，不会深入隐藏目录。显式传入的文件无论扩展名如何都会被扫描。
+目录扫描会跳过 `node_modules`、`dist`、`.git` 等构建/版本目录；除已列入白名单的 `.cursor`、`.vscode`、`.claude`、`.codex` 外，不会深入隐藏目录。`include` / `exclude` 只作用于目录发现，显式传入的文件无论扩展名或路径过滤规则如何都会被扫描。
 
 `audit` 同时执行两层检查：锁文件 SHA-256 完整性，以及按当前配置重新扫描后的安全策略。即使用 `install --force` 锁定了高风险技能，只要内容未改但策略检查失败，`audit` 仍会返回退出码 `1`。
 
@@ -253,6 +264,7 @@ AgentWarden also provides a fully-typed programmatic SDK for embedding security 
 
 ```typescript
 import {
+  POLICY_PROFILES,
   scanSkillContent,
   scanSkillPaths,
   createBaseline,
@@ -271,8 +283,13 @@ console.log(result.passed); // false
 console.log(result.findings);
 
 // Discover and scan Markdown skills plus MCP JSON configs from disk
-const results = scanSkillPaths('./skills');
+const results = scanSkillPaths('./skills', {
+  profile: 'strict',
+  include: ['skills/**'],
+  exclude: ['skills/vendor/**'],
+});
 console.log(`Scanned ${results.length} assets`);
+console.log(POLICY_PROFILES.strict); // { failOn: 'medium', minScore: 90 }
 
 // Build and apply a baseline in memory or persist it with writeBaseline()
 const baseline = createBaseline(results);

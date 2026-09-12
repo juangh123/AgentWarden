@@ -79,4 +79,45 @@ describe('skill and MCP discovery', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('applies include and exclude globs to directory discovery and SDK scans', () => {
+    const root = tempDir();
+    try {
+      writeFile(root, 'skills/public/SKILL.md', '# Public skill\n');
+      writeFile(root, 'skills/private/SKILL.md', '# Private skill\n');
+      writeFile(root, 'skills/README.txt', 'not scanned');
+      writeFile(root, 'outside/SKILL.md', '# Outside skill\n');
+
+      const files = discoverSkillFiles(root, root, {
+        include: ['skills/**/*.md'],
+        exclude: ['skills/private/**'],
+      }).map((file) => path.relative(root, file).replace(/\\/g, '/'));
+
+      assert.deepEqual(files, ['skills/public/SKILL.md']);
+
+      const results = scanSkillPaths(
+        root,
+        {
+          include: ['skills/**/*.md'],
+          exclude: ['skills/private/**'],
+        },
+        root,
+      );
+      assert.deepEqual(
+        results.map((result) => path.relative(root, result.filePath).replace(/\\/g, '/')),
+        ['skills/public/SKILL.md'],
+      );
+
+      const explicitFile = path.join(root, 'skills', 'private', 'SKILL.md');
+      assert.deepEqual(
+        discoverSkillFiles(explicitFile, root, {
+          include: ['never/**'],
+          exclude: ['**'],
+        }),
+        [explicitFile],
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
