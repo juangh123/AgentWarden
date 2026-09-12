@@ -7,15 +7,19 @@ export {
   writeBaseline,
   applyBaseline,
   inspectBaseline,
+  pruneBaseline,
+  updateBaseline,
   type ApplyBaselineOptions,
   type BaselineEntry,
   type BaselineEntryStatus,
   type BaselineInspection,
+  type BaselineMaintenance,
   type BaselineReview,
   type BaselineSchema,
   type BaselineVersion,
   type CreateBaselineOptions,
   type InspectBaselineOptions,
+  type MaintainBaselineOptions,
 } from './baseline/index.ts';
 export { parseSkillMarkdown } from './parser/skillParser.ts';
 export { allRules } from './rules/index.ts';

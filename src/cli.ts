@@ -35,7 +35,9 @@ import {
   DEFAULT_BASELINE_NAME,
   createBaseline,
   inspectBaseline,
+  pruneBaseline,
   readBaseline,
+  updateBaseline,
   writeBaseline,
 } from './baseline/index.ts';
 import { allRules } from './rules/index.ts';
@@ -80,6 +82,7 @@ const BOOLEAN_OPTIONS = new Set([
   'fail-on-diff',
   'fail-on-expiring',
   'fail-on-unmatched',
+  'dry-run',
 ]);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 const REPEATABLE_OPTIONS: Record<string, string> = {
@@ -330,11 +333,11 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('policy [diff <from> <to>]')} Show effective policy or compare two policies
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
-  ${chalk.green('baseline [create|status] [path...]')} Create or inspect accepted findings
+  ${chalk.green('baseline [create|status|prune|update] [path...]')} Manage accepted findings
   ${chalk.green('help')}                 Show this help manual
 
 ${chalk.bold('OPTIONS:')}
-  ${chalk.yellow('-f, --force')}            Bypass install warning or overwrite an existing baseline
+  ${chalk.yellow('-f, --force')}            Bypass install warning or apply baseline write changes
   ${chalk.yellow('--format <type>')}        Report format: pretty (default), json, sarif
   ${chalk.yellow('--json')}                 Shorthand for --format json
   ${chalk.yellow('--sarif')}                Shorthand for --format sarif
@@ -356,6 +359,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--expiring-within <days>')} Warn when a baseline expires within N days (default: 30)
   ${chalk.yellow('--fail-on-expiring')}      Exit 1 when a baseline is nearing expiry
   ${chalk.yellow('--fail-on-unmatched')}     Exit 1 when baseline entries no longer match
+  ${chalk.yellow('--dry-run')}               Preview baseline prune/update without writing
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
   ${chalk.yellow('--no-color')}             Disable ANSI colors (also honors NO_COLOR env)
   ${chalk.yellow('--no-redact')}            Include raw snippets and file content in reports
@@ -900,6 +904,126 @@ function cmdBaselineStatus(
   }
 }
 
+function cmdBaselineMaintenance(
+  mode: 'prune' | 'update',
+  targets: string[],
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): void {
+  if (format === 'sarif') usageError(`baseline ${mode} supports pretty|json output only`);
+  if (options['dry-run'] && options.force) {
+    usageError('Use either --dry-run or --force, not both');
+  }
+
+  const config = buildConfig(options);
+  const baselinePath = config.baseline ?? DEFAULT_BASELINE_NAME;
+  delete config.baseline;
+  const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
+    include: config.include,
+    exclude: config.exclude,
+  });
+  if (files.length === 0) {
+    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
+    process.exit(EXIT_FAIL);
+  }
+
+  const baseline = readBaseline(baselinePath, process.cwd());
+  const results = files.map((file) => scanSkillFile(file, config));
+  const maintenanceOptions = {
+    cwd: process.cwd(),
+    owner: options.owner !== undefined ? String(options.owner) : undefined,
+    expiresAt: resolveBaselineExpiry(options),
+    note: options.note !== undefined ? String(options.note) : undefined,
+  };
+  const maintenance =
+    mode === 'prune'
+      ? pruneBaseline(results, baseline, maintenanceOptions)
+      : updateBaseline(results, baseline, maintenanceOptions);
+  const output = String(options.output || baselinePath);
+  const resolvedOutput = path.resolve(process.cwd(), output);
+  const requestedDryRun = Boolean(options['dry-run']);
+  const dryRun = requestedDryRun || (maintenance.changed && !options.force);
+  const applied = maintenance.changed && !requestedDryRun && Boolean(options.force);
+
+  if (applied) {
+    writeBaseline(maintenance.baseline, output);
+  }
+
+  const report = {
+    ok: true,
+    mode,
+    path: path.resolve(process.cwd(), baselinePath),
+    output: resolvedOutput,
+    dryRun,
+    changed: maintenance.changed,
+    applied,
+    filesScanned: files.length,
+    baselineVersion: maintenance.baseline.baselineVersion,
+    reviewedAt: maintenance.baseline.review?.reviewedAt ?? null,
+    owner: maintenance.baseline.review?.owner ?? null,
+    expiresAt: maintenance.baseline.review?.expiresAt ?? null,
+    summary: maintenance.summary,
+    removed: maintenance.removed.map((entry) => ({
+      fingerprint: entry.fingerprint,
+      ruleId: entry.ruleId,
+      file: entry.file,
+      line: entry.line ?? null,
+      severity: entry.severity,
+      acceptedAt: entry.acceptedAt ?? null,
+    })),
+    added: maintenance.added.map((entry) => ({
+      fingerprint: entry.fingerprint,
+      ruleId: entry.ruleId,
+      file: entry.file,
+      line: entry.line ?? null,
+      severity: entry.severity,
+      acceptedAt: entry.acceptedAt ?? null,
+    })),
+  };
+
+  if (format === 'json') {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    const state = maintenance.changed
+      ? applied
+        ? chalk.green.bold('UPDATED')
+        : chalk.yellow.bold('DRY RUN')
+      : chalk.green.bold('NO CHANGES');
+    console.log(chalk.bold.cyan(`\nBaseline ${mode === 'prune' ? 'Prune' : 'Update'}\n`));
+    console.log(chalk.gray('─'.repeat(88)));
+    console.log(`  Path:      ${chalk.gray(report.path)}`);
+    console.log(`  Output:    ${chalk.gray(report.output)}`);
+    console.log(`  Status:    ${state}`);
+    console.log(
+      `  Entries:   ${chalk.white(String(report.summary.before))} before, ` +
+        `${chalk.white(String(report.summary.after))} after`,
+    );
+    console.log(
+      `  Changes:   ${chalk.green(String(report.summary.kept))} kept, ` +
+        `${chalk.yellow(String(report.summary.removed))} removed, ` +
+        `${chalk.cyan(String(report.summary.added))} added`,
+    );
+    if (report.removed.length > 0) {
+      console.log(chalk.yellow.bold('\nEntries to remove:'));
+      for (const entry of report.removed) {
+        const location = entry.line ? `${entry.file}:${entry.line}` : entry.file;
+        console.log(`  • ${chalk.white(entry.ruleId)} ${chalk.gray(location)}`);
+      }
+    }
+    if (report.added.length > 0) {
+      console.log(chalk.cyan.bold('\nEntries to add:'));
+      for (const entry of report.added) {
+        const location = entry.line ? `${entry.file}:${entry.line}` : entry.file;
+        console.log(`  • ${chalk.white(entry.ruleId)} ${chalk.gray(location)}`);
+      }
+    }
+    if (maintenance.changed && !applied) {
+      console.log(chalk.yellow('\nPreview only. Re-run with --force to write these changes.'));
+    }
+    console.log(chalk.gray('─'.repeat(88)) + '\n');
+  }
+}
+
 function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: ReportFormat): void {
   const config = buildConfig(options, true);
   const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
@@ -1053,6 +1177,11 @@ function main(): void {
     if (subcommand === 'status') {
       const targets = positionals.length > 2 ? positionals.slice(2) : ['.'];
       cmdBaselineStatus(targets, options, resolveFormat(options));
+      return;
+    }
+    if (subcommand === 'prune' || subcommand === 'update') {
+      const targets = positionals.length > 2 ? positionals.slice(2) : ['.'];
+      cmdBaselineMaintenance(subcommand, targets, options, resolveFormat(options));
       return;
     }
     const targets = subcommand === 'create' ? positionals.slice(2) : positionals.slice(1);

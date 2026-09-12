@@ -73,6 +73,28 @@ export interface BaselineInspection {
   };
 }
 
+export interface MaintainBaselineOptions extends InspectBaselineOptions {
+  owner?: string;
+  expiresAt?: string | Date;
+  note?: string;
+  reviewedAt?: string | Date;
+}
+
+export interface BaselineMaintenance {
+  baseline: BaselineSchema;
+  changed: boolean;
+  kept: BaselineEntry[];
+  removed: BaselineEntry[];
+  added: BaselineEntry[];
+  summary: {
+    before: number;
+    after: number;
+    kept: number;
+    removed: number;
+    added: number;
+  };
+}
+
 function toBaselinePath(filePath: string, cwd: string): string {
   const relative = path.isAbsolute(filePath) ? path.relative(cwd, filePath) : filePath;
   return (relative && !relative.startsWith('..') ? relative : filePath).replace(/\\/g, '/');
@@ -384,4 +406,149 @@ export function inspectBaseline(
       unmatched: entries.filter((entry) => !entry.matched).length,
     },
   };
+}
+
+function sortBaselineEntries(entries: BaselineEntry[]): BaselineEntry[] {
+  return [...entries].sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
+}
+
+function mergeMaintenanceReview(
+  baseline: BaselineSchema,
+  options: MaintainBaselineOptions,
+  now: string,
+): BaselineReview {
+  const owner =
+    options.owner !== undefined ? cleanReviewText(options.owner, 'owner') : baseline.review?.owner;
+  const note =
+    options.note !== undefined ? cleanReviewText(options.note, 'note') : baseline.review?.note;
+  const expiresAt =
+    options.expiresAt !== undefined
+      ? normalizeTimestamp(options.expiresAt, 'expiresAt')
+      : baseline.review?.expiresAt;
+
+  return {
+    reviewedAt: options.reviewedAt
+      ? normalizeTimestamp(options.reviewedAt, 'reviewedAt')
+      : now,
+    ...(owner ? { owner } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
+    ...(note ? { note } : {}),
+  };
+}
+
+function maintenanceReviewChanged(
+  baseline: BaselineSchema,
+  options: MaintainBaselineOptions,
+): boolean {
+  if (
+    options.owner !== undefined &&
+    cleanReviewText(options.owner, 'owner') !== baseline.review?.owner
+  ) {
+    return true;
+  }
+  if (
+    options.note !== undefined &&
+    cleanReviewText(options.note, 'note') !== baseline.review?.note
+  ) {
+    return true;
+  }
+  if (
+    options.expiresAt !== undefined &&
+    normalizeTimestamp(options.expiresAt, 'expiresAt') !== baseline.review?.expiresAt
+  ) {
+    return true;
+  }
+  if (
+    options.reviewedAt !== undefined &&
+    normalizeTimestamp(options.reviewedAt, 'reviewedAt') !== baseline.review?.reviewedAt
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function maintainBaseline(
+  results: ScanResult[],
+  baseline: BaselineSchema,
+  mode: 'prune' | 'update',
+  options: MaintainBaselineOptions,
+): BaselineMaintenance {
+  const cwd = options.cwd ?? process.cwd();
+  const now = options.now ? normalizeTimestamp(options.now, 'now') : new Date().toISOString();
+  const remaining = new Map<string, BaselineEntry[]>();
+
+  for (const entry of baseline.entries) {
+    const bucket = remaining.get(entry.fingerprint) ?? [];
+    bucket.push(entry);
+    remaining.set(entry.fingerprint, bucket);
+  }
+
+  const kept: BaselineEntry[] = [];
+  const added: BaselineEntry[] = [];
+  for (const result of results) {
+    const fingerprints = fingerprintsForResult(result, cwd);
+    result.findings.forEach((finding, index) => {
+      const fingerprint = fingerprints[index];
+      const bucket = remaining.get(fingerprint);
+      if (bucket && bucket.length > 0) {
+        kept.push(bucket.shift()!);
+        return;
+      }
+      if (mode === 'update') {
+        added.push({
+          fingerprint,
+          ruleId: finding.ruleId,
+          file: toBaselinePath(result.filePath, cwd),
+          line: finding.line,
+          severity: finding.severity,
+          acceptedAt: now,
+        });
+      }
+    });
+  }
+
+  const removed = [...remaining.values()].flat();
+  const entriesChanged = removed.length > 0 || added.length > 0;
+  const changed = entriesChanged || maintenanceReviewChanged(baseline, options);
+  const entries = sortBaselineEntries([...kept, ...added]);
+
+  return {
+    baseline: changed
+      ? {
+          baselineVersion: 2,
+          createdAt: baseline.createdAt,
+          review: mergeMaintenanceReview(baseline, options, now),
+          entries,
+        }
+      : baseline,
+    changed,
+    kept,
+    removed,
+    added,
+    summary: {
+      before: baseline.entries.length,
+      after: entries.length,
+      kept: kept.length,
+      removed: removed.length,
+      added: added.length,
+    },
+  };
+}
+
+/** Remove baseline entries that no longer match the supplied scan results. */
+export function pruneBaseline(
+  results: ScanResult[],
+  baseline: BaselineSchema,
+  options: MaintainBaselineOptions = {},
+): BaselineMaintenance {
+  return maintainBaseline(results, baseline, 'prune', options);
+}
+
+/** Reconcile a baseline with current findings, preserving matched entries and accepting new ones. */
+export function updateBaseline(
+  results: ScanResult[],
+  baseline: BaselineSchema,
+  options: MaintainBaselineOptions = {},
+): BaselineMaintenance {
+  return maintainBaseline(results, baseline, 'update', options);
 }

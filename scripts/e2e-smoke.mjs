@@ -310,6 +310,153 @@ r = run([
 ]);
 check('baseline status can fail on unmatched entries', r.status === 1, `status=${r.status}`);
 
+const staleBaselineBefore = JSON.parse(
+  fs.readFileSync(path.join(tmp, 'status-stale-baseline.json'), 'utf8'),
+).entries.length;
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'prune',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--json',
+]);
+const prunePreview = JSON.parse(r.stdout);
+const staleBaselineAfterPreview = JSON.parse(
+  fs.readFileSync(path.join(tmp, 'status-stale-baseline.json'), 'utf8'),
+).entries.length;
+check(
+  'baseline prune previews stale entries without writing',
+  r.status === 0 &&
+    prunePreview.dryRun === true &&
+    prunePreview.applied === false &&
+    prunePreview.summary.removed > 0 &&
+    staleBaselineAfterPreview === staleBaselineBefore,
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'prune',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--force',
+  '--json',
+]);
+const pruneResult = JSON.parse(r.stdout);
+const staleBaselineAfterPrune = JSON.parse(
+  fs.readFileSync(path.join(tmp, 'status-stale-baseline.json'), 'utf8'),
+).entries.length;
+check(
+  'baseline prune applies reviewed removals',
+  r.status === 0 &&
+    pruneResult.applied === true &&
+    pruneResult.dryRun === false &&
+    staleBaselineAfterPrune === pruneResult.summary.after &&
+    staleBaselineAfterPrune === staleBaselineBefore - pruneResult.summary.removed,
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'status',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--json',
+]);
+check(
+  'pruned baseline no longer reports stale entries',
+  r.status === 0 && JSON.parse(r.stdout).summary.unmatched === 0,
+  `status=${r.status}`,
+);
+
+const updateBaselineBefore = JSON.parse(
+  fs.readFileSync(path.join(tmp, 'status-stale-baseline.json'), 'utf8'),
+).entries.length;
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'update',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--json',
+]);
+const updatePreview = JSON.parse(r.stdout);
+check(
+  'baseline update previews newly accepted findings',
+  r.status === 0 &&
+    updatePreview.dryRun === true &&
+    updatePreview.applied === false &&
+    updatePreview.summary.added > 0 &&
+    JSON.parse(fs.readFileSync(path.join(tmp, 'status-stale-baseline.json'), 'utf8')).entries.length ===
+      updateBaselineBefore,
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'update',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--owner',
+  'security-platform',
+  '--force',
+  '--json',
+]);
+const updateResult = JSON.parse(r.stdout);
+check(
+  'baseline update applies newly accepted findings',
+  r.status === 0 &&
+    updateResult.applied === true &&
+    updateResult.summary.added > 0 &&
+    updateResult.owner === 'security-platform',
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'status',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--json',
+]);
+const updatedStatus = JSON.parse(r.stdout);
+check(
+  'updated baseline matches all reviewed findings',
+  r.status === 0 && updatedStatus.summary.unmatched === 0 && updatedStatus.summary.matched > 0,
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'prune',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--dry-run',
+  '--force',
+  '--json',
+]);
+check('baseline maintenance rejects conflicting write modes', r.status === 2, `status=${r.status}`);
+
 r = run([
   '-C',
   tmp,
