@@ -81,4 +81,24 @@ describe('SkillGuard Security Scanner', () => {
       assert.ok(!res.findings.some(f => f.ruleId === id), `${id} should be ignored`);
     }
   });
+
+  it('should apply per-rule severity overrides to findings and policy evaluation', () => {
+    const content = '---\nname: severity-demo\n---\ncat ~/.ssh/id_rsa\n';
+    const tempFile = writeTempSkill(content);
+    try {
+      const blocked = scanSkillFile(tempFile);
+      assert.strictEqual(blocked.passed, false);
+      assert.ok(blocked.findings.some((finding) => finding.ruleId === 'SEC-CRED-001' && finding.severity === 'critical'));
+
+      const overridden = scanSkillFile(tempFile, {
+        severityOverrides: { 'SEC-CRED-001': 'info' },
+      });
+      const finding = overridden.findings.find((item) => item.ruleId === 'SEC-CRED-001');
+      assert.equal(finding?.severity, 'info');
+      assert.equal(overridden.score, 100);
+      assert.equal(overridden.passed, true);
+    } finally {
+      fs.rmSync(tempFile, { force: true });
+    }
+  });
 });

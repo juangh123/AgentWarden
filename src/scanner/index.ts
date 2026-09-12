@@ -48,7 +48,14 @@ export function scanSkillContent(
   for (const rule of allRules) {
     if (ignored.has(rule.id)) continue;
     const findings = rule.check(parsed, { allowedDomains: config.allowedDomains });
-    allFindings.push(...findings);
+    const effectiveSeverity = config.severityOverrides?.[rule.id] ?? rule.severity;
+    allFindings.push(
+      ...findings.map((finding) =>
+        finding.severity === effectiveSeverity
+          ? finding
+          : { ...finding, severity: effectiveSeverity },
+      ),
+    );
   }
 
   const result = evaluateFindings(allFindings, config, virtualPath, parsed, sha256);

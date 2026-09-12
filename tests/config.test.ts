@@ -18,10 +18,19 @@ describe('config normalization', () => {
       ignoreRules: ['SEC-CRED-001', ' SEC-CRED-001 ', ''],
       allowedDomains: ['Example.com', 'example.com', '.api.open-meteo.com'],
       baseline: ' .agentwarden-baseline.json ',
+      severityOverrides: {
+        'sec-cred-001': 'medium',
+        'SEC-INJ-002': 'low',
+        invalid: 'panic' as never,
+      },
     });
     assert.deepEqual(cfg.ignoreRules, ['SEC-CRED-001']);
     assert.deepEqual(cfg.allowedDomains, ['example.com', 'api.open-meteo.com']);
     assert.equal(cfg.baseline, '.agentwarden-baseline.json');
+    assert.deepEqual(cfg.severityOverrides, {
+      'SEC-CRED-001': 'medium',
+      'SEC-INJ-002': 'low',
+    });
   });
 
   it('returns defaults for empty input', () => {

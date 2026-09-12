@@ -20,6 +20,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
 - 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills，以及 `.mcp.json`、`.cursor/mcp.json`、`.vscode/mcp.json` 等常见 MCP 配置。
 - 🧱 **可审计基线**：用稳定指纹接受既有告警，同时继续阻断新发现；基线不保存原始敏感片段。
 - 🕶️ **默认安全报告**：JSON、SARIF 与终端输出自动隐藏密钥、认证头、私钥、敏感配置值和原始文件内容。
+- 🧩 **规则治理**：查看完整规则目录，并按规则覆盖有效严重级别，无需修改源码或直接关闭规则。
 
 ---
 
@@ -68,6 +69,11 @@ node dist/cli.js audit
 node dist/cli.js list
 node dist/cli.js uninstall safe-weather-reporter
 
+# 查看规则与有效严重级别
+node dist/cli.js rules
+node dist/cli.js rules --json
+node dist/cli.js scan skills/ --severity-override SEC-CRED-003=medium
+
 # 生成或应用已接受发现的基线
 node dist/cli.js baseline skills/ --output .agentwarden-baseline.json
 node dist/cli.js scan skills/ --baseline .agentwarden-baseline.json
@@ -86,6 +92,7 @@ node dist/cli.js --version
 | `--fail-on <sev>` | 判定失败的严重级别阈值：`critical`/`high`/`medium`/`low`/`info`（默认 `high`） |
 | `--min-score <0-100>` | 最低安全得分（默认 `60`） |
 | `--ignore-rule <id>` | 跳过指定规则，可重复传入 |
+| `--severity-override <rule=sev>` | 覆盖指定规则的有效严重级别，可重复传入 |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
 | `--output <file>` | `baseline` 命令输出路径（默认 `.agentwarden-baseline.json`） |
 | `--no-redact` | 在报告中保留原始片段和完整文件内容，仅用于受信任的本地调试 |
@@ -112,7 +119,10 @@ node dist/cli.js --version
   "minScore": 75,
   "ignoreRules": ["SEC-INJ-002"],
   "allowedDomains": ["api.open-meteo.com", "company-internal.example"],
-  "baseline": ".agentwarden-baseline.json"
+  "baseline": ".agentwarden-baseline.json",
+  "severityOverrides": {
+    "SEC-CRED-003": "medium"
+  }
 }
 ```
 
@@ -121,6 +131,18 @@ node dist/cli.js --version
 - `ignoreRules`：按规则 ID 忽略检测（例如误报豁免）。
 - `allowedDomains`：网络类规则的域名白名单（含子域名匹配）；命中白名单的 URL 不会被 `SEC-EXFIL-002` 等外带规则标记。
 - `baseline`：显式启用发现基线；不存在或格式损坏时会直接失败，不会静默忽略。
+- `severityOverrides`：按规则 ID 调整有效严重级别；影响评分、失败阈值、基线和 SARIF 输出。
+
+### 规则治理
+
+使用 `agentwarden rules` 查看当前生效的规则目录。JSON 输出包含规则原始严重级别、有效严重级别、覆盖状态、忽略状态、说明和建议。
+
+```bash
+agentwarden rules --json
+agentwarden scan skills/ --severity-override SEC-CRED-003=medium
+```
+
+严重级别覆盖会参与评分和 `failOn` 判断，因此修改级别或收敛基线前应经过代码审查。无效规则 ID 不会报错，但也不会出现在规则目录中；可通过 `rules --json` 检查目标规则是否显示 `overridden: true`，确认覆盖已实际生效。
 
 配置文件非法或缺失字段时自动回退到默认值（`failOn: high`、`minScore: 60`），不会中断运行。
 

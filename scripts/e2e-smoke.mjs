@@ -70,6 +70,18 @@ check(
 r = run(['-C', tmp, 'baseline', 'malicious-skill.md', '--output', 'baseline.json', '--json']);
 check('baseline refuses implicit overwrite', r.status === 1, `status=${r.status}`);
 
+r = run(['-C', tmp, 'rules', '--json']);
+const rulesJson = JSON.parse(r.stdout);
+check('rules catalog lists security rules', r.status === 0 && rulesJson.count >= 10, `status=${r.status}`);
+
+r = run(['-C', tmp, 'rules', '--json', '--severity-override', 'SEC-CRED-001=medium']);
+const overriddenRules = JSON.parse(r.stdout).rules.find((rule) => rule.id === 'SEC-CRED-001');
+check(
+  'rules catalog shows effective severity override',
+  r.status === 0 && overriddenRules?.severity === 'critical' && overriddenRules?.effectiveSeverity === 'medium',
+  `status=${r.status}`,
+);
+
 r = run(['-C', tmp, 'install', 'safe-skill.md', '--json']);
 check('install success exit 0', r.status === 0, `status=${r.status}`);
 const installJson = JSON.parse(r.stdout);

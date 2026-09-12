@@ -25,6 +25,7 @@ import { loadConfig, normalizeConfig, type SkillGuardConfig } from './config/ind
 import { readPackageVersion } from './version.ts';
 import type { ScanResult, Severity } from './rules/types.ts';
 import { DEFAULT_BASELINE_NAME, createBaseline, writeBaseline } from './baseline/index.ts';
+import { allRules } from './rules/index.ts';
 
 const VERSION = readPackageVersion();
 
@@ -35,7 +36,16 @@ const EXIT_USAGE = 2;
 const VALID_FORMATS = new Set(['pretty', 'json', 'sarif']);
 const VALID_FAIL_ON: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
-const VALUE_OPTIONS = new Set(['format', 'fail-on', 'min-score', 'cwd', 'ignore-rule', 'baseline', 'output']);
+const VALUE_OPTIONS = new Set([
+  'format',
+  'fail-on',
+  'min-score',
+  'cwd',
+  'ignore-rule',
+  'severity-override',
+  'baseline',
+  'output',
+]);
 const BOOLEAN_OPTIONS = new Set(['force', 'help', 'version', 'json', 'sarif', 'no-color', 'no-redact']);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 
@@ -68,10 +78,11 @@ function parseArgs(argv: string[]): ParsedArgs {
           errors.push(`Option --${key} requires a value`);
           continue;
         }
-        if (key === 'ignore-rule') {
-          const list = (options.ignoreRule as string[] | undefined) ?? [];
+        if (key === 'ignore-rule' || key === 'severity-override') {
+          const optionKey = key === 'ignore-rule' ? 'ignoreRule' : 'severityOverride';
+          const list = (options[optionKey] as string[] | undefined) ?? [];
           list.push(value);
-          options.ignoreRule = list;
+          options[optionKey] = list;
         } else {
           options[key] = value;
         }
@@ -144,6 +155,21 @@ function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): Sk
   const extraIgnores = (options.ignoreRule as string[] | undefined) ?? [];
   if (options.baseline !== undefined) override.baseline = String(options.baseline);
 
+  const severityOverrides: Record<string, Severity> = { ...(base.severityOverrides ?? {}) };
+  for (const specification of (options.severityOverride as string[] | undefined) ?? []) {
+    const separator = specification.indexOf('=');
+    if (separator <= 0) {
+      usageError(`Invalid --severity-override "${specification}" (expected RULE_ID=severity)`);
+    }
+    const ruleId = specification.slice(0, separator).trim().toUpperCase();
+    const severity = specification.slice(separator + 1).trim().toLowerCase() as Severity;
+    if (!ruleId || !VALID_FAIL_ON.includes(severity)) {
+      usageError(`Invalid --severity-override "${specification}" (expected RULE_ID=critical|high|medium|low|info)`);
+    }
+    severityOverrides[ruleId] = severity;
+  }
+  override.severityOverrides = severityOverrides;
+
   const merged: Partial<SkillGuardConfig> = {
     ...base,
     ...override,
@@ -176,6 +202,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('install <file>')}       Pre-scan, then securely record fingerprint to skills.lock
   ${chalk.green('verify <file>')}        Verify a single skill file against skills.lock fingerprint
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
+  ${chalk.green('rules')}                List active security rules and effective severity
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
   ${chalk.green('baseline [path...]')}   Create an explicit baseline of accepted findings
@@ -189,6 +216,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--fail-on <sev>')}        Fail threshold: critical|high|medium|low|info (default: high)
   ${chalk.yellow('--min-score <n>')}        Minimum safety score 0-100 (default: 60)
   ${chalk.yellow('--ignore-rule <id>')}     Skip a rule id (repeatable)
+  ${chalk.yellow('--severity-override <rule=sev>')} Override a rule severity (repeatable)
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
   ${chalk.yellow('--output <file>')}        Baseline output path (default: ${DEFAULT_BASELINE_NAME})
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
@@ -427,6 +455,50 @@ function cmdList(lock: LockfileSchema, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(78)) + '\n');
 }
 
+function cmdRules(config: SkillGuardConfig, format: ReportFormat): void {
+  const ignored = new Set(config.ignoreRules ?? []);
+  const overrides = config.severityOverrides ?? {};
+  const rules = allRules.map((rule) => {
+    const effectiveSeverity = overrides[rule.id] ?? rule.severity;
+    return {
+      id: rule.id,
+      title: rule.title,
+      category: rule.category,
+      severity: rule.severity,
+      effectiveSeverity,
+      overridden: effectiveSeverity !== rule.severity,
+      ignored: ignored.has(rule.id),
+      description: rule.description,
+      suggestion: rule.suggestion,
+    };
+  });
+
+  if (format === 'json') {
+    console.log(JSON.stringify({ count: rules.length, rules }, null, 2));
+    return;
+  }
+
+  console.log(chalk.bold.cyan('\nSecurity Rule Catalog\n'));
+  console.log(chalk.gray('─'.repeat(104)));
+  for (const rule of rules) {
+    const stateLabel = rule.ignored
+      ? 'IGNORED'
+      : rule.overridden
+        ? `${rule.effectiveSeverity.toUpperCase()} override`
+        : rule.effectiveSeverity.toUpperCase();
+    const state = rule.ignored
+      ? chalk.red(stateLabel.padEnd(20))
+      : rule.overridden
+        ? chalk.yellow(stateLabel.padEnd(20))
+        : chalk.green(stateLabel.padEnd(20));
+    console.log(
+      `  ${chalk.bold.white(rule.id.padEnd(17))} ${state} ` +
+        `${chalk.gray(rule.category.padEnd(20))} ${rule.title}`,
+    );
+  }
+  console.log(chalk.gray('─'.repeat(104)) + '\n');
+}
+
 function cmdUninstall(name: string, format: ReportFormat): void {
   const lock = readLockfile();
   const key = findSkillKey(lock, name);
@@ -539,6 +611,11 @@ function main(): void {
 
   if (command === 'audit') {
     cmdAudit(options, buildConfig(options), resolveFormat(options));
+    return;
+  }
+
+  if (command === 'rules') {
+    cmdRules(buildConfig(options), resolveFormat(options));
     return;
   }
 

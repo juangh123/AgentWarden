@@ -8,6 +8,7 @@ export interface SkillGuardConfig {
   minScore?: number;
   allowedDomains?: string[];
   baseline?: string;
+  severityOverrides?: Record<string, Severity>;
 }
 
 export type AgentWardenConfig = SkillGuardConfig;
@@ -17,6 +18,7 @@ export const DEFAULT_CONFIG: Readonly<SkillGuardConfig> = {
   failOn: 'high',
   minScore: 60,
   allowedDomains: [],
+  severityOverrides: {},
 };
 
 const VALID_FAIL_ON: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -24,6 +26,20 @@ const VALID_FAIL_ON: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 function cleanStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((v) => String(v).trim()).filter(Boolean))];
+}
+
+function cleanSeverityOverrides(value: unknown): Record<string, Severity> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  const overrides: Record<string, Severity> = {};
+  for (const [rawRuleId, rawSeverity] of Object.entries(value)) {
+    const ruleId = rawRuleId.trim().toUpperCase();
+    const severity = String(rawSeverity).trim().toLowerCase() as Severity;
+    if (ruleId && VALID_FAIL_ON.includes(severity)) {
+      overrides[ruleId] = severity;
+    }
+  }
+  return overrides;
 }
 
 /** Validate and clamp a raw (possibly partial) config into a safe, usable shape. */
@@ -48,6 +64,7 @@ export function normalizeConfig(raw?: Partial<SkillGuardConfig>): SkillGuardConf
     ...(typeof source.baseline === 'string' && source.baseline.trim()
       ? { baseline: source.baseline.trim() }
       : {}),
+    severityOverrides: cleanSeverityOverrides(source.severityOverrides),
   };
 }
 
