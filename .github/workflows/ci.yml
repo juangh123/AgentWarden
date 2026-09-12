@@ -29,5 +29,4 @@ jobs:
       - uses: ./
         with:
           path: '.'
-          profile: 'strict'
-          include: 'fixtures/safe-skill.md'
+          config: 'fixtures/ci-policy.json'

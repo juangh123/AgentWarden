@@ -45,6 +45,12 @@ fs.writeFileSync(
   ].join('\n'),
   'utf8',
 );
+fs.writeFileSync(
+  path.join(tmp, 'custom-policy.json'),
+  JSON.stringify({ profile: 'strict', include: ['skills/**'] }, null, 2),
+  'utf8',
+);
+fs.writeFileSync(path.join(tmp, 'malformed-policy.json'), '{"profile":', 'utf8');
 
 let r = run(['-C', tmp, 'scan', '.', '--json']);
 const directoryScan = JSON.parse(r.stdout);
@@ -170,10 +176,44 @@ check(
     effectivePolicy.profile === 'strict' &&
     effectivePolicy.failOn === 'medium' &&
     effectivePolicy.minScore === 90 &&
+    effectivePolicy.configSource === null &&
     effectivePolicy.include[0] === 'skills/**' &&
     effectivePolicy.exclude[0] === 'skills/vendor/**',
   `status=${r.status}`,
 );
+
+r = run(['-C', tmp, 'policy', '--config', 'custom-policy.json', '--json']);
+const explicitPolicy = JSON.parse(r.stdout);
+check(
+  'policy command reports explicit config source',
+  r.status === 0 &&
+    explicitPolicy.profile === 'strict' &&
+    explicitPolicy.configSource === path.join(tmp, 'custom-policy.json') &&
+    explicitPolicy.include[0] === 'skills/**',
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'scan', 'medium-profile.md', '--config', 'custom-policy.json', '--json']);
+check('explicit config controls scan policy', r.status === 1, `status=${r.status}`);
+
+r = run([
+  '-C',
+  tmp,
+  'scan',
+  'medium-profile.md',
+  '--config',
+  'custom-policy.json',
+  '--profile',
+  'legacy',
+  '--json',
+]);
+check('CLI policy overrides explicit config defaults', r.status === 0, `status=${r.status}`);
+
+r = run(['-C', tmp, 'policy', '--config', 'missing-policy.json', '--json']);
+check('missing explicit config fails as a usage error', r.status === 2, `status=${r.status}`);
+
+r = run(['-C', tmp, 'policy', '--config', 'malformed-policy.json', '--json']);
+check('malformed explicit config fails as a usage error', r.status === 2, `status=${r.status}`);
 
 r = run(['-C', tmp, 'install', 'safe-skill.md', '--json']);
 check('install success exit 0', r.status === 0, `status=${r.status}`);

@@ -1,6 +1,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { POLICY_PROFILES, normalizeConfig } from '../src/config/index.ts';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import {
+  ConfigError,
+  POLICY_PROFILES,
+  loadConfigWithMetadata,
+  normalizeConfig,
+} from '../src/config/index.ts';
+
+function tempDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-config-'));
+}
 
 describe('config normalization', () => {
   it('clamps minScore into 0-100', () => {
@@ -73,5 +85,78 @@ describe('config normalization', () => {
     });
     assert.deepEqual(cfg.include, ['skills/**']);
     assert.deepEqual(cfg.exclude, ['skills/private/**']);
+  });
+
+  it('loads an explicit config with source metadata', () => {
+    const root = tempDir();
+    try {
+      fs.mkdirSync(path.join(root, 'config'));
+      fs.writeFileSync(
+        path.join(root, 'config', 'policy.json'),
+        JSON.stringify({
+          profile: 'strict',
+          include: ['skills/**'],
+          exclude: ['skills/vendor/**'],
+        }),
+        'utf8',
+      );
+
+      const loaded = loadConfigWithMetadata(root, 'config/policy.json');
+      assert.equal(loaded.explicit, true);
+      assert.equal(loaded.source, path.join(root, 'config', 'policy.json'));
+      assert.equal(loaded.config.profile, 'strict');
+      assert.equal(loaded.config.failOn, 'medium');
+      assert.equal(loaded.config.minScore, 90);
+      assert.deepEqual(loaded.config.include, ['skills/**']);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when an explicit config is missing or malformed', () => {
+    const root = tempDir();
+    try {
+      assert.throws(
+        () => loadConfigWithMetadata(root, 'missing.json'),
+        (error) => error instanceof ConfigError && error.message.includes('Config file not found'),
+      );
+
+      const malformed = path.join(root, 'malformed.json');
+      fs.writeFileSync(malformed, '{"profile":', 'utf8');
+      assert.throws(
+        () => loadConfigWithMetadata(root, 'malformed.json'),
+        (error) => error instanceof ConfigError && error.message.includes('Invalid config file'),
+      );
+
+      const arrayConfig = path.join(root, 'array.json');
+      fs.writeFileSync(arrayConfig, '[]', 'utf8');
+      assert.throws(
+        () => loadConfigWithMetadata(root, 'array.json'),
+        (error) => error instanceof ConfigError && error.message.includes('JSON object'),
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('tracks implicit config sources and preserves malformed implicit fallback', () => {
+    const root = tempDir();
+    try {
+      const implicit = path.join(root, '.wardenrc.json');
+      fs.writeFileSync(implicit, JSON.stringify({ profile: 'balanced' }), 'utf8');
+      const loaded = loadConfigWithMetadata(root);
+      assert.equal(loaded.explicit, false);
+      assert.equal(loaded.source, implicit);
+      assert.equal(loaded.config.profile, 'balanced');
+      assert.equal(loaded.config.minScore, 80);
+
+      fs.writeFileSync(implicit, '{"profile":', 'utf8');
+      const fallback = loadConfigWithMetadata(root);
+      assert.equal(fallback.source, undefined);
+      assert.equal(fallback.config.profile, 'legacy');
+      assert.equal(fallback.config.minScore, 60);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

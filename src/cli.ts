@@ -22,7 +22,8 @@ import {
   type LockfileSchema,
 } from './manifest/lockfile.ts';
 import {
-  loadConfig,
+  ConfigError,
+  loadConfigWithMetadata,
   normalizeConfig,
   POLICY_PROFILES,
   type PolicyProfileName,
@@ -47,6 +48,7 @@ const VALUE_OPTIONS = new Set([
   'fail-on',
   'min-score',
   'profile',
+  'config',
   'cwd',
   'ignore-rule',
   'severity-override',
@@ -68,6 +70,12 @@ interface ParsedArgs {
   positionals: string[];
   options: Record<string, string | string[] | boolean>;
   errors: string[];
+}
+
+interface BuiltConfig {
+  config: SkillGuardConfig;
+  source?: string;
+  explicit: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -153,8 +161,17 @@ function reportOptions(options: ParsedArgs['options']): ReportOptions {
   return { redact: !options['no-redact'] };
 }
 
-function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): SkillGuardConfig {
-  const base = loadConfig();
+function buildConfigDetails(options: ParsedArgs['options'], ignoreBaseline = false): BuiltConfig {
+  const configPath = options.config !== undefined ? String(options.config) : undefined;
+  let loaded: ReturnType<typeof loadConfigWithMetadata>;
+  try {
+    loaded = loadConfigWithMetadata(process.cwd(), configPath);
+  } catch (error) {
+    if (error instanceof ConfigError) usageError(error.message);
+    throw error;
+  }
+
+  const base = loaded.config;
   const override: Partial<SkillGuardConfig> = {};
 
   if (options.profile !== undefined) {
@@ -206,7 +223,15 @@ function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): Sk
   };
   if (ignoreBaseline) delete merged.baseline;
 
-  return normalizeConfig(merged);
+  return {
+    config: normalizeConfig(merged),
+    source: loaded.source,
+    explicit: loaded.explicit,
+  };
+}
+
+function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): SkillGuardConfig {
+  return buildConfigDetails(options, ignoreBaseline).config;
 }
 
 function resolvePath(target: string): string {
@@ -244,6 +269,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--json')}                 Shorthand for --format json
   ${chalk.yellow('--sarif')}                Shorthand for --format sarif
   ${chalk.yellow('--profile <name>')}       Policy preset: legacy|balanced|strict (default: legacy)
+  ${chalk.yellow('--config <file>')}        Load an explicit JSON configuration file
   ${chalk.yellow('--fail-on <sev>')}        Fail threshold: critical|high|medium|low|info (default: high)
   ${chalk.yellow('--min-score <n>')}        Minimum safety score 0-100 (default: 60)
   ${chalk.yellow('--ignore-rule <id>')}     Skip a rule id (repeatable)
@@ -535,9 +561,11 @@ function cmdRules(config: SkillGuardConfig, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(104)) + '\n');
 }
 
-function cmdPolicy(config: SkillGuardConfig, format: ReportFormat): void {
+function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
+  const { config, source } = details;
   const policy = {
     profile: config.profile ?? 'legacy',
+    configSource: source ?? null,
     failOn: config.failOn ?? 'high',
     minScore: config.minScore ?? 60,
     ignoreRules: config.ignoreRules ?? [],
@@ -556,6 +584,7 @@ function cmdPolicy(config: SkillGuardConfig, format: ReportFormat): void {
   console.log(chalk.bold.cyan('\nEffective Security Policy\n'));
   console.log(chalk.gray('─'.repeat(78)));
   console.log(`  Profile:          ${chalk.bold.white(policy.profile)}`);
+  console.log(`  Config Source:    ${policy.configSource ? chalk.gray(policy.configSource) : chalk.gray('(built-in defaults)')}`);
   console.log(`  Fail On:          ${chalk.yellow(policy.failOn)}`);
   console.log(`  Minimum Score:    ${chalk.yellow(String(policy.minScore))}`);
   console.log(`  Baseline:         ${policy.baseline ? chalk.gray(policy.baseline) : chalk.gray('(disabled)')}`);
@@ -694,7 +723,7 @@ function main(): void {
   }
 
   if (command === 'policy') {
-    cmdPolicy(buildConfig(options), resolveFormat(options));
+    cmdPolicy(buildConfigDetails(options), resolveFormat(options));
     return;
   }
 

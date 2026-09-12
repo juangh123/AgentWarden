@@ -12,11 +12,14 @@ export {
 export { parseSkillMarkdown } from './parser/skillParser.ts';
 export { allRules } from './rules/index.ts';
 export {
+  ConfigError,
   DEFAULT_CONFIG,
   POLICY_PROFILES,
   loadConfig,
+  loadConfigWithMetadata,
   normalizeConfig,
   type AgentWardenConfig,
+  type ConfigLoadResult,
   type PolicyProfile,
   type PolicyProfileName,
   type SkillGuardConfig,

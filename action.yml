@@ -12,6 +12,10 @@ inputs:
     description: 'Path to a skill, MCP config, or directory to scan'
     required: false
     default: '.'
+  config:
+    description: 'Optional explicit JSON configuration file'
+    required: false
+    default: ''
   profile:
     description: 'Policy profile: legacy, balanced, or strict'
     required: false
@@ -67,6 +71,7 @@ runs:
       shell: bash
       env:
         INPUT_PATH: ${{ inputs.path }}
+        INPUT_CONFIG: ${{ inputs.config }}
         INPUT_PROFILE: ${{ inputs.profile }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_MIN_SCORE: ${{ inputs.min-score }}
@@ -79,6 +84,9 @@ runs:
       run: |
         set -euo pipefail
         args=(scan "$INPUT_PATH" --sarif)
+        if [[ -n "$INPUT_CONFIG" ]]; then
+          args+=(--config "$INPUT_CONFIG")
+        fi
         append_lines() {
           local option="$1"
           local value="$2"
