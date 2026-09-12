@@ -1,4 +1,4 @@
 {
-  "profile": "strict",
-  "include": ["fixtures/safe-skill.md"]
+  "extends": "./ci-base-policy.json",
+  "minScore": 95
 }

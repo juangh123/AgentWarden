@@ -104,6 +104,7 @@ describe('config normalization', () => {
       const loaded = loadConfigWithMetadata(root, 'config/policy.json');
       assert.equal(loaded.explicit, true);
       assert.equal(loaded.source, path.join(root, 'config', 'policy.json'));
+      assert.deepEqual(loaded.sources, [path.join(root, 'config', 'policy.json')]);
       assert.equal(loaded.config.profile, 'strict');
       assert.equal(loaded.config.failOn, 'medium');
       assert.equal(loaded.config.minScore, 90);
@@ -147,14 +148,109 @@ describe('config normalization', () => {
       const loaded = loadConfigWithMetadata(root);
       assert.equal(loaded.explicit, false);
       assert.equal(loaded.source, implicit);
+      assert.deepEqual(loaded.sources, [implicit]);
       assert.equal(loaded.config.profile, 'balanced');
       assert.equal(loaded.config.minScore, 80);
 
       fs.writeFileSync(implicit, '{"profile":', 'utf8');
       const fallback = loadConfigWithMetadata(root);
       assert.equal(fallback.source, undefined);
+      assert.deepEqual(fallback.sources, []);
       assert.equal(fallback.config.profile, 'legacy');
       assert.equal(fallback.config.minScore, 60);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('merges extended configs from parent to child with additive policy lists', () => {
+    const root = tempDir();
+    try {
+      fs.mkdirSync(path.join(root, 'config'));
+      const base = path.join(root, 'config', 'base.json');
+      const child = path.join(root, 'config', 'child.json');
+      fs.writeFileSync(
+        base,
+        JSON.stringify({
+          profile: 'strict',
+          ignoreRules: ['SEC-INJ-002'],
+          allowedDomains: ['example.com'],
+          include: ['skills/**'],
+          severityOverrides: { 'SEC-CRED-003': 'medium' },
+        }),
+        'utf8',
+      );
+      fs.writeFileSync(
+        child,
+        JSON.stringify({
+          extends: './base.json',
+          exclude: ['skills/vendor/**'],
+          severityOverrides: { 'SEC-INJ-002': 'low' },
+        }),
+        'utf8',
+      );
+
+      const loaded = loadConfigWithMetadata(root, 'config/child.json');
+      assert.equal(loaded.source, child);
+      assert.deepEqual(loaded.sources, [base, child]);
+      assert.equal(loaded.config.profile, 'strict');
+      assert.equal(loaded.config.failOn, 'medium');
+      assert.equal(loaded.config.minScore, 90);
+      assert.deepEqual(loaded.config.ignoreRules, ['SEC-INJ-002']);
+      assert.deepEqual(loaded.config.allowedDomains, ['example.com']);
+      assert.deepEqual(loaded.config.include, ['skills/**']);
+      assert.deepEqual(loaded.config.exclude, ['skills/vendor/**']);
+      assert.deepEqual(loaded.config.severityOverrides, {
+        'SEC-CRED-003': 'medium',
+        'SEC-INJ-002': 'low',
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('supports multiple parents, child overrides, and cycle detection', () => {
+    const root = tempDir();
+    try {
+      const first = path.join(root, 'first.json');
+      const second = path.join(root, 'second.json');
+      const child = path.join(root, 'child.json');
+      fs.writeFileSync(first, JSON.stringify({ profile: 'balanced', minScore: 70 }), 'utf8');
+      fs.writeFileSync(second, JSON.stringify({ profile: 'strict' }), 'utf8');
+      fs.writeFileSync(
+        child,
+        JSON.stringify({ extends: ['./first.json', './second.json'], minScore: 85 }),
+        'utf8',
+      );
+
+      const loaded = loadConfigWithMetadata(root, 'child.json');
+      assert.deepEqual(loaded.sources, [first, second, child]);
+      assert.equal(loaded.config.profile, 'strict');
+      assert.equal(loaded.config.failOn, 'medium');
+      assert.equal(loaded.config.minScore, 85);
+
+      const cycleA = path.join(root, 'cycle-a.json');
+      const cycleB = path.join(root, 'cycle-b.json');
+      fs.writeFileSync(cycleA, JSON.stringify({ extends: './cycle-b.json' }), 'utf8');
+      fs.writeFileSync(cycleB, JSON.stringify({ extends: './cycle-a.json' }), 'utf8');
+      assert.throws(
+        () => loadConfigWithMetadata(root, 'cycle-a.json'),
+        (error) => error instanceof ConfigError && error.message.includes('Circular config extends chain'),
+      );
+
+      const missingParent = path.join(root, 'missing-parent.json');
+      fs.writeFileSync(missingParent, JSON.stringify({ extends: './does-not-exist.json' }), 'utf8');
+      assert.throws(
+        () => loadConfigWithMetadata(root, 'missing-parent.json'),
+        (error) => error instanceof ConfigError && error.message.includes('Config file not found'),
+      );
+
+      const invalidExtends = path.join(root, 'invalid-extends.json');
+      fs.writeFileSync(invalidExtends, JSON.stringify({ extends: 42 }), 'utf8');
+      assert.throws(
+        () => loadConfigWithMetadata(root, 'invalid-extends.json'),
+        (error) => error instanceof ConfigError && error.message.includes('Invalid "extends"'),
+      );
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

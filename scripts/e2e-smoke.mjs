@@ -50,6 +50,20 @@ fs.writeFileSync(
   JSON.stringify({ profile: 'strict', include: ['skills/**'] }, null, 2),
   'utf8',
 );
+fs.writeFileSync(
+  path.join(tmp, 'inherited-base-policy.json'),
+  JSON.stringify({ profile: 'strict', include: ['skills/**'] }, null, 2),
+  'utf8',
+);
+fs.writeFileSync(
+  path.join(tmp, 'inherited-policy.json'),
+  JSON.stringify({
+    extends: './inherited-base-policy.json',
+    exclude: ['skills/vendor/**'],
+    minScore: 95,
+  }),
+  'utf8',
+);
 fs.writeFileSync(path.join(tmp, 'malformed-policy.json'), '{"profile":', 'utf8');
 
 let r = run(['-C', tmp, 'scan', '.', '--json']);
@@ -190,6 +204,21 @@ check(
     explicitPolicy.profile === 'strict' &&
     explicitPolicy.configSource === path.join(tmp, 'custom-policy.json') &&
     explicitPolicy.include[0] === 'skills/**',
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'policy', '--config', 'inherited-policy.json', '--json']);
+const inheritedPolicy = JSON.parse(r.stdout);
+check(
+  'policy command reports the config inheritance chain',
+  r.status === 0 &&
+    inheritedPolicy.profile === 'strict' &&
+    inheritedPolicy.minScore === 95 &&
+    inheritedPolicy.configSources.length === 2 &&
+    inheritedPolicy.configSources[0] === path.join(tmp, 'inherited-base-policy.json') &&
+    inheritedPolicy.configSources[1] === path.join(tmp, 'inherited-policy.json') &&
+    inheritedPolicy.include[0] === 'skills/**' &&
+    inheritedPolicy.exclude[0] === 'skills/vendor/**',
   `status=${r.status}`,
 );
 

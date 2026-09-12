@@ -75,6 +75,7 @@ interface ParsedArgs {
 interface BuiltConfig {
   config: SkillGuardConfig;
   source?: string;
+  sources: string[];
   explicit: boolean;
 }
 
@@ -226,6 +227,7 @@ function buildConfigDetails(options: ParsedArgs['options'], ignoreBaseline = fal
   return {
     config: normalizeConfig(merged),
     source: loaded.source,
+    sources: loaded.sources,
     explicit: loaded.explicit,
   };
 }
@@ -562,10 +564,12 @@ function cmdRules(config: SkillGuardConfig, format: ReportFormat): void {
 }
 
 function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
-  const { config, source } = details;
+  const { config, source, sources, explicit } = details;
   const policy = {
     profile: config.profile ?? 'legacy',
     configSource: source ?? null,
+    configSources: sources,
+    configExplicit: explicit,
     failOn: config.failOn ?? 'high',
     minScore: config.minScore ?? 60,
     ignoreRules: config.ignoreRules ?? [],
@@ -585,6 +589,9 @@ function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(78)));
   console.log(`  Profile:          ${chalk.bold.white(policy.profile)}`);
   console.log(`  Config Source:    ${policy.configSource ? chalk.gray(policy.configSource) : chalk.gray('(built-in defaults)')}`);
+  if (policy.configSources.length > 1) {
+    console.log(`  Config Chain:     ${chalk.gray(policy.configSources.join(' -> '))}`);
+  }
   console.log(`  Fail On:          ${chalk.yellow(policy.failOn)}`);
   console.log(`  Minimum Score:    ${chalk.yellow(String(policy.minScore))}`);
   console.log(`  Baseline:         ${policy.baseline ? chalk.gray(policy.baseline) : chalk.gray('(disabled)')}`);

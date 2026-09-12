@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { Severity } from '../rules/types.ts';
 
 export interface SkillGuardConfig {
+  extends?: string | string[];
   profile?: PolicyProfileName;
   ignoreRules?: string[];
   failOn?: Severity;
@@ -19,6 +20,7 @@ export type AgentWardenConfig = SkillGuardConfig;
 export interface ConfigLoadResult {
   config: SkillGuardConfig;
   source?: string;
+  sources: string[];
   explicit: boolean;
 }
 
@@ -85,12 +87,105 @@ function cleanSeverityOverrides(value: unknown): Record<string, Severity> {
 }
 
 function parseConfigFile(filePath: string): Partial<SkillGuardConfig> {
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const parsed = JSON.parse(raw) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('config root must be a JSON object');
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('config root must be a JSON object');
+    }
+    return parsed as Partial<SkillGuardConfig>;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(`Invalid config file "${filePath}": ${detail}`);
   }
-  return parsed as Partial<SkillGuardConfig>;
+}
+
+function cleanExtends(value: unknown, source: string): string[] {
+  if (value === undefined) return [];
+  const entries = Array.isArray(value) ? value : [value];
+  if (entries.length === 0) return [];
+  if (entries.some((entry) => typeof entry !== 'string' || !entry.trim())) {
+    throw new ConfigError(`Invalid "extends" in config file "${source}" (expected string or string[])`);
+  }
+  return entries.map((entry) => String(entry).trim());
+}
+
+function mergeStringLists(base: unknown, override: unknown): string[] {
+  const baseValues = Array.isArray(base) ? base : [];
+  const overrideValues = Array.isArray(override) ? override : [];
+  return [...baseValues, ...overrideValues].map((value) => String(value));
+}
+
+function mergeRawConfigs(
+  base: Partial<SkillGuardConfig>,
+  override: Partial<SkillGuardConfig>,
+): Partial<SkillGuardConfig> {
+  const merged: Partial<SkillGuardConfig> = { ...base, ...override };
+
+  merged.ignoreRules = mergeStringLists(base.ignoreRules, override.ignoreRules);
+  merged.allowedDomains = mergeStringLists(base.allowedDomains, override.allowedDomains);
+  merged.include = mergeStringLists(base.include, override.include);
+  merged.exclude = mergeStringLists(base.exclude, override.exclude);
+
+  if (base.severityOverrides !== undefined || override.severityOverrides !== undefined) {
+    const baseOverrides =
+      base.severityOverrides && typeof base.severityOverrides === 'object' && !Array.isArray(base.severityOverrides)
+        ? base.severityOverrides
+        : {};
+    const overrideOverrides =
+      override.severityOverrides &&
+      typeof override.severityOverrides === 'object' &&
+      !Array.isArray(override.severityOverrides)
+        ? override.severityOverrides
+        : {};
+    merged.severityOverrides = { ...baseOverrides, ...overrideOverrides };
+  }
+
+  return merged;
+}
+
+interface RawConfigTree {
+  config: Partial<SkillGuardConfig>;
+  sources: string[];
+}
+
+function readConfigTree(filePath: string, stack: string[] = []): RawConfigTree {
+  const source = path.resolve(filePath);
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(source);
+  } catch {
+    throw new ConfigError(`Config file not found: ${source}`);
+  }
+  if (!stat.isFile()) {
+    throw new ConfigError(`Config path is not a file: ${source}`);
+  }
+
+  const identity = fs.realpathSync(source);
+  if (stack.includes(identity)) {
+    throw new ConfigError(`Circular config extends chain: ${[...stack, identity].join(' -> ')}`);
+  }
+
+  const parsed = parseConfigFile(source);
+  const parentPaths = cleanExtends(parsed.extends, source);
+  const nextStack = [...stack, identity];
+  let merged: Partial<SkillGuardConfig> = {};
+  const sources: string[] = [];
+
+  for (const parentPath of parentPaths) {
+    const parent = readConfigTree(path.resolve(path.dirname(source), parentPath), nextStack);
+    merged = mergeRawConfigs(merged, parent.config);
+    sources.push(...parent.sources);
+  }
+
+  const { extends: _extends, ...ownConfig } = parsed;
+  merged = mergeRawConfigs(merged, ownConfig);
+  sources.push(source);
+
+  return {
+    config: merged,
+    sources: [...new Set(sources)],
+  };
 }
 
 /** Validate and clamp a raw (possibly partial) config into a safe, usable shape. */
@@ -135,34 +230,24 @@ export function loadConfigWithMetadata(
 ): ConfigLoadResult {
   if (explicitConfigPath !== undefined) {
     const source = path.resolve(cwd, explicitConfigPath);
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(source);
-    } catch {
-      throw new ConfigError(`Config file not found: ${source}`);
-    }
-    if (!stat.isFile()) {
-      throw new ConfigError(`Config path is not a file: ${source}`);
-    }
-    try {
-      return {
-        config: normalizeConfig(parseConfigFile(source)),
-        source,
-        explicit: true,
-      };
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw new ConfigError(`Invalid config file "${source}": ${detail}`);
-    }
+    const tree = readConfigTree(source);
+    return {
+      config: normalizeConfig(tree.config),
+      source,
+      sources: tree.sources,
+      explicit: true,
+    };
   }
 
   for (const name of CONFIG_FILE_NAMES) {
     const source = path.join(cwd, name);
     if (!fs.existsSync(source)) continue;
     try {
+      const tree = readConfigTree(source);
       return {
-        config: normalizeConfig(parseConfigFile(source)),
+        config: normalizeConfig(tree.config),
         source,
+        sources: tree.sources,
         explicit: false,
       };
     } catch {
@@ -172,6 +257,7 @@ export function loadConfigWithMetadata(
 
   return {
     config: normalizeConfig(),
+    sources: [],
     explicit: false,
   };
 }

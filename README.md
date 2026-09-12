@@ -16,7 +16,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
   - 隐蔽数据偷放与反向链接识别（Raw IP 外带、webhook.site 等数据收集端点、本地文件上传）
 - 🔒 **完整性指纹锁定 (`skills.lock`)**：类比 `package-lock.json`，记录 SHA-256 签名与安全得分，一键审计本地文件篡改；锁文件损坏或字段缺失会直接报错，不会静默降级为空。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
-- 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，并支持自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
+- 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令直接展示最终生效的配置来源、档位、阈值、基线、规则覆盖和目录范围，JSON 输出可纳入审计流水线。
 - 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills 与常见 MCP 配置，并可通过 `include` / `exclude` glob 精确限定审计范围。
 - 🧱 **可审计基线**：用稳定指纹接受既有告警，同时继续阻断新发现；基线不保存原始敏感片段。
@@ -127,6 +127,7 @@ node dist/cli.js --version
 
 ```json
 {
+  "extends": "./base-security.json",
   "profile": "balanced",
   "failOn": "medium",
   "minScore": 75,
@@ -141,6 +142,7 @@ node dist/cli.js --version
 }
 ```
 
+- `extends`：继承一个或多个父配置，字符串或字符串数组均可；路径相对于当前配置文件解析。数组按顺序合并，后面的父配置和当前文件中的标量字段优先。
 - `profile`：策略档位。`legacy` 为 `failOn: high` / `minScore: 60`，`balanced` 为 `high` / `80`，`strict` 为 `medium` / `90`。
 - `failOn`：命中该级别及以上的发现即判定失败。
 - `minScore`：得分低于该值即失败（0-100，自动收敛）。
@@ -150,11 +152,13 @@ node dist/cli.js --version
 - `baseline`：显式启用发现基线；不存在或格式损坏时会直接失败，不会静默忽略。
 - `severityOverrides`：按规则 ID 调整有效严重级别；影响评分、失败阈值、基线和 SARIF 输出。
 
+继承时 `ignoreRules`、`allowedDomains`、`include`、`exclude` 为追加合并，`severityOverrides` 按键合并，其他字段由子配置覆盖。缺失父配置或循环引用会终止加载；显式 `--config` 下返回退出码 `2`，隐式候选配置则继续兼容回退到默认策略。
+
 命令行中的 `--profile` 会先采用该档位的默认阈值；仅当同时显式传入 `--fail-on` 或 `--min-score` 时，对应 CLI 值才会覆盖档位默认值。重复传入的 `--include` / `--exclude` 会追加到配置文件的路径范围内。
 
 使用 `agentwarden policy --json` 可以检查合并配置文件、策略档位和 CLI 参数后的最终值，适合在 CI 中记录安全门禁的实际配置。
 
-`policy --json` 的 `configSource` 字段会显示实际加载的配置文件绝对路径；未加载配置文件时为 `null`。显式传入的 `--config` 文件不存在、不是文件或 JSON 根节点不是对象时会立即以退出码 `2` 失败。隐式发现候选文件时仍保持兼容行为：损坏文件会跳过并回退到 `legacy` 默认策略。
+`policy --json` 的 `configSource` 字段会显示最终配置文件绝对路径，`configSources` 按父级到子级列出完整继承链；未加载配置文件时分别为 `null` 和空数组。显式传入的 `--config` 文件不存在、不是文件、JSON 根节点不是对象或继承关系损坏时会立即以退出码 `2` 失败。隐式发现候选文件时仍保持兼容行为：损坏文件会跳过并回退到 `legacy` 默认策略。
 
 ### 规则治理
 
