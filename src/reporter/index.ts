@@ -67,7 +67,6 @@ export function buildSarifReport(results: ScanResult[], options: ReportOptions =
           }
         },
         results: reportResults.flatMap(result => {
-          const uri = toArtifactUri(result.filePath);
           return result.findings.map(finding => ({
             ruleId: finding.ruleId,
             ruleIndex: ruleIndexById.get(finding.ruleId) ?? 0,
@@ -76,7 +75,7 @@ export function buildSarifReport(results: ScanResult[], options: ReportOptions =
             locations: [
               {
                 physicalLocation: {
-                  artifactLocation: { uri },
+                  artifactLocation: { uri: toArtifactUri(finding.filePath || result.filePath) },
                   region: {
                     startLine: Math.max(1, finding.line || 1),
                     snippet: { text: finding.snippet || '' },
@@ -182,6 +181,9 @@ export function renderScanReports(
 
       console.log(`\n${idx + 1}. ${sevBadge} ${chalk.bold.white(finding.title)} (${chalk.gray(finding.ruleId)})`);
       console.log(`   ${finding.description}`);
+      if (finding.filePath) {
+        console.log(`   File: ${chalk.gray(finding.filePath)}`);
+      }
       if (finding.line) {
         console.log(`   Line: ${chalk.yellow(finding.line.toString())}`);
       }

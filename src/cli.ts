@@ -35,7 +35,7 @@ import {
   type SkillGuardConfig,
 } from './config/index.ts';
 import { readPackageVersion } from './version.ts';
-import type { ScanResult, Severity } from './rules/types.ts';
+import type { Finding, ScanResult, Severity } from './rules/types.ts';
 import {
   DEFAULT_BASELINE_NAME,
   createBaseline,
@@ -48,6 +48,16 @@ import {
 import { allRules } from './rules/index.ts';
 import { diffPolicyConfigs } from './policy/diff.ts';
 import { RemoteSkillError, fetchRemoteSkill } from './source/remote.ts';
+import {
+  SkillPackageError,
+  extractSkillPackage,
+  inspectInstalledSkillPackage,
+  isSkillPackageSource,
+  readSkillPackage,
+  writeSkillPackage,
+  type SkillPackage,
+} from './source/package.ts';
+import { calculateScore } from './scanner/scoring.ts';
 
 const VERSION = readPackageVersion();
 
@@ -336,7 +346,7 @@ ${chalk.bold('USAGE:')}
 
 ${chalk.bold('COMMANDS:')}
   ${chalk.green('scan <file|dir>...')}    Audit skill markdown files or directories of skills
-  ${chalk.green('install <file|https://url>')} Pre-scan, then securely record fingerprint to skills.lock
+  ${chalk.green('install <file|archive|https://url>')} Pre-scan, then securely record fingerprint to skills.lock
   ${chalk.green('verify <file>')}        Verify a single skill file against skills.lock fingerprint
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
   ${chalk.green('rules')}                List active security rules and effective severity
@@ -363,7 +373,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--changed-from <ref>')}   Scan only files changed since a Git ref
   ${chalk.yellow('--fail-on-diff')}         Exit 1 when policy diff detects changes
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
-  ${chalk.yellow('--output <file>')}        Baseline output path or remote install destination
+  ${chalk.yellow('--output <file>')}        Baseline output or package destination path
   ${chalk.yellow('--sha256 <digest>')}      Required SHA-256 pin for remote installs
   ${chalk.yellow('--allow-http')}           Allow HTTP remote installs (trusted local testing only)
   ${chalk.yellow('--owner <name>')}         Baseline review owner or team
@@ -517,6 +527,198 @@ function resolveRemoteInstallPath(filename: string, output: unknown): string {
   return destination;
 }
 
+interface ScannedSkillPackage {
+  result: ScanResult;
+  scannedFiles: string[];
+}
+
+function decodePackageText(file: { path: string; data: Buffer }): string {
+  if (file.data.includes(0)) {
+    throw new SkillPackageError(
+      'UNSUPPORTED_ENTRY',
+      `Skill package file "${file.path}" contains binary NUL bytes`,
+    );
+  }
+
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(file.data).replace(/^\uFEFF/, '');
+  } catch {
+    throw new SkillPackageError(
+      'UNSUPPORTED_ENTRY',
+      `Skill package file "${file.path}" is not valid UTF-8 text`,
+    );
+  }
+}
+
+function scanSkillPackage(skillPackage: SkillPackage, config: SkillGuardConfig): ScannedSkillPackage {
+  const results = skillPackage.files.map((file) => {
+    const content = decodePackageText(file);
+    return scanSkillContent(content, file.path, config);
+  });
+  const entryIndex = skillPackage.files.findIndex(
+    (file) => file.path.toLowerCase() === skillPackage.entryPath.toLowerCase(),
+  );
+  if (entryIndex === -1) {
+    throw new SkillPackageError('MISSING_ENTRY', 'Skill package entry file is missing');
+  }
+
+  const findings: Finding[] = results.flatMap((result) =>
+    result.findings.map((finding) => ({
+      ...finding,
+      filePath: finding.filePath ?? result.filePath,
+    })),
+  );
+  const suppressedFindings: Finding[] = results.flatMap((result) =>
+    (result.suppressedFindings ?? []).map((finding) => ({
+      ...finding,
+      filePath: finding.filePath ?? result.filePath,
+    })),
+  );
+  const entryResult = results[entryIndex];
+
+  return {
+    result: {
+      ...entryResult,
+      findings,
+      ...(suppressedFindings.length > 0 ? { suppressedFindings } : {}),
+      score: calculateScore(findings),
+      passed: results.every((result) => result.passed),
+    },
+    scannedFiles: skillPackage.files.map((file) => file.path),
+  };
+}
+
+function packageSlug(
+  skillPackage: SkillPackage,
+  result: ScanResult,
+  archiveFilename: string,
+): string {
+  const entryName = path.posix.basename(skillPackage.entryPath);
+  const parsedName = result.parsedSkill.name?.trim();
+  const fallback = path
+    .basename(archiveFilename)
+    .replace(/\.(?:tar\.gz|tgz)$/i, '')
+    .trim();
+  const candidate =
+    parsedName && parsedName !== skillPackage.entryPath && parsedName !== entryName
+      ? parsedName
+      : fallback || 'skill-package';
+  const slug = candidate
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+    .slice(0, 80);
+  return slug || 'skill-package';
+}
+
+interface PackageInstallSource {
+  type: 'local' | 'remote';
+  requestedUrl?: string;
+  resolvedUrl?: string;
+  downloadSha256?: string;
+  digestVerified?: boolean;
+}
+
+function installSkillPackage(
+  skillPackage: SkillPackage,
+  archiveFilename: string,
+  source: PackageInstallSource,
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+  config: SkillGuardConfig,
+  force: boolean,
+): void {
+  const scanned = scanSkillPackage(skillPackage, config);
+  const slug = packageSlug(skillPackage, scanned.result, archiveFilename);
+  const parsedName = scanned.result.parsedSkill.name?.trim();
+  const entryName = path.posix.basename(skillPackage.entryPath);
+  if (!parsedName || parsedName === skillPackage.entryPath || parsedName === entryName) {
+    scanned.result.parsedSkill = { ...scanned.result.parsedSkill, name: slug };
+  }
+  const destination =
+    options.output !== undefined
+      ? path.resolve(process.cwd(), String(options.output))
+      : path.resolve(process.cwd(), '.agentwarden', 'skills', slug);
+
+  if (fs.existsSync(destination) && !fs.statSync(destination).isDirectory()) {
+    usageError(`Skill package destination is not a directory: ${destination}`);
+  }
+
+  const relativeDirectory = toRelativePosix(destination);
+  const sourcePath = toRelativePosix(
+    path.join(destination, ...skillPackage.entryPath.split('/')),
+  );
+  const installAborted = !scanned.result.passed && !force;
+  const sourceDetails = {
+    ...source,
+    path: sourcePath,
+    packagePath: relativeDirectory,
+    packageFormat: 'tar.gz',
+    packageSha256: skillPackage.sha256,
+    packageEntry: skillPackage.entryPath,
+    packageFiles: skillPackage.manifest.length,
+    scannedFiles: scanned.scannedFiles.length,
+  };
+
+  if (format === 'json') {
+    console.log(
+      JSON.stringify(
+        {
+          ...toReportScanResult(scanned.result, reportOptions(options)),
+          source: sourceDetails,
+          installAborted,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    renderScanReport(scanned.result, format, reportOptions(options));
+  }
+
+  if (installAborted) {
+    if (format === 'pretty') {
+      console.log(chalk.red('🚫 Aborted installation due to security risk. Use --force to override.\n'));
+    }
+    process.exit(EXIT_FAIL);
+  }
+
+  const lock = readLockfile();
+  const previous = lock.skills[scanned.result.parsedSkill.name];
+  if (previous && format === 'pretty') {
+    console.log(chalk.gray(`ℹ️  Updating existing lock entry for "${scanned.result.parsedSkill.name}" (was: ${previous.source}).`));
+  }
+
+  writeSkillPackage(skillPackage, destination);
+  updateLockfileSkill({
+    name: scanned.result.parsedSkill.name,
+    version: scanned.result.parsedSkill.version || '0.1.0',
+    source: sourcePath,
+    sha256: scanned.result.sha256,
+    installedAt: new Date().toISOString(),
+    verifiedScore: scanned.result.score,
+    sourceType: source.type,
+    ...(source.requestedUrl ? { remoteUrl: source.requestedUrl } : {}),
+    ...(source.resolvedUrl ? { resolvedUrl: source.resolvedUrl } : {}),
+    ...(source.downloadSha256 ? { downloadSha256: source.downloadSha256 } : {}),
+    ...(source.digestVerified !== undefined
+      ? { digestVerified: source.digestVerified }
+      : {}),
+    packageFormat: 'tar.gz',
+    packageSha256: skillPackage.sha256,
+    packageEntry: skillPackage.entryPath,
+    packageFiles: skillPackage.manifest,
+  });
+
+  if (format === 'pretty') {
+    console.log(
+      chalk.green(
+        `🔒 Successfully verified and locked skill package to skills.lock (${skillPackage.manifest.length} files, package: ${skillPackage.sha256.slice(0, 16)}...).\n`,
+      ),
+    );
+  }
+}
+
 function cmdInstallLocal(target: string, options: ParsedArgs['options'], format: ReportFormat): void {
   const force = Boolean(options.force);
   const fullPath = resolvePath(target);
@@ -605,6 +807,26 @@ async function cmdInstallRemote(
     throw error;
   }
 
+  if (isSkillPackageSource(download.filename, download.contentType)) {
+    const skillPackage = extractSkillPackage(download.bytes);
+    installSkillPackage(
+      skillPackage,
+      download.filename,
+      {
+        type: 'remote',
+        requestedUrl: download.requestedUrl,
+        resolvedUrl: download.resolvedUrl,
+        downloadSha256: download.sha256,
+        digestVerified: download.digestVerified,
+      },
+      options,
+      format,
+      config,
+      force,
+    );
+    return;
+  }
+
   const destination = resolveRemoteInstallPath(download.filename, options.output);
   const relativePosix = toRelativePosix(destination);
   const result = scanSkillContent(download.content, download.filename, config);
@@ -672,6 +894,28 @@ async function cmdInstallRemote(
   }
 }
 
+function cmdInstallLocalPackage(
+  target: string,
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): void {
+  const fullPath = resolvePath(target);
+  const config = buildConfig(options);
+  if (format === 'pretty') {
+    console.log(chalk.cyan(`\n📦 Analyzing local skill package: ${target}...`));
+  }
+  const skillPackage = readSkillPackage(fullPath);
+  installSkillPackage(
+    skillPackage,
+    path.basename(fullPath),
+    { type: 'local' },
+    options,
+    format,
+    config,
+    Boolean(options.force),
+  );
+}
+
 async function cmdInstall(
   target: string,
   options: ParsedArgs['options'],
@@ -688,6 +932,10 @@ async function cmdInstall(
   if (options['allow-http']) {
     usageError('--allow-http is only valid when installing a remote HTTP source');
   }
+  if (isSkillPackageSource(target)) {
+    cmdInstallLocalPackage(target, options, format);
+    return;
+  }
   if (options.output !== undefined) {
     usageError('--output is only valid for baseline writes or remote installs');
   }
@@ -697,6 +945,81 @@ async function cmdInstall(
 function cmdVerify(target: string, config: SkillGuardConfig): void {
   const fullPath = resolvePath(target);
   const lock = readLockfile();
+  const packageKey = Object.keys(lock.skills).find((candidate) => {
+    const item = lock.skills[candidate];
+    if (!item.packageFormat) return false;
+    const packageRoot = path.dirname(resolveFromRoot(item.source));
+    const relative = path.relative(packageRoot, fullPath);
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  });
+
+  if (packageKey) {
+    const lockedEntry = lock.skills[packageKey];
+    if (
+      !lockedEntry.packageSha256 ||
+      !lockedEntry.packageEntry ||
+      !lockedEntry.packageFiles
+    ) {
+      console.error(chalk.red(`❌ Invalid package metadata for skill "${packageKey}".`));
+      process.exit(EXIT_FAIL);
+    }
+
+    const packageRoot = path.dirname(resolveFromRoot(lockedEntry.source));
+    const inspection = inspectInstalledSkillPackage(packageRoot, {
+      entryPath: lockedEntry.packageEntry,
+      sha256: lockedEntry.packageSha256,
+      manifest: lockedEntry.packageFiles,
+    });
+    if (!inspection.packageMatch) {
+      console.error(chalk.red.bold(`❌ TAMPERING DETECTED: Package "${packageKey}" does not match skills.lock!`));
+      if (inspection.missingFiles.length > 0) {
+        console.error(chalk.gray(`  Missing: ${inspection.missingFiles.join(', ')}`));
+      }
+      if (inspection.extraFiles.length > 0) {
+        console.error(chalk.gray(`  Unexpected: ${inspection.extraFiles.join(', ')}`));
+      }
+      if (inspection.modifiedFiles.length > 0) {
+        console.error(chalk.gray(`  Modified: ${inspection.modifiedFiles.join(', ')}`));
+      }
+      if (inspection.unsafePaths.length > 0) {
+        console.error(chalk.gray(`  Unsafe entries: ${inspection.unsafePaths.join(', ')}`));
+      }
+      process.exit(EXIT_FAIL);
+    }
+
+    try {
+      const installedPackage: SkillPackage = {
+        entryPath: lockedEntry.packageEntry,
+        files: inspection.files,
+        manifest: lockedEntry.packageFiles,
+        sha256: lockedEntry.packageSha256,
+        totalBytes: inspection.files.reduce((total, file) => total + file.data.byteLength, 0),
+      };
+      const result = scanSkillPackage(installedPackage, config).result;
+      if (!result.passed) {
+        console.error(
+          chalk.red.bold(
+            `❌ Package "${packageKey}" failed current policy checks (Score: ${result.score}/100).`,
+          ),
+        );
+        process.exit(EXIT_FAIL);
+      }
+      console.log(
+        chalk.green.bold(
+          `✓ Package integrity verified: "${packageKey}" matches ${lockedEntry.packageFiles.length} locked file(s) (Score: ${result.score}/100).`,
+        ),
+      );
+    } catch (error) {
+      console.error(
+        chalk.red(
+          `❌ Unable to scan package "${packageKey}": ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+      process.exit(EXIT_FAIL);
+    }
+    return;
+  }
+
   const result = scanSkillFile(fullPath, config);
   const skillName = result.parsedSkill.name;
   const key = findSkillKey(lock, skillName);
@@ -731,6 +1054,8 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     currentScore: number | null;
     policyPassed: boolean;
     currentFindingCount: number | null;
+    packageMatch: boolean | null;
+    packageFilesChecked: number | null;
   }
   const auditResult: { auditedAt: string; passed?: boolean; skills: Record<string, AuditEntry> } = {
     auditedAt: new Date().toISOString(),
@@ -741,22 +1066,52 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
   for (const name of keys) {
     const item = lock.skills[name];
     const resolvedPath = resolveFromRoot(item.source);
-    const exists = fs.existsSync(resolvedPath);
+    const exists = fs.existsSync(item.packageFormat ? path.dirname(resolvedPath) : resolvedPath);
     let hashMatch = false;
     let currentScore: number | null = null;
     let policyPassed = false;
     let currentFindingCount: number | null = null;
+    let packageMatch: boolean | null = null;
+    let packageFilesChecked: number | null = null;
 
-    if (exists) {
+    if (item.packageFormat === 'tar.gz' && item.packageSha256 && item.packageEntry && item.packageFiles) {
+      const packageRoot = path.dirname(resolvedPath);
+      const inspection = inspectInstalledSkillPackage(packageRoot, {
+        entryPath: item.packageEntry,
+        sha256: item.packageSha256,
+        manifest: item.packageFiles,
+      });
+      packageMatch = inspection.packageMatch;
+      packageFilesChecked = inspection.files.length;
+      hashMatch = inspection.packageMatch;
+
+      if (inspection.exists) {
+        try {
+          const installedPackage: SkillPackage = {
+            entryPath: item.packageEntry,
+            files: inspection.files,
+            manifest: item.packageFiles,
+            sha256: item.packageSha256,
+            totalBytes: inspection.files.reduce((total, file) => total + file.data.byteLength, 0),
+          };
+          const currentResult = scanSkillPackage(installedPackage, config).result;
+          currentScore = currentResult.score;
+          policyPassed = currentResult.passed;
+          currentFindingCount = currentResult.findings.length;
+        } catch {
+          policyPassed = false;
+        }
+      }
+    } else if (exists) {
       const currentResult = scanSkillFile(resolvedPath, config);
       hashMatch = currentResult.sha256 === item.sha256;
       currentScore = currentResult.score;
       policyPassed = currentResult.passed;
       currentFindingCount = currentResult.findings.length;
-      if (!hashMatch || !policyPassed) hasFailure = true;
     } else {
       hasFailure = true;
     }
+    if (!exists || !hashMatch || !policyPassed) hasFailure = true;
 
     auditResult.skills[name] = {
       version: item.version,
@@ -768,6 +1123,8 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
       currentScore,
       policyPassed,
       currentFindingCount,
+      packageMatch,
+      packageFilesChecked,
     };
   }
 
@@ -790,14 +1147,31 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     console.log(`\n• Skill: ${chalk.bold.white(name)} (${chalk.gray('v' + entry.version)})`);
     console.log(`  Source: ${entry.source}`);
     console.log(`  Locked Hash: ${chalk.gray(entry.sha256.slice(0, 16))}...`);
+    if (entry.packageMatch !== null) {
+      console.log(
+        `  Package: ${chalk.gray('tar.gz')} (${entry.packageFilesChecked ?? 0} files checked)`,
+      );
+    }
     console.log(`  Last Security Score: ${entry.lockedScore}/100`);
 
     if (!entry.exists) {
       console.log(chalk.yellow(`  ⚠️  Source file not found on disk at: ${entry.source}`));
     } else if (!entry.hashMatch) {
-      console.log(chalk.red.bold('  ⚠️  TAMPERING DETECTED! File content hash does NOT match lockfile!'));
+      console.log(
+        chalk.red.bold(
+          entry.packageMatch !== null
+            ? '  ⚠️  TAMPERING DETECTED! Package contents do NOT match the lockfile manifest!'
+            : '  ⚠️  TAMPERING DETECTED! File content hash does NOT match lockfile!',
+        ),
+      );
     } else {
-      console.log(chalk.green('  ✓ Content integrity verified against locked SHA256.'));
+      console.log(
+        chalk.green(
+          entry.packageMatch !== null
+            ? '  ✓ Package integrity verified against the locked manifest and SHA256.'
+            : '  ✓ Content integrity verified against locked SHA256.',
+        ),
+      );
     }
     if (!entry.exists) {
       console.log(chalk.red.bold('  ✗ Current policy check could not run because the source file is missing.'));

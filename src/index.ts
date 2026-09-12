@@ -21,6 +21,25 @@ export {
   type RemoteSkillErrorCode,
 } from './source/remote.ts';
 export {
+  DEFAULT_MAX_COMPRESSED_PACKAGE_BYTES,
+  DEFAULT_MAX_PACKAGE_FILES,
+  DEFAULT_MAX_PACKAGE_FILE_BYTES,
+  DEFAULT_MAX_PACKAGE_UNPACKED_BYTES,
+  SkillPackageError,
+  extractSkillPackage,
+  inspectInstalledSkillPackage,
+  isSkillPackageSource,
+  readSkillPackage,
+  writeSkillPackage,
+  type ExpectedSkillPackage,
+  type ExtractSkillPackageOptions,
+  type SkillPackage,
+  type SkillPackageErrorCode,
+  type SkillPackageFile,
+  type SkillPackageInspection,
+  type SkillPackageManifestEntry,
+} from './source/package.ts';
+export {
   DEFAULT_BASELINE_NAME,
   createBaseline,
   readBaseline,

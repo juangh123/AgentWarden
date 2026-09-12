@@ -16,6 +16,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
   - 隐蔽数据偷放与反向链接识别（Raw IP 外带、webhook.site 等数据收集端点、本地文件上传）
 - 🔒 **完整性指纹锁定 (`skills.lock`)**：类比 `package-lock.json`，记录 SHA-256 签名与安全得分，一键审计本地文件篡改；锁文件损坏或字段缺失会直接报错，不会静默降级为空。
 - 📥 **远程安装与摘要固定**：支持从 HTTPS 下载 Skill，必须先提供 SHA-256 pin；下载、扫描与校验成功后才原子落盘并写入锁文件。
+- 📦 **多文件 Skill 包**：安全解析 `.tar.gz` / `.tgz`，递归扫描包内全部 UTF-8 文本文件，并用整包清单锁定脚本、参考文档和 MCP 配置。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
@@ -69,6 +70,11 @@ node dist/cli.js install fixtures/safe-skill.md --force   # 跳过阻断，强�
 node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char-sha256>
 node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char-sha256> --output .agentwarden/skills/weather.md
 node dist/cli.js install http://127.0.0.1:8080/weather.md --sha256 <64-char-sha256> --allow-http  # 仅限可信本地测试
+
+# 安装多文件 Skill 包；包根目录必须包含唯一的 SKILL.md
+node dist/cli.js install ./packages/weather.tar.gz
+node dist/cli.js install https://example.com/packages/weather.tar.gz --sha256 <64-char-sha256>
+node dist/cli.js verify .agentwarden/skills/weather
 
 # 校验单个技能文件是否与 lockfile 匹配
 node dist/cli.js verify fixtures/safe-skill.md
@@ -127,7 +133,7 @@ node dist/cli.js --version
 | `--changed-from <ref>` | 仅扫描相对指定 Git ref 或提交 SHA 发生变化的文件 |
 | `--fail-on-diff` | `policy diff` 检测到差异时返回退出码 `1` |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
-| `--output <file>` | `baseline` 输出路径，或远程安装的目标文件路径 |
+| `--output <file>` | `baseline` 输出路径，或本地/远程 Skill 包的目标目录 |
 | `--sha256 <digest>` | 远程安装必填；校验原始下载字节的 SHA-256，支持 `sha256:` 前缀 |
 | `--allow-http` | 允许远程安装使用 HTTP；仅限可信本地测试，默认只接受 HTTPS |
 | `--owner <name>` | 基线责任人、团队或审核工单标识 |
@@ -172,6 +178,31 @@ node dist/cli.js --version
 | `digestVerified` | 本次安装是否执行并通过了摘要校验 |
 
 锁文件中的 `sha256` 仍是本地快照的审计哈希，`verify` / `audit` 使用它检测文件篡改。扫描器会统一换行并将内容按 UTF-8 文本处理；远程安装还会移除 BOM。因此，对包含 CRLF 或 BOM 的响应，`downloadSha256` 不保证与 `sha256` 字符串相同，二者用途不同。新增字段均为可选，现有 v1 `skills.lock` 保持兼容。
+
+---
+
+## 📦 多文件 Skill 包
+
+`.tar.gz` / `.tgz` 包会被安全解包到内存，校验通过后才原子替换目标目录。包内必须包含唯一的 `SKILL.md`，该文件所在目录作为包根，其他文件必须位于同一根目录下；默认安装到 `.agentwarden/skills/<skill-name>/`。
+
+安全边界：
+
+- 拒绝绝对路径、`..` 穿越、Windows 保留名、重复路径、符号链接、硬链接、设备文件和特殊条目。
+- 压缩包上限 `5 MiB`，解压后上限 `20 MiB`，最多 `256` 个文件，单文件上限 `5 MiB`。
+- 包内所有文件必须是有效 UTF-8 文本且不能包含 NUL 字节，避免不可扫描的二进制载荷进入安装目录。
+- 所有文本文件都会经过现有规则引擎；发现会携带包内相对路径，聚合得分作为整包安全得分。
+- 写入采用同目录 staging 目录加目录替换，安装失败时恢复原目录，不会写入半成品。
+
+整包锁项保留入口文件的 `sha256` 兼容字段，并增加：
+
+| 字段 | 含义 |
+| :--- | :--- |
+| `packageFormat` | 当前固定为 `tar.gz` |
+| `packageSha256` | 排序后对全部文件路径和字节计算的确定性整包 SHA-256 |
+| `packageEntry` | 包内入口文件，通常为 `SKILL.md` |
+| `packageFiles` | 每个包内文件的相对路径、大小和 SHA-256 清单 |
+
+`verify <package-dir>`、`verify <entry-file>` 和 `audit` 都会检查缺失文件、额外文件、链接、路径碰撞和任一文件内容变化。即使只修改 `scripts/*.sh`，包级校验也会失败，避免只锁定入口 Markdown 而遗漏脚本篡改。
 
 ---
 
@@ -349,7 +380,7 @@ src/
   cli.ts               CLI 入口与参数解析（命令、选项、退出码）
   baseline/            发现基线生成、校验、应用与稳定指纹
   git/                 Git 变更集解析与增量扫描范围
-  source/              远程下载、大小限制、超时与 SHA-256 固定
+  source/              远程下载、安全 tar.gz 解包、大小限制与整包指纹
   scanner/             扫描编排与评分
   reporter/redaction.ts 报告脱敏与安全输出投影
   parser/              Markdown / Frontmatter 解析
@@ -377,6 +408,8 @@ import {
   scanSkillContent,
   scanSkillPaths,
   fetchRemoteSkill,
+  extractSkillPackage,
+  inspectInstalledSkillPackage,
   getChangedFiles,
   filterSkillFiles,
   createBaseline,
@@ -411,6 +444,20 @@ const download = await fetchRemoteSkill({
   expectedSha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
 });
 console.log(download.content, download.filename, download.digestVerified);
+
+// Inspect a package in memory and retain its full-file manifest
+const skillPackage = extractSkillPackage(
+  new Uint8Array(await (await fetch('https://example.com/skills/weather.tar.gz')).arrayBuffer()),
+);
+console.log(skillPackage.entryPath, skillPackage.files.length, skillPackage.sha256);
+
+// Installed package verification checks every file in the manifest
+const packageInspection = inspectInstalledSkillPackage('./.agentwarden/skills/weather', {
+  entryPath: skillPackage.entryPath,
+  sha256: skillPackage.sha256,
+  manifest: skillPackage.manifest,
+});
+console.log(packageInspection.packageMatch);
 
 // Resolve an incremental scope for CI without shelling out yourself
 const changed = getChangedFiles({ base: 'origin/main' });

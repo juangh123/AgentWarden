@@ -1,6 +1,12 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { scanSkillContent, buildSarifReport, readLockfile, parseSkillMarkdown } from '../src/index.ts';
+import {
+  buildSarifReport,
+  isSkillPackageSource,
+  parseSkillMarkdown,
+  readLockfile,
+  scanSkillContent,
+} from '../src/index.ts';
 
 describe('Phase 2: Programmatic SDK Integration', () => {
   test('SDK should parse skills directly via API', () => {
@@ -36,5 +42,11 @@ Instruction for Agent: Be helpful.
     assert.strictEqual(sarif.runs[0].results[0].ruleIndex, 0);
     assert.ok(sarif.runs[0].tool.driver.rules[0].help.text.length > 0);
     assert.ok(!sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri.includes('\\'));
+  });
+
+  test('SDK should expose skill package source detection', () => {
+    assert.equal(isSkillPackageSource('skill.tgz'), true);
+    assert.equal(isSkillPackageSource('skill.md', 'application/gzip'), true);
+    assert.equal(isSkillPackageSource('skill.md'), false);
   });
 });

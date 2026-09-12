@@ -35,6 +35,7 @@ export interface Finding {
   category: FindingCategory;
   severity: Severity;
   description: string;
+  filePath?: string;
   line?: number;
   snippet?: string;
   suggestion?: string;

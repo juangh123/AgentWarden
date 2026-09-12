@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { SkillPackageManifestEntry } from '../source/package.ts';
 
 export interface LockedSkill {
   name: string;
@@ -13,6 +14,10 @@ export interface LockedSkill {
   resolvedUrl?: string;
   downloadSha256?: string;
   digestVerified?: boolean;
+  packageFormat?: 'tar.gz';
+  packageSha256?: string;
+  packageEntry?: string;
+  packageFiles?: SkillPackageManifestEntry[];
 }
 
 export interface LockfileSchema {
@@ -63,6 +68,89 @@ function validateOptionalSourceMetadata(
   if (hasRemoteMetadata && sourceType !== 'remote') {
     throw new Error(
       `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has remote metadata without sourceType "remote".`,
+    );
+  }
+
+  const packageFields = [
+    entry.packageFormat,
+    entry.packageSha256,
+    entry.packageEntry,
+    entry.packageFiles,
+  ];
+  const hasPackageMetadata = packageFields.some((value) => value !== undefined);
+  if (!hasPackageMetadata) return;
+
+  if (entry.packageFormat !== 'tar.gz') {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid packageFormat.`,
+    );
+  }
+  if (
+    typeof entry.packageSha256 !== 'string' ||
+    !/^[a-f0-9]{64}$/i.test(entry.packageSha256)
+  ) {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid packageSha256.`,
+    );
+  }
+  if (
+    typeof entry.packageEntry !== 'string' ||
+    !entry.packageEntry ||
+    path.isAbsolute(entry.packageEntry) ||
+    entry.packageEntry.replace(/\\/g, '/').split('/').includes('..') ||
+    path.posix.basename(entry.packageEntry.replace(/\\/g, '/')).toLowerCase() !== 'skill.md'
+  ) {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid packageEntry.`,
+    );
+  }
+  if (!Array.isArray(entry.packageFiles) || entry.packageFiles.length === 0) {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid packageFiles.`,
+    );
+  }
+  if (entry.packageFiles.length > 256) {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has too many packageFiles.`,
+    );
+  }
+
+  const normalizedPackageFiles = new Set<string>();
+  for (const packageFile of entry.packageFiles) {
+    if (!packageFile || typeof packageFile !== 'object' || Array.isArray(packageFile)) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid package file metadata.`,
+      );
+    }
+    const candidate = packageFile as Record<string, unknown>;
+    if (
+      typeof candidate.path !== 'string' ||
+      !candidate.path ||
+      path.isAbsolute(candidate.path) ||
+      candidate.path.replace(/\\/g, '/').split('/').includes('..') ||
+      typeof candidate.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/i.test(candidate.sha256) ||
+      typeof candidate.size !== 'number' ||
+      !Number.isSafeInteger(candidate.size) ||
+      candidate.size < 0
+    ) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid package file metadata.`,
+      );
+    }
+    const normalizedPath = candidate.path.replace(/\\/g, '/').toLowerCase();
+    if (normalizedPackageFiles.has(normalizedPath)) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has duplicate package file paths.`,
+      );
+    }
+    normalizedPackageFiles.add(normalizedPath);
+  }
+
+  const normalizedEntry = entry.packageEntry.replace(/\\/g, '/').toLowerCase();
+  if (!normalizedPackageFiles.has(normalizedEntry)) {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" packageEntry is missing from packageFiles.`,
     );
   }
 }

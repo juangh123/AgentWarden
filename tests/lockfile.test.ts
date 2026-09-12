@@ -115,4 +115,63 @@ describe('lockfile', () => {
     );
     assert.throws(() => readLockfile(dir), /remote metadata without sourceType "remote"/);
   });
+
+  it('validates and preserves whole-package metadata', () => {
+    const dir = tempDir();
+    updateLockfileSkill(
+      {
+        name: 'package-demo',
+        version: '1.0.0',
+        source: '.agentwarden/skills/package-demo/SKILL.md',
+        sha256: 'a'.repeat(64),
+        installedAt: new Date().toISOString(),
+        verifiedScore: 100,
+        sourceType: 'remote',
+        remoteUrl: 'https://example.com/package-demo.tar.gz',
+        resolvedUrl: 'https://cdn.example.com/package-demo.tar.gz',
+        downloadSha256: 'b'.repeat(64),
+        digestVerified: true,
+        packageFormat: 'tar.gz',
+        packageSha256: 'c'.repeat(64),
+        packageEntry: 'SKILL.md',
+        packageFiles: [
+          { path: 'SKILL.md', sha256: 'd'.repeat(64), size: 10 },
+          { path: 'scripts/run.sh', sha256: 'e'.repeat(64), size: 20 },
+        ],
+      },
+      dir,
+    );
+
+    const entry = readLockfile(dir).skills['package-demo'];
+    assert.equal(entry.packageFormat, 'tar.gz');
+    assert.equal(entry.packageFiles?.length, 2);
+    assert.equal(entry.packageEntry, 'SKILL.md');
+  });
+
+  it('rejects package metadata when the entry is absent from the manifest', () => {
+    const dir = tempDir();
+    fs.writeFileSync(
+      path.join(dir, LOCKFILE_NAME),
+      JSON.stringify({
+        lockfileVersion: 1,
+        skills: {
+          demo: {
+            name: 'demo',
+            version: '1.0.0',
+            source: 'demo/SKILL.md',
+            sha256: 'a'.repeat(64),
+            installedAt: new Date().toISOString(),
+            verifiedScore: 100,
+            packageFormat: 'tar.gz',
+            packageSha256: 'b'.repeat(64),
+            packageEntry: 'SKILL.md',
+            packageFiles: [{ path: 'scripts/run.sh', sha256: 'c'.repeat(64), size: 10 }],
+          },
+        },
+      }),
+      'utf8',
+    );
+
+    assert.throws(() => readLockfile(dir), /packageEntry is missing from packageFiles/);
+  });
 });

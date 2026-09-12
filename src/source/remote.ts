@@ -38,6 +38,7 @@ export interface RemoteSkillDownload {
   resolvedUrl: string;
   filename: string;
   contentType?: string;
+  bytes: Uint8Array;
   content: string;
   sha256: string;
   size: number;
@@ -199,6 +200,7 @@ export async function fetchRemoteSkill(
       resolvedUrl: resolvedUrl.href,
       filename: resolveFilename(resolvedUrl, response.headers.get('content-type')),
       ...(contentType ? { contentType } : {}),
+      bytes: contentBuffer,
       content,
       sha256,
       size: contentBuffer.byteLength,
