@@ -28,6 +28,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./
         with:
-          path: './fixtures/safe-skill.md'
-          fail-on: 'high'
-          min-score: '80'
+          path: '.'
+          profile: 'strict'
+          include: 'fixtures/safe-skill.md'

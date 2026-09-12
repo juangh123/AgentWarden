@@ -232,6 +232,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('verify <file>')}        Verify a single skill file against skills.lock fingerprint
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
   ${chalk.green('rules')}                List active security rules and effective severity
+  ${chalk.green('policy')}               Show the effective policy and directory scan scope
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
   ${chalk.green('baseline [path...]')}   Create an explicit baseline of accepted findings
@@ -534,6 +535,41 @@ function cmdRules(config: SkillGuardConfig, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(104)) + '\n');
 }
 
+function cmdPolicy(config: SkillGuardConfig, format: ReportFormat): void {
+  const policy = {
+    profile: config.profile ?? 'legacy',
+    failOn: config.failOn ?? 'high',
+    minScore: config.minScore ?? 60,
+    ignoreRules: config.ignoreRules ?? [],
+    allowedDomains: config.allowedDomains ?? [],
+    baseline: config.baseline ?? null,
+    severityOverrides: config.severityOverrides ?? {},
+    include: config.include ?? [],
+    exclude: config.exclude ?? [],
+  };
+
+  if (format === 'json') {
+    console.log(JSON.stringify(policy, null, 2));
+    return;
+  }
+
+  console.log(chalk.bold.cyan('\nEffective Security Policy\n'));
+  console.log(chalk.gray('─'.repeat(78)));
+  console.log(`  Profile:          ${chalk.bold.white(policy.profile)}`);
+  console.log(`  Fail On:          ${chalk.yellow(policy.failOn)}`);
+  console.log(`  Minimum Score:    ${chalk.yellow(String(policy.minScore))}`);
+  console.log(`  Baseline:         ${policy.baseline ? chalk.gray(policy.baseline) : chalk.gray('(disabled)')}`);
+  console.log(`  Ignored Rules:    ${policy.ignoreRules.length ? policy.ignoreRules.join(', ') : chalk.gray('(none)')}`);
+  console.log(`  Allowed Domains:  ${policy.allowedDomains.length ? policy.allowedDomains.join(', ') : chalk.gray('(none)')}`);
+  console.log(`  Include Globs:    ${policy.include.length ? policy.include.join(', ') : chalk.gray('(all)')}`);
+  console.log(`  Exclude Globs:    ${policy.exclude.length ? policy.exclude.join(', ') : chalk.gray('(none)')}`);
+  const overrides = Object.entries(policy.severityOverrides);
+  console.log(
+    `  Severity Override:${overrides.length ? ' ' + overrides.map(([id, severity]) => `${id}=${severity}`).join(', ') : ' ' + chalk.gray('(none)')}`,
+  );
+  console.log(chalk.gray('─'.repeat(78)) + '\n');
+}
+
 function cmdUninstall(name: string, format: ReportFormat): void {
   const lock = readLockfile();
   const key = findSkillKey(lock, name);
@@ -654,6 +690,11 @@ function main(): void {
 
   if (command === 'rules') {
     cmdRules(buildConfig(options), resolveFormat(options));
+    return;
+  }
+
+  if (command === 'policy') {
+    cmdPolicy(buildConfig(options), resolveFormat(options));
     return;
   }
 

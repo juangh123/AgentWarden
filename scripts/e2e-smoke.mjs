@@ -151,6 +151,30 @@ check(
   `status=${r.status}`,
 );
 
+r = run([
+  '-C',
+  tmp,
+  'policy',
+  '--json',
+  '--profile',
+  'strict',
+  '--include',
+  'skills/**',
+  '--exclude',
+  'skills/vendor/**',
+]);
+const effectivePolicy = JSON.parse(r.stdout);
+check(
+  'policy command shows effective profile and scan scope',
+  r.status === 0 &&
+    effectivePolicy.profile === 'strict' &&
+    effectivePolicy.failOn === 'medium' &&
+    effectivePolicy.minScore === 90 &&
+    effectivePolicy.include[0] === 'skills/**' &&
+    effectivePolicy.exclude[0] === 'skills/vendor/**',
+  `status=${r.status}`,
+);
+
 r = run(['-C', tmp, 'install', 'safe-skill.md', '--json']);
 check('install success exit 0', r.status === 0, `status=${r.status}`);
 const installJson = JSON.parse(r.stdout);

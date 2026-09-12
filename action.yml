@@ -12,14 +12,34 @@ inputs:
     description: 'Path to a skill, MCP config, or directory to scan'
     required: false
     default: '.'
+  profile:
+    description: 'Policy profile: legacy, balanced, or strict'
+    required: false
+    default: 'balanced'
   fail-on:
-    description: 'Failure severity threshold: critical, high, medium, low'
+    description: 'Optional failure severity override: critical, high, medium, low, info'
     required: false
-    default: 'high'
+    default: ''
   min-score:
-    description: 'Minimum required security score (0-100)'
+    description: 'Optional minimum security score override (0-100)'
     required: false
-    default: '80'
+    default: ''
+  include:
+    description: 'Optional newline-separated globs that limit directory discovery'
+    required: false
+    default: ''
+  exclude:
+    description: 'Optional newline-separated globs excluded from directory discovery'
+    required: false
+    default: ''
+  ignore-rules:
+    description: 'Optional newline-separated rule IDs to ignore'
+    required: false
+    default: ''
+  severity-overrides:
+    description: 'Optional newline-separated RULE_ID=severity overrides'
+    required: false
+    default: ''
   baseline:
     description: 'Optional baseline file containing reviewed findings to suppress'
     required: false
@@ -47,13 +67,41 @@ runs:
       shell: bash
       env:
         INPUT_PATH: ${{ inputs.path }}
+        INPUT_PROFILE: ${{ inputs.profile }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_INCLUDE: ${{ inputs.include }}
+        INPUT_EXCLUDE: ${{ inputs.exclude }}
+        INPUT_IGNORE_RULES: ${{ inputs.ignore-rules }}
+        INPUT_SEVERITY_OVERRIDES: ${{ inputs.severity-overrides }}
         INPUT_BASELINE: ${{ inputs.baseline }}
         INPUT_SARIF: ${{ inputs.sarif }}
       run: |
         set -euo pipefail
-        args=(scan "$INPUT_PATH" --fail-on "$INPUT_FAIL_ON" --min-score "$INPUT_MIN_SCORE" --sarif)
+        args=(scan "$INPUT_PATH" --sarif)
+        append_lines() {
+          local option="$1"
+          local value="$2"
+          while IFS= read -r line; do
+            line="${line%$'\r'}"
+            if [[ -n "$line" ]]; then
+              args+=("$option" "$line")
+            fi
+          done <<< "$value"
+        }
+        if [[ -n "$INPUT_PROFILE" ]]; then
+          args+=(--profile "$INPUT_PROFILE")
+        fi
+        if [[ -n "$INPUT_FAIL_ON" ]]; then
+          args+=(--fail-on "$INPUT_FAIL_ON")
+        fi
+        if [[ -n "$INPUT_MIN_SCORE" ]]; then
+          args+=(--min-score "$INPUT_MIN_SCORE")
+        fi
+        append_lines --include "$INPUT_INCLUDE"
+        append_lines --exclude "$INPUT_EXCLUDE"
+        append_lines --ignore-rule "$INPUT_IGNORE_RULES"
+        append_lines --severity-override "$INPUT_SEVERITY_OVERRIDES"
         if [[ -n "$INPUT_BASELINE" ]]; then
           args+=(--baseline "$INPUT_BASELINE")
         fi
