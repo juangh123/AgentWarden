@@ -222,6 +222,45 @@ check(
   `status=${r.status}`,
 );
 
+r = run(['-C', tmp, 'policy', 'diff', 'legacy', 'strict', '--json']);
+const policyDiff = JSON.parse(r.stdout);
+check(
+  'policy diff reports changes between profiles',
+  r.status === 0 &&
+    policyDiff.changed === true &&
+    policyDiff.from.label === 'legacy' &&
+    policyDiff.to.label === 'strict' &&
+    policyDiff.changes.some((change) => change.field === 'minScore' && change.before === 60 && change.after === 90),
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'policy',
+  'diff',
+  'legacy',
+  'current',
+  '--config',
+  'custom-policy.json',
+  '--json',
+]);
+const currentPolicyDiff = JSON.parse(r.stdout);
+check(
+  'policy diff resolves the current explicit config',
+  r.status === 0 &&
+    currentPolicyDiff.to.label === 'current' &&
+    currentPolicyDiff.to.configSource === path.join(tmp, 'custom-policy.json') &&
+    currentPolicyDiff.to.profile === 'strict',
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'policy', 'diff', 'legacy', 'strict', '--fail-on-diff', '--json']);
+check('policy diff can fail CI on policy changes', r.status === 1, `status=${r.status}`);
+
+r = run(['-C', tmp, 'policy', 'diff', 'legacy', 'strict', '--sarif']);
+check('policy diff rejects SARIF output', r.status === 2, `status=${r.status}`);
+
 r = run(['-C', tmp, 'scan', 'medium-profile.md', '--config', 'custom-policy.json', '--json']);
 check('explicit config controls scan policy', r.status === 1, `status=${r.status}`);
 

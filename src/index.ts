@@ -44,6 +44,12 @@ export {
   type ReportOptions,
 } from './reporter/index.ts';
 export { readPackageVersion } from './version.ts';
+export {
+  diffPolicyConfigs,
+  type PolicyDiff,
+  type PolicyDiffChange,
+  type PolicyDiffKind,
+} from './policy/diff.ts';
 export type {
   Rule,
   Finding,

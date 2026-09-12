@@ -33,6 +33,7 @@ import { readPackageVersion } from './version.ts';
 import type { ScanResult, Severity } from './rules/types.ts';
 import { DEFAULT_BASELINE_NAME, createBaseline, writeBaseline } from './baseline/index.ts';
 import { allRules } from './rules/index.ts';
+import { diffPolicyConfigs } from './policy/diff.ts';
 
 const VERSION = readPackageVersion();
 
@@ -57,7 +58,16 @@ const VALUE_OPTIONS = new Set([
   'baseline',
   'output',
 ]);
-const BOOLEAN_OPTIONS = new Set(['force', 'help', 'version', 'json', 'sarif', 'no-color', 'no-redact']);
+const BOOLEAN_OPTIONS = new Set([
+  'force',
+  'help',
+  'version',
+  'json',
+  'sarif',
+  'no-color',
+  'no-redact',
+  'fail-on-diff',
+]);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 const REPEATABLE_OPTIONS: Record<string, string> = {
   'ignore-rule': 'ignoreRule',
@@ -77,6 +87,11 @@ interface BuiltConfig {
   source?: string;
   sources: string[];
   explicit: boolean;
+}
+
+interface PolicySide {
+  label: string;
+  details: BuiltConfig;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -236,6 +251,46 @@ function buildConfig(options: ParsedArgs['options'], ignoreBaseline = false): Sk
   return buildConfigDetails(options, ignoreBaseline).config;
 }
 
+function resolvePolicySide(input: string, options: ParsedArgs['options']): PolicySide {
+  const normalizedInput = input.trim();
+  const profile = normalizedInput.toLowerCase() as PolicyProfileName;
+  if (Object.hasOwn(POLICY_PROFILES, profile)) {
+    return {
+      label: profile,
+      details: {
+        config: normalizeConfig({ profile }),
+        sources: [],
+        explicit: false,
+      },
+    };
+  }
+
+  if (normalizedInput.toLowerCase() === 'current') {
+    return {
+      label: 'current',
+      details: buildConfigDetails(options),
+    };
+  }
+
+  let loaded: ReturnType<typeof loadConfigWithMetadata>;
+  try {
+    loaded = loadConfigWithMetadata(process.cwd(), normalizedInput);
+  } catch (error) {
+    if (error instanceof ConfigError) usageError(error.message);
+    throw error;
+  }
+
+  return {
+    label: normalizedInput,
+    details: {
+      config: loaded.config,
+      source: loaded.source,
+      sources: loaded.sources,
+      explicit: loaded.explicit,
+    },
+  };
+}
+
 function resolvePath(target: string): string {
   const fullPath = path.resolve(process.cwd(), target);
   if (!fs.existsSync(fullPath)) {
@@ -259,7 +314,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('verify <file>')}        Verify a single skill file against skills.lock fingerprint
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
   ${chalk.green('rules')}                List active security rules and effective severity
-  ${chalk.green('policy')}               Show the effective policy and directory scan scope
+  ${chalk.green('policy [diff <from> <to>]')} Show effective policy or compare two policies
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
   ${chalk.green('baseline [path...]')}   Create an explicit baseline of accepted findings
@@ -278,6 +333,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--severity-override <rule=sev>')} Override a rule severity (repeatable)
   ${chalk.yellow('--include <glob>')}       Limit directory scans to matching paths (repeatable)
   ${chalk.yellow('--exclude <glob>')}       Exclude matching paths from directory scans (repeatable)
+  ${chalk.yellow('--fail-on-diff')}         Exit 1 when policy diff detects changes
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
   ${chalk.yellow('--output <file>')}        Baseline output path (default: ${DEFAULT_BASELINE_NAME})
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
@@ -563,9 +619,9 @@ function cmdRules(config: SkillGuardConfig, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(104)) + '\n');
 }
 
-function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
+function policySnapshot(details: BuiltConfig) {
   const { config, source, sources, explicit } = details;
-  const policy = {
+  return {
     profile: config.profile ?? 'legacy',
     configSource: source ?? null,
     configSources: sources,
@@ -579,7 +635,10 @@ function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
     include: config.include ?? [],
     exclude: config.exclude ?? [],
   };
+}
 
+function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
+  const policy = policySnapshot(details);
   if (format === 'json') {
     console.log(JSON.stringify(policy, null, 2));
     return;
@@ -604,6 +663,73 @@ function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
     `  Severity Override:${overrides.length ? ' ' + overrides.map(([id, severity]) => `${id}=${severity}`).join(', ') : ' ' + chalk.gray('(none)')}`,
   );
   console.log(chalk.gray('─'.repeat(78)) + '\n');
+}
+
+function formatPolicyDiffValue(value: string | number | null | undefined): string {
+  if (value === undefined || value === null) return '(none)';
+  return String(value);
+}
+
+function cmdPolicyDiff(
+  fromInput: string,
+  toInput: string,
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): void {
+  if (format === 'sarif') usageError('policy diff supports pretty|json output only');
+
+  const from = resolvePolicySide(fromInput, options);
+  const to = resolvePolicySide(toInput, options);
+  const difference = diffPolicyConfigs(from.details.config, to.details.config);
+  const report = {
+    from: {
+      label: from.label,
+      ...policySnapshot(from.details),
+    },
+    to: {
+      label: to.label,
+      ...policySnapshot(to.details),
+    },
+    changed: difference.changed,
+    changes: difference.changes,
+  };
+
+  if (format === 'json') {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(chalk.bold.cyan('\nPolicy Diff\n'));
+    console.log(chalk.gray('─'.repeat(78)));
+    console.log(`  From: ${chalk.white(from.label)}`);
+    console.log(`  To:   ${chalk.white(to.label)}`);
+    console.log(chalk.gray('─'.repeat(78)));
+
+    if (!difference.changed) {
+      console.log(chalk.green.bold('\n✓ Policies are equivalent.\n'));
+    } else {
+      for (const change of difference.changes) {
+        const field = change.key ? `${change.field}[${change.key}]` : change.field;
+        if (change.kind === 'added') {
+          console.log(
+            `  ${chalk.green('+')} ${field}: ${chalk.gray(formatPolicyDiffValue(change.after))}`,
+          );
+        } else if (change.kind === 'removed') {
+          console.log(
+            `  ${chalk.red('-')} ${field}: ${chalk.gray(formatPolicyDiffValue(change.before))}`,
+          );
+        } else {
+          console.log(
+            `  ${chalk.yellow('~')} ${field}: ` +
+              `${chalk.gray(formatPolicyDiffValue(change.before))} -> ${chalk.white(formatPolicyDiffValue(change.after))}`,
+          );
+        }
+      }
+      console.log(chalk.gray(`\n${difference.changes.length} change(s) detected.\n`));
+    }
+  }
+
+  if (options['fail-on-diff'] && difference.changed) {
+    process.exit(EXIT_FAIL);
+  }
 }
 
 function cmdUninstall(name: string, format: ReportFormat): void {
@@ -730,6 +856,22 @@ function main(): void {
   }
 
   if (command === 'policy') {
+    const subcommand = positionals[1];
+    if (subcommand === 'diff') {
+      const from = positionals[2];
+      const to = positionals[3];
+      if (!from || !to) {
+        usageError('Missing policy comparison inputs. Usage: skillguard policy diff <from> <to>');
+      }
+      if (positionals.length > 4) {
+        usageError('policy diff accepts exactly two comparison inputs');
+      }
+      cmdPolicyDiff(from, to, options, resolveFormat(options));
+      return;
+    }
+    if (subcommand !== undefined) {
+      usageError(`Unknown policy subcommand: "${subcommand}"`);
+    }
     cmdPolicy(buildConfigDetails(options), resolveFormat(options));
     return;
   }
