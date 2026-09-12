@@ -85,8 +85,10 @@ node dist/cli.js policy diff current .agentwarden/policy.json --fail-on-diff --j
 node dist/cli.js scan . --config .agentwarden/policy.json
 
 # 生成或应用已接受发现的基线
-node dist/cli.js baseline skills/ --output .agentwarden-baseline.json
-node dist/cli.js baseline skills/ --owner security-platform --expires-in 30 --note "Migration tracked in SEC-142"
+node dist/cli.js baseline create skills/ --output .agentwarden-baseline.json
+node dist/cli.js baseline create skills/ --owner security-platform --expires-in 30 --note "Migration tracked in SEC-142"
+node dist/cli.js baseline status skills/ --baseline .agentwarden-baseline.json --json
+node dist/cli.js baseline status skills/ --baseline .agentwarden-baseline.json --expiring-within 14 --fail-on-expiring --fail-on-unmatched
 node dist/cli.js scan skills/ --baseline .agentwarden-baseline.json
 
 # 帮助与版本
@@ -115,6 +117,9 @@ node dist/cli.js --version
 | `--expires-in <days>` | 新建基线在指定天数后过期，范围 `1-3650` |
 | `--expires-at <date>` | 使用 ISO 日期显式设置基线过期时间 |
 | `--note <text>` | 保存简短审核备注，最多 500 字符 |
+| `--expiring-within <days>` | `baseline status` 在基线剩余天数不超过该值时标记临近到期（默认 `30`） |
+| `--fail-on-expiring` | `baseline status` 检测到临近到期时返回退出码 `1` |
+| `--fail-on-unmatched` | `baseline status` 检测到未匹配项时返回退出码 `1` |
 | `--no-redact` | 在报告中保留原始片段和完整文件内容，仅用于受信任的本地调试 |
 | `-C, --cwd <dir>` | 指定工作目录（lockfile 与相对路径均基于该目录解析） |
 | `--no-color` | 关闭 ANSI 颜色（同时遵循 `NO_COLOR` 环境变量） |
@@ -226,18 +231,21 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 基线用于接受经过审查的既有发现，适合在已有大型 Skill 仓库中逐步接入安全门禁：
 
 ```bash
-agentwarden baseline skills/ --output .agentwarden-baseline.json
-agentwarden baseline skills/ --owner security-platform --expires-in 30 --note "SEC-142 migration"
+agentwarden baseline create skills/ --output .agentwarden-baseline.json
+agentwarden baseline create skills/ --owner security-platform --expires-in 30 --note "SEC-142 migration"
+agentwarden baseline status skills/ --baseline .agentwarden-baseline.json --json
 agentwarden scan skills/ --baseline .agentwarden-baseline.json
 ```
 
 指纹由规则、类别、级别、规范化文件路径和规范化告警片段共同生成，因此普通行号移动不会导致基线失效，但规则内容、文件位置或匹配片段变化后必须重新审查。基线仅保存 SHA-256 指纹、规则 ID、文件、行号和级别，不保存原始敏感片段。
 
-基线不会自动启用。必须通过 `--baseline <file>` 或配置项 `baseline` 显式指定；覆盖已有基线必须使用 `--force`。
+基线不会自动启用。必须通过 `--baseline <file>` 或配置项 `baseline` 显式指定；覆盖已有基线必须使用 `--force`。旧语法 `baseline [path...]` 仍然兼容，`baseline create [path...]` 是新语法的显式形式。
 
 基线 v2 会在 `review` 中保存审核时间、`owner`、可选 `expiresAt` 和审核备注。超过 `expiresAt` 后，该基线不再抑制任何发现，所有当前告警重新进入策略判断，因此 CI 会自动恢复阻断。旧版 v1 基线仍可读取和应用，但不会过期。
 
-审核备注会原样写入基线文件，不应包含密钥、Token 或其他敏感数据。扫描报告只投影 `owner`、`expiresAt` 和过期状态，不包含备注正文。
+`baseline status [path...]` 会重新扫描指定路径（默认当前目录），逐条报告基线匹配状态、接受时间、未匹配条目年龄，以及责任人、审核时间和到期状态。匹配基于稳定指纹：如果只扫描仓库子目录，基线中位于该扫描范围之外的条目会显示为 `unmatched`。基线已过期时命令返回退出码 `1`；`--fail-on-expiring` 和 `--fail-on-unmatched` 可分别把临近到期和未匹配项升级为 CI 失败。
+
+审核备注会原样写入基线文件，不应包含密钥、Token 或其他敏感数据。扫描和 status 报告只投影 `owner`、`expiresAt`、过期状态及条目元数据，不包含备注正文或原始敏感片段。v2 新建条目会记录 `acceptedAt` 并据此计算 `ageDays`，v1 基线没有接受时间时该字段为空。
 
 ### 报告脱敏
 

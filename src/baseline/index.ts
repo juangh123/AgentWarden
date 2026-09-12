@@ -14,6 +14,7 @@ export interface BaselineEntry {
   file: string;
   line?: number;
   severity: Severity;
+  acceptedAt?: string;
 }
 
 export interface BaselineReview {
@@ -45,6 +46,31 @@ export interface ApplyBaselineOptions {
   failOn?: Severity;
   minScore?: number;
   now?: string | Date;
+}
+
+export interface InspectBaselineOptions {
+  cwd?: string;
+  now?: string | Date;
+}
+
+export interface BaselineEntryStatus extends BaselineEntry {
+  matched: boolean;
+  ageDays?: number;
+}
+
+export interface BaselineInspection {
+  baselineVersion: BaselineVersion;
+  reviewedAt?: string;
+  owner?: string;
+  expiresAt?: string;
+  expired: boolean;
+  daysUntilExpiry?: number;
+  entries: BaselineEntryStatus[];
+  summary: {
+    total: number;
+    matched: number;
+    unmatched: number;
+  };
 }
 
 function toBaselinePath(filePath: string, cwd: string): string {
@@ -116,6 +142,7 @@ export function createBaseline(
   options: CreateBaselineOptions = {},
 ): BaselineSchema {
   const entries: BaselineEntry[] = [];
+  const createdAt = new Date().toISOString();
 
   for (const result of results) {
     const fingerprints = fingerprintsForResult(result, cwd);
@@ -126,13 +153,14 @@ export function createBaseline(
         file: toBaselinePath(result.filePath, cwd),
         line: finding.line,
         severity: finding.severity,
+        acceptedAt: createdAt,
       });
     });
   }
 
   return {
     baselineVersion: 2,
-    createdAt: new Date().toISOString(),
+    createdAt,
     review: createReview(options),
     entries: entries.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint)),
   };
@@ -189,9 +217,19 @@ function parseBaseline(raw: string, baselinePath: string): BaselineSchema {
       typeof entry.ruleId !== 'string' ||
       typeof entry.file !== 'string' ||
       typeof entry.severity !== 'string' ||
-      !VALID_SEVERITIES.includes(entry.severity)
+      !VALID_SEVERITIES.includes(entry.severity) ||
+      (entry.acceptedAt !== undefined && typeof entry.acceptedAt !== 'string')
     ) {
       throw new Error(`Invalid baseline at ${baselinePath}: entry ${index} is malformed.`);
+    }
+    if (entry.acceptedAt !== undefined) {
+      try {
+        normalizeTimestamp(entry.acceptedAt, `entries[${index}].acceptedAt`);
+      } catch (error) {
+        throw new Error(
+          `Invalid baseline at ${baselinePath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
   }
 
@@ -284,5 +322,66 @@ export function applyBaseline(
     baseline: metadata,
     score: calculateScore(activeFindings),
     passed: passesPolicy(activeFindings, options.failOn, options.minScore),
+  };
+}
+
+/** Inspect baseline freshness and per-entry matching against one or more scan results. */
+export function inspectBaseline(
+  results: ScanResult[],
+  baseline: BaselineSchema,
+  options: InspectBaselineOptions = {},
+): BaselineInspection {
+  const cwd = options.cwd ?? process.cwd();
+  const now = options.now ? normalizeTimestamp(options.now, 'now') : new Date().toISOString();
+  const nowMs = Date.parse(now);
+  const expiresAt = baseline.review?.expiresAt;
+  const expired = expiresAt !== undefined && nowMs >= Date.parse(expiresAt);
+  const baselineFingerprints = new Set(baseline.entries.map((entry) => entry.fingerprint));
+  const matchedFingerprints = new Set<string>();
+
+  for (const result of results) {
+    for (const fingerprint of fingerprintsForResult(result, cwd)) {
+      if (baselineFingerprints.has(fingerprint)) {
+        matchedFingerprints.add(fingerprint);
+      }
+    }
+  }
+
+  const entries: BaselineEntryStatus[] = baseline.entries
+    .map((entry) => {
+      const acceptedMs = entry.acceptedAt ? Date.parse(entry.acceptedAt) : undefined;
+      return {
+        ...entry,
+        matched: matchedFingerprints.has(entry.fingerprint),
+        ...(acceptedMs !== undefined
+          ? { ageDays: Math.max(0, Math.floor((nowMs - acceptedMs) / (24 * 60 * 60 * 1000))) }
+          : {}),
+      };
+    })
+    .sort((a, b) => {
+      if (a.matched !== b.matched) return a.matched ? 1 : -1;
+      return (
+        a.file.localeCompare(b.file) ||
+        a.ruleId.localeCompare(b.ruleId) ||
+        (a.line ?? 0) - (b.line ?? 0) ||
+        a.fingerprint.localeCompare(b.fingerprint)
+      );
+    });
+
+  return {
+    baselineVersion: baseline.baselineVersion,
+    ...(baseline.review?.reviewedAt ? { reviewedAt: baseline.review.reviewedAt } : {}),
+    ...(baseline.review?.owner ? { owner: baseline.review.owner } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
+    expired,
+    ...(expiresAt
+      ? { daysUntilExpiry: Math.ceil((Date.parse(expiresAt) - nowMs) / (24 * 60 * 60 * 1000)) }
+      : {}),
+    entries,
+    summary: {
+      total: entries.length,
+      matched: entries.filter((entry) => entry.matched).length,
+      unmatched: entries.filter((entry) => !entry.matched).length,
+    },
   };
 }

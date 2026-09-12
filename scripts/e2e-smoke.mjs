@@ -219,6 +219,121 @@ r = run([
   '-C',
   tmp,
   'baseline',
+  'status',
+  'malicious-skill.md',
+  '--baseline',
+  'reviewed-baseline.json',
+  '--json',
+]);
+const baselineStatus = JSON.parse(r.stdout);
+check(
+  'baseline status reports matching entries and review metadata',
+  r.status === 0 &&
+    baselineStatus.summary.total === reviewedBaseline.entries.length &&
+    baselineStatus.summary.matched === reviewedBaseline.entries.length &&
+    baselineStatus.summary.unmatched === 0 &&
+    baselineStatus.owner === 'security-platform',
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'status',
+  'malicious-skill.md',
+  '--baseline',
+  'reviewed-baseline.json',
+  '--expiring-within',
+  '30',
+  '--fail-on-expiring',
+  '--json',
+]);
+const expiringBaselineStatus = JSON.parse(r.stdout);
+check(
+  'baseline status can fail when expiry is near',
+  r.status === 1 && expiringBaselineStatus.expiring === true,
+  `status=${r.status}`,
+);
+
+const staleSkillPath = path.join(tmp, 'status-stale.md');
+fs.writeFileSync(
+  staleSkillPath,
+  fs.readFileSync(path.join(tmp, 'malicious-skill.md'), 'utf8'),
+  'utf8',
+);
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'create',
+  'status-stale.md',
+  '--output',
+  'status-stale-baseline.json',
+  '--json',
+]);
+check('baseline create is backward-compatible with the legacy path syntax', r.status === 0, `status=${r.status}`);
+
+fs.writeFileSync(
+  staleSkillPath,
+  fs.readFileSync(staleSkillPath, 'utf8').replace('id_rsa', 'id_ed25519'),
+  'utf8',
+);
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'status',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--json',
+]);
+const staleBaselineStatus = JSON.parse(r.stdout);
+check(
+  'baseline status reports entries that no longer match',
+  r.status === 0 &&
+    staleBaselineStatus.summary.unmatched > 0,
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'status',
+  'status-stale.md',
+  '--baseline',
+  'status-stale-baseline.json',
+  '--fail-on-unmatched',
+  '--json',
+]);
+check('baseline status can fail on unmatched entries', r.status === 1, `status=${r.status}`);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
+  'status',
+  'malicious-skill.md',
+  '--baseline',
+  'expired-baseline.json',
+  '--json',
+]);
+const expiredStatus = JSON.parse(r.stdout);
+check(
+  'baseline status exits nonzero for expired baselines',
+  r.status === 1 && expiredStatus.expired === true && expiredStatus.daysUntilExpiry < 0,
+  `status=${r.status}`,
+);
+
+r = run(['-C', tmp, 'baseline', 'status', 'malicious-skill.md', '--baseline', 'baseline.json', '--sarif']);
+check('baseline status rejects SARIF output', r.status === 2, `status=${r.status}`);
+
+r = run([
+  '-C',
+  tmp,
+  'baseline',
   'malicious-skill.md',
   '--output',
   'invalid-baseline.json',

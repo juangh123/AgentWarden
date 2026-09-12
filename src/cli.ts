@@ -31,7 +31,13 @@ import {
 } from './config/index.ts';
 import { readPackageVersion } from './version.ts';
 import type { ScanResult, Severity } from './rules/types.ts';
-import { DEFAULT_BASELINE_NAME, createBaseline, writeBaseline } from './baseline/index.ts';
+import {
+  DEFAULT_BASELINE_NAME,
+  createBaseline,
+  inspectBaseline,
+  readBaseline,
+  writeBaseline,
+} from './baseline/index.ts';
 import { allRules } from './rules/index.ts';
 import { diffPolicyConfigs } from './policy/diff.ts';
 
@@ -61,6 +67,7 @@ const VALUE_OPTIONS = new Set([
   'note',
   'expires-in',
   'expires-at',
+  'expiring-within',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'force',
@@ -71,6 +78,8 @@ const BOOLEAN_OPTIONS = new Set([
   'no-color',
   'no-redact',
   'fail-on-diff',
+  'fail-on-expiring',
+  'fail-on-unmatched',
 ]);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 const REPEATABLE_OPTIONS: Record<string, string> = {
@@ -321,7 +330,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('policy [diff <from> <to>]')} Show effective policy or compare two policies
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
-  ${chalk.green('baseline [path...]')}   Create an explicit baseline of accepted findings
+  ${chalk.green('baseline [create|status] [path...]')} Create or inspect accepted findings
   ${chalk.green('help')}                 Show this help manual
 
 ${chalk.bold('OPTIONS:')}
@@ -344,6 +353,9 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--expires-in <days>')}    Expire a new baseline after 1-3650 days
   ${chalk.yellow('--expires-at <date>')}    Explicit baseline expiry date
   ${chalk.yellow('--note <text>')}          Baseline review note
+  ${chalk.yellow('--expiring-within <days>')} Warn when a baseline expires within N days (default: 30)
+  ${chalk.yellow('--fail-on-expiring')}      Exit 1 when a baseline is nearing expiry
+  ${chalk.yellow('--fail-on-unmatched')}     Exit 1 when baseline entries no longer match
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
   ${chalk.yellow('--no-color')}             Disable ANSI colors (also honors NO_COLOR env)
   ${chalk.yellow('--no-redact')}            Include raw snippets and file content in reports
@@ -781,6 +793,113 @@ function resolveBaselineExpiry(options: ParsedArgs['options']): string | undefin
   return undefined;
 }
 
+function resolveExpiringWithin(options: ParsedArgs['options']): number {
+  if (options['expiring-within'] === undefined) return 30;
+  const days = Number(options['expiring-within']);
+  if (!Number.isFinite(days) || days < 1 || days > 3650) {
+    usageError(
+      `Invalid --expiring-within "${String(options['expiring-within'])}" (expected 1-3650 days)`,
+    );
+  }
+  return Math.ceil(days);
+}
+
+function cmdBaselineStatus(
+  targets: string[],
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): void {
+  if (format === 'sarif') usageError('baseline status supports pretty|json output only');
+
+  const config = buildConfig(options);
+  const baselinePath = config.baseline ?? DEFAULT_BASELINE_NAME;
+  delete config.baseline;
+  const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
+    include: config.include,
+    exclude: config.exclude,
+  });
+  if (files.length === 0) {
+    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
+    process.exit(EXIT_FAIL);
+  }
+
+  const baseline = readBaseline(baselinePath, process.cwd());
+  const results = files.map((file) => scanSkillFile(file, config));
+  const inspection = inspectBaseline(results, baseline, { cwd: process.cwd() });
+  const expiringWithinDays = resolveExpiringWithin(options);
+  const expiring =
+    !inspection.expired &&
+    inspection.daysUntilExpiry !== undefined &&
+    inspection.daysUntilExpiry <= expiringWithinDays;
+  const unmatchedEntries = inspection.entries.filter((entry) => !entry.matched);
+  const report = {
+    path: path.resolve(process.cwd(), baselinePath),
+    baselineVersion: inspection.baselineVersion,
+    reviewedAt: inspection.reviewedAt ?? null,
+    owner: inspection.owner ?? null,
+    expiresAt: inspection.expiresAt ?? null,
+    expired: inspection.expired,
+    expiring,
+    expiringWithinDays,
+    daysUntilExpiry: inspection.daysUntilExpiry ?? null,
+    summary: inspection.summary,
+    entries: inspection.entries.map((entry) => ({
+      fingerprint: entry.fingerprint,
+      ruleId: entry.ruleId,
+      file: entry.file,
+      line: entry.line ?? null,
+      severity: entry.severity,
+      acceptedAt: entry.acceptedAt ?? null,
+      ageDays: entry.ageDays ?? null,
+      matched: entry.matched,
+    })),
+  };
+
+  if (format === 'json') {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    const state = inspection.expired
+      ? chalk.red.bold('EXPIRED')
+      : expiring
+        ? chalk.yellow.bold('EXPIRING SOON')
+        : chalk.green.bold('ACTIVE');
+    console.log(chalk.bold.cyan('\nBaseline Status\n'));
+    console.log(chalk.gray('─'.repeat(88)));
+    console.log(`  Path:      ${chalk.gray(report.path)}`);
+    console.log(`  Version:   ${chalk.white(String(report.baselineVersion))}`);
+    console.log(`  Status:    ${state}`);
+    console.log(`  Owner:     ${report.owner ?? chalk.gray('(unassigned)')}`);
+    console.log(`  Reviewed:  ${report.reviewedAt ?? chalk.gray('(legacy baseline)')}`);
+    console.log(`  Expires:   ${report.expiresAt ?? chalk.gray('(never)')}`);
+    if (report.daysUntilExpiry !== null) {
+      console.log(`  Remaining: ${chalk.white(String(report.daysUntilExpiry) + ' day(s)')}`);
+    }
+    console.log(
+      `  Entries:   ${chalk.white(String(report.summary.total))} total, ` +
+        `${chalk.green(String(report.summary.matched))} matched, ` +
+        `${chalk.yellow(String(report.summary.unmatched))} unmatched`,
+    );
+
+    if (unmatchedEntries.length > 0) {
+      console.log(chalk.yellow.bold('\nUnmatched entries:'));
+      for (const entry of unmatchedEntries) {
+        const location = entry.line ? `${entry.file}:${entry.line}` : entry.file;
+        const age = entry.ageDays !== undefined ? `, ${entry.ageDays} day(s) old` : '';
+        console.log(`  • ${chalk.white(entry.ruleId)} ${chalk.gray(location)}${chalk.gray(age)}`);
+      }
+    }
+    console.log(chalk.gray('─'.repeat(88)) + '\n');
+  }
+
+  if (
+    inspection.expired ||
+    (options['fail-on-expiring'] && expiring) ||
+    (options['fail-on-unmatched'] && unmatchedEntries.length > 0)
+  ) {
+    process.exit(EXIT_FAIL);
+  }
+}
+
 function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: ReportFormat): void {
   const config = buildConfig(options, true);
   const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
@@ -930,7 +1049,13 @@ function main(): void {
   }
 
   if (command === 'baseline') {
-    const targets = positionals.slice(1);
+    const subcommand = positionals[1];
+    if (subcommand === 'status') {
+      const targets = positionals.length > 2 ? positionals.slice(2) : ['.'];
+      cmdBaselineStatus(targets, options, resolveFormat(options));
+      return;
+    }
+    const targets = subcommand === 'create' ? positionals.slice(2) : positionals.slice(1);
     cmdBaseline(targets.length > 0 ? targets : ['.'], options, resolveFormat(options));
     return;
   }

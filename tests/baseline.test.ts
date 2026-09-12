@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import {
   applyBaseline,
   createBaseline,
+  inspectBaseline,
   readBaseline,
   scanSkillContent,
   writeBaseline,
@@ -129,6 +130,66 @@ describe('finding baselines', () => {
     assert.equal(expired.baseline?.expired, true);
     assert.equal(expired.baseline?.owner, 'security-platform');
     assert.equal(expired.passed, false);
+  });
+
+  it('inspects matched and unmatched entries with acceptance ages', () => {
+    const result = scanSkillContent(riskyContent, 'skills/credential-demo.md');
+    const baseline = createBaseline([result]);
+    baseline.entries[0].acceptedAt = '2026-09-01T00:00:00.000Z';
+
+    const matched = inspectBaseline([result], baseline, {
+      now: '2026-09-12T00:00:00.000Z',
+    });
+    assert.deepEqual(matched.summary, { total: 1, matched: 1, unmatched: 0 });
+    assert.equal(matched.entries[0].matched, true);
+    assert.equal(matched.entries[0].ageDays, 11);
+
+    const changed = scanSkillContent(
+      riskyContent.replace('id_rsa', 'id_ed25519'),
+      'skills/credential-demo.md',
+    );
+    const unmatched = inspectBaseline([changed], baseline, {
+      now: '2026-09-12T00:00:00.000Z',
+    });
+    assert.deepEqual(unmatched.summary, { total: 1, matched: 0, unmatched: 1 });
+    assert.equal(unmatched.entries[0].matched, false);
+    assert.equal(unmatched.entries[0].ageDays, 11);
+  });
+
+  it('reports baseline expiry and remaining days', () => {
+    const result = scanSkillContent(riskyContent, 'skills/credential-demo.md');
+    const baseline = createBaseline([result], process.cwd(), {
+      expiresAt: '2026-09-30T00:00:00.000Z',
+    });
+
+    const active = inspectBaseline([result], baseline, {
+      now: '2026-09-12T00:00:00.000Z',
+    });
+    assert.equal(active.expired, false);
+    assert.equal(active.daysUntilExpiry, 18);
+
+    const expired = inspectBaseline([result], baseline, {
+      now: '2026-10-01T00:00:00.000Z',
+    });
+    assert.equal(expired.expired, true);
+    assert.equal(expired.daysUntilExpiry, -1);
+  });
+
+  it('inspects legacy v1 baselines without acceptance timestamps', () => {
+    const result = scanSkillContent(riskyContent, 'skills/credential-demo.md');
+    const current = createBaseline([result]);
+    const legacy = {
+      baselineVersion: 1 as const,
+      createdAt: current.createdAt,
+      entries: current.entries.map(({ acceptedAt: _acceptedAt, ...entry }) => entry),
+    };
+
+    const inspection = inspectBaseline([result], legacy, {
+      now: '2026-09-12T00:00:00.000Z',
+    });
+    assert.equal(inspection.baselineVersion, 1);
+    assert.deepEqual(inspection.summary, { total: 1, matched: 1, unmatched: 0 });
+    assert.equal(Object.hasOwn(inspection.entries[0], 'ageDays'), false);
   });
 
   it('continues to read and apply legacy v1 baselines', () => {
