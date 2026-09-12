@@ -18,6 +18,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
 - 📥 **远程安装与摘要固定**：支持从 HTTPS 下载 Skill，必须先提供 SHA-256 pin；下载、扫描与校验成功后才原子落盘并写入锁文件。
 - 📦 **多文件 Skill 包**：安全解析 `.tar.gz` / `.tgz`，递归扫描包内全部 UTF-8 文本文件，并用整包清单锁定脚本、参考文档和 MCP 配置。
 - ✍️ **Ed25519 发布者来源**：验证与发布者公钥绑定的分离签名，并把公钥、签名指纹及验证状态写入锁文件。
+- 🛡️ **可信发布者策略**：可要求安装必须验签，只允许指定公钥指纹，并在安装、`verify` 和 `audit` 阶段阻断已撤销密钥。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
@@ -231,6 +232,51 @@ agentwarden install https://publisher.example/weather.tar.gz \
 
 ---
 
+## 🛡️ 可信发布者策略
+
+仅在安装命令中提供 `--signature` / `--public-key` 只能证明“本次验签通过”。若要让 CI、审计和团队统一强制执行发布者身份，应把策略写入配置文件：
+
+```json
+{
+  "publishers": {
+    "requireSignature": true,
+    "trustedKeys": [
+      "8f6c9d1f0d4d2c4f0f7cd6f67f2d6a4f9f2a8d7b3c1e5a6b8c9d0e1f2a3b4c5d"
+    ],
+    "revokedKeys": [
+      "1111111111111111111111111111111111111111111111111111111111111111"
+    ]
+  }
+}
+```
+
+```bash
+agentwarden install https://publisher.example/weather.md \
+  --sha256 <64-char-sha256> \
+  --signature https://publisher.example/weather.md.sig \
+  --public-key ./trusted-publisher.pem \
+  --config .agentwarden/publisher-policy.json
+
+agentwarden verify .agentwarden/skills/weather.md --config .agentwarden/publisher-policy.json
+agentwarden audit --config .agentwarden/publisher-policy.json
+agentwarden policy --config .agentwarden/publisher-policy.json --json
+```
+
+策略语义：
+
+- `requireSignature: true`：安装未提供有效发布者签名时，在任何写盘或下载前以退出码 `1` 阻断。
+- `trustedKeys`：非空时只接受指纹精确匹配的签名公钥；指纹是公钥 SPKI DER 的 SHA-256。
+- `revokedKeys`：即使密钥仍在 `trustedKeys` 中或被父配置信任，撤销仍然优先，验签成功后也会以退出码 `1` 阻断。
+- 密钥指纹可使用大写、`sha256:` 前缀和重复项；标准化统一转换为小写并去重。
+- `--force` 只绕过内容风险扫描，不能绕过必需签名、可信密钥或撤销策略。
+- `verify` 和 `audit` 会按当前配置重新检查锁文件中的发布者元数据，因此策略新增或撤销密钥后，既有安装也会被 CI 发现。
+
+`trustedKeys` 和 `revokedKeys` 在配置继承中追加合并；后出现的 `revokedKeys` 会从最终可信集合中移除同一指纹，便于在子配置中撤销父配置曾信任的发布者。`requireSignature` 由子配置覆盖。`policy` 与 `policy diff` 输出均包含发布者策略，便于在变更进入主分支前审查。
+
+当 `requireSignature: true` 且 `trustedKeys` 为空时，策略只要求存在一个可验证的 Ed25519 签名，不限制签名者身份；若目标包含团队或供应链信任边界，应显式配置 `trustedKeys`。
+
+---
+
 ## 📦 多文件 Skill 包
 
 `.tar.gz` / `.tgz` 包会被安全解包到内存，校验通过后才原子替换目标目录。包内必须包含唯一的 `SKILL.md`，该文件所在目录作为包根，其他文件必须位于同一根目录下；默认安装到 `.agentwarden/skills/<skill-name>/`。
@@ -268,6 +314,11 @@ agentwarden install https://publisher.example/weather.tar.gz \
   "minScore": 75,
   "ignoreRules": ["SEC-INJ-002"],
   "allowedDomains": ["api.open-meteo.com", "company-internal.example"],
+  "publishers": {
+    "requireSignature": true,
+    "trustedKeys": ["8f6c9d1f0d4d2c4f0f7cd6f67f2d6a4f9f2a8d7b3c1e5a6b8c9d0e1f2a3b4c5d"],
+    "revokedKeys": []
+  },
   "include": ["skills/**", "agents/**"],
   "exclude": ["skills/vendor/**", "**/fixtures/**"],
   "baseline": ".agentwarden-baseline.json",
@@ -283,11 +334,12 @@ agentwarden install https://publisher.example/weather.tar.gz \
 - `minScore`：得分低于该值即失败（0-100，自动收敛）。
 - `ignoreRules`：按规则 ID 忽略检测（例如误报豁免）。
 - `allowedDomains`：网络类规则的域名白名单（含子域名匹配）；命中白名单的 URL 不会被 `SEC-EXFIL-002` 等外带规则标记。
+- `publishers`：发布者签名要求、可信公钥指纹和撤销公钥指纹；用于安装、`verify` 和 `audit` 的来源门禁。
 - `include` / `exclude`：相对于工作目录的 glob，仅约束目录扫描；`exclude` 优先于 `include`。
 - `baseline`：显式启用发现基线；不存在或格式损坏时会直接失败，不会静默忽略。
 - `severityOverrides`：按规则 ID 调整有效严重级别；影响评分、失败阈值、基线和 SARIF 输出。
 
-继承时 `ignoreRules`、`allowedDomains`、`include`、`exclude` 为追加合并，`severityOverrides` 按键合并，其他字段由子配置覆盖。缺失父配置或循环引用会终止加载；显式 `--config` 下返回退出码 `2`，隐式候选配置则继续兼容回退到默认策略。
+继承时 `ignoreRules`、`allowedDomains`、`publishers.trustedKeys`、`publishers.revokedKeys`、`include`、`exclude` 为追加合并，`severityOverrides` 按键合并，其他字段由子配置覆盖。缺失父配置或循环引用会终止加载；显式 `--config` 下返回退出码 `2`，隐式候选配置则继续兼容回退到默认策略。
 
 命令行中的 `--profile` 会先采用该档位的默认阈值；仅当同时显式传入 `--fail-on` 或 `--min-score` 时，对应 CLI 值才会覆盖档位默认值。重复传入的 `--include` / `--exclude` 会追加到配置文件的路径范围内。
 
@@ -305,7 +357,7 @@ agentwarden policy diff current .warden/policy.json --json
 agentwarden policy diff current .warden/policy.json --fail-on-diff --json
 ```
 
-差异覆盖档位、失败阈值、最低分、基线、允许域名、忽略规则、目录范围和规则严重级别覆盖。默认仅报告差异并返回 `0`；显式传入 `--fail-on-diff` 后，存在差异时返回 `1`，适合在策略变更 PR 中阻断未经审查的升级。
+差异覆盖档位、失败阈值、最低分、基线、允许域名、发布者要求、可信/撤销密钥、忽略规则、目录范围和规则严重级别覆盖。默认仅报告差异并返回 `0`；显式传入 `--fail-on-diff` 后，存在差异时返回 `1`，适合在策略变更 PR 中阻断未经审查的升级。
 
 ### 规则治理
 
@@ -460,6 +512,7 @@ import {
   fetchRemoteSkill,
   verifyPayloadSignature,
   loadEd25519PublicKey,
+  evaluatePublisherPolicy,
   extractSkillPackage,
   inspectInstalledSkillPackage,
   getChangedFiles,
@@ -508,6 +561,20 @@ console.log(provenance.publicKeySha256, provenance.signatureSha256);
 // Load and fingerprint a trusted key independently when composing custom provenance flows
 const publisherKey = loadEd25519PublicKey('./trusted-publisher.pem');
 console.log(publisherKey.sha256);
+
+// Apply the same publisher trust policy used by CLI installs, verify, and audit
+const publisherDecision = evaluatePublisherPolicy(
+  {
+    requireSignature: true,
+    trustedKeys: [publisherKey.sha256],
+    revokedKeys: [],
+  },
+  {
+    signatureVerified: true,
+    signatureKeySha256: provenance.publicKeySha256,
+  },
+);
+console.log(publisherDecision.passed, publisherDecision.code);
 
 // Inspect a package in memory and retain its full-file manifest
 const skillPackage = extractSkillPackage(

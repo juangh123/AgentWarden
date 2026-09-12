@@ -88,8 +88,15 @@ export {
   type ConfigLoadResult,
   type PolicyProfile,
   type PolicyProfileName,
+  type PublisherPolicy,
   type SkillGuardConfig,
 } from './config/index.ts';
+export {
+  evaluatePublisherPolicy,
+  type PublisherPolicyDecision,
+  type PublisherPolicyViolationCode,
+  type PublisherProvenance,
+} from './source/provenance.ts';
 export {
   readLockfile,
   writeLockfile,

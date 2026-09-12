@@ -63,6 +63,11 @@ import {
   verifyPayloadSignature,
   type SignatureVerificationResult,
 } from './source/signature.ts';
+import {
+  evaluatePublisherPolicy,
+  type PublisherPolicyDecision,
+  type PublisherProvenance,
+} from './source/provenance.ts';
 
 const VERSION = readPackageVersion();
 
@@ -559,6 +564,53 @@ function signatureLockMetadata(signature: SignatureVerificationResult | undefine
     : {};
 }
 
+function signatureProvenance(
+  signature: SignatureVerificationResult | undefined,
+): PublisherProvenance | undefined {
+  return signature
+    ? {
+        signatureVerified: true,
+        signatureKeySha256: signature.publicKeySha256,
+      }
+    : undefined;
+}
+
+function failPublisherPolicy(
+  decision: PublisherPolicyDecision,
+  format: ReportFormat,
+  operation: string,
+): never {
+  const message = decision.message ?? 'Publisher policy rejected the operation';
+  if (format === 'json') {
+    console.log(
+      JSON.stringify(
+        {
+          passed: false,
+          error: {
+            code: decision.code ?? 'PUBLISHER_POLICY_FAILED',
+            message,
+          },
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    console.error(chalk.red.bold(`❌ Publisher policy blocked ${operation}: ${message}`));
+  }
+  process.exit(EXIT_FAIL);
+}
+
+function enforcePublisherPolicy(
+  config: SkillGuardConfig,
+  provenance: PublisherProvenance | undefined,
+  format: ReportFormat,
+  operation: string,
+): void {
+  const decision = evaluatePublisherPolicy(config.publishers, provenance);
+  if (!decision.passed) failPublisherPolicy(decision, format, operation);
+}
+
 function writeFileAtomic(filePath: string, content: string): void {
   const directory = path.dirname(filePath);
   fs.mkdirSync(directory, { recursive: true });
@@ -814,6 +866,7 @@ async function cmdInstallLocal(
   }
   const bytes = fs.readFileSync(fullPath);
   const signature = await verifyInstallSignature(bytes, signatureOptions, false);
+  enforcePublisherPolicy(config, signatureProvenance(signature), format, `local install "${target}"`);
   const result = scanSkillContent(bytes.toString('utf8'), fullPath, config);
   if (format === 'json') {
     console.log(
@@ -877,6 +930,9 @@ async function cmdInstallRemote(
   }
 
   const config = buildConfig(options);
+  if (!signatureOptions) {
+    enforcePublisherPolicy(config, undefined, format, `remote install "${target}"`);
+  }
   if (format === 'pretty') {
     console.log(chalk.cyan(`\n⬇️  Downloading remote skill: ${target}...`));
   }
@@ -903,6 +959,12 @@ async function cmdInstallRemote(
     download.bytes,
     signatureOptions,
     Boolean(options['allow-http']),
+  );
+  enforcePublisherPolicy(
+    config,
+    signatureProvenance(signature),
+    format,
+    `remote install "${target}"`,
   );
 
   if (isSkillPackageSource(download.filename, download.contentType)) {
@@ -1008,6 +1070,12 @@ async function cmdInstallLocalPackage(
   }
   const bytes = readSkillPackageBytes(fullPath);
   const signature = await verifyInstallSignature(bytes, signatureOptions, false);
+  enforcePublisherPolicy(
+    config,
+    signatureProvenance(signature),
+    format,
+    `local package install "${target}"`,
+  );
   const skillPackage = extractSkillPackage(bytes);
   installSkillPackage(
     skillPackage,
@@ -1068,6 +1136,15 @@ function cmdVerify(target: string, config: SkillGuardConfig): void {
       console.error(chalk.red(`❌ Invalid package metadata for skill "${packageKey}".`));
       process.exit(EXIT_FAIL);
     }
+    enforcePublisherPolicy(
+      config,
+      {
+        signatureVerified: lockedEntry.signatureVerified,
+        signatureKeySha256: lockedEntry.signatureKeySha256,
+      },
+      'pretty',
+      `package verification "${packageKey}"`,
+    );
 
     const packageRoot = path.dirname(resolveFromRoot(lockedEntry.source));
     const inspection = inspectInstalledSkillPackage(packageRoot, {
@@ -1134,6 +1211,15 @@ function cmdVerify(target: string, config: SkillGuardConfig): void {
     console.error(chalk.yellow(`⚠️  Skill "${skillName}" is not registered in skills.lock. Run "skillguard install ${target}" first.`));
     process.exit(EXIT_FAIL);
   }
+  enforcePublisherPolicy(
+    config,
+    {
+      signatureVerified: lockedEntry.signatureVerified,
+      signatureKeySha256: lockedEntry.signatureKeySha256,
+    },
+    'pretty',
+    `skill verification "${key}"`,
+  );
 
   if (lockedEntry.sha256 !== result.sha256) {
     console.error(chalk.red.bold(`❌ TAMPERING DETECTED: Hash mismatch for skill "${key}"!`));
@@ -1161,6 +1247,9 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     currentFindingCount: number | null;
     packageMatch: boolean | null;
     packageFilesChecked: number | null;
+    publisherPolicyPassed: boolean;
+    publisherPolicyCode: string | null;
+    signerKeySha256: string | null;
   }
   const auditResult: { auditedAt: string; passed?: boolean; skills: Record<string, AuditEntry> } = {
     auditedAt: new Date().toISOString(),
@@ -1178,6 +1267,10 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     let currentFindingCount: number | null = null;
     let packageMatch: boolean | null = null;
     let packageFilesChecked: number | null = null;
+    const publisherDecision = evaluatePublisherPolicy(config.publishers, {
+      signatureVerified: item.signatureVerified,
+      signatureKeySha256: item.signatureKeySha256,
+    });
 
     if (item.packageFormat === 'tar.gz' && item.packageSha256 && item.packageEntry && item.packageFiles) {
       const packageRoot = path.dirname(resolvedPath);
@@ -1216,7 +1309,7 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     } else {
       hasFailure = true;
     }
-    if (!exists || !hashMatch || !policyPassed) hasFailure = true;
+    if (!exists || !hashMatch || !policyPassed || !publisherDecision.passed) hasFailure = true;
 
     auditResult.skills[name] = {
       version: item.version,
@@ -1230,6 +1323,9 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
       currentFindingCount,
       packageMatch,
       packageFilesChecked,
+      publisherPolicyPassed: publisherDecision.passed,
+      publisherPolicyCode: publisherDecision.code ?? null,
+      signerKeySha256: publisherDecision.keySha256 ?? item.signatureKeySha256 ?? null,
     };
   }
 
@@ -1258,6 +1354,9 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
       );
     }
     console.log(`  Last Security Score: ${entry.lockedScore}/100`);
+    if (entry.signerKeySha256) {
+      console.log(`  Publisher Key:    ${chalk.gray(entry.signerKeySha256)}`);
+    }
 
     if (!entry.exists) {
       console.log(chalk.yellow(`  ⚠️  Source file not found on disk at: ${entry.source}`));
@@ -1288,6 +1387,15 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
       );
     } else {
       console.log(chalk.green('  ✓ Current security policy check passed.'));
+    }
+    if (!entry.publisherPolicyPassed) {
+      console.log(
+        chalk.red.bold(
+          `  ✗ Publisher policy check FAILED (${entry.publisherPolicyCode ?? 'PUBLISHER_POLICY_FAILED'}).`,
+        ),
+      );
+    } else if (entry.signerKeySha256) {
+      console.log(chalk.green('  ✓ Publisher policy check passed.'));
     }
     if (entry.currentScore !== null && entry.currentScore !== entry.lockedScore) {
       console.log(chalk.yellow(`  ℹ️  Re-scan score drift: locked ${entry.lockedScore}/100, now ${entry.currentScore}/100 (rule updates may affect this).`));
@@ -1384,6 +1492,11 @@ function policySnapshot(details: BuiltConfig) {
     ignoreRules: config.ignoreRules ?? [],
     allowedDomains: config.allowedDomains ?? [],
     baseline: config.baseline ?? null,
+    publishers: config.publishers ?? {
+      requireSignature: false,
+      trustedKeys: [],
+      revokedKeys: [],
+    },
     severityOverrides: config.severityOverrides ?? {},
     include: config.include ?? [],
     exclude: config.exclude ?? [],
@@ -1407,6 +1520,15 @@ function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
   console.log(`  Fail On:          ${chalk.yellow(policy.failOn)}`);
   console.log(`  Minimum Score:    ${chalk.yellow(String(policy.minScore))}`);
   console.log(`  Baseline:         ${policy.baseline ? chalk.gray(policy.baseline) : chalk.gray('(disabled)')}`);
+  console.log(
+    `  Require Signature:${policy.publishers.requireSignature ? ' ' + chalk.yellow('yes') : ' ' + chalk.gray('no')}`,
+  );
+  console.log(
+    `  Trusted Keys:     ${policy.publishers.trustedKeys?.length ? policy.publishers.trustedKeys.join(', ') : chalk.gray('(any valid signer)')}`,
+  );
+  console.log(
+    `  Revoked Keys:     ${policy.publishers.revokedKeys?.length ? policy.publishers.revokedKeys.join(', ') : chalk.gray('(none)')}`,
+  );
   console.log(`  Ignored Rules:    ${policy.ignoreRules.length ? policy.ignoreRules.join(', ') : chalk.gray('(none)')}`);
   console.log(`  Allowed Domains:  ${policy.allowedDomains.length ? policy.allowedDomains.join(', ') : chalk.gray('(none)')}`);
   console.log(`  Include Globs:    ${policy.include.length ? policy.include.join(', ') : chalk.gray('(all)')}`);
@@ -1418,7 +1540,7 @@ function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(78)) + '\n');
 }
 
-function formatPolicyDiffValue(value: string | number | null | undefined): string {
+function formatPolicyDiffValue(value: string | number | boolean | null | undefined): string {
   if (value === undefined || value === null) return '(none)';
   return String(value);
 }

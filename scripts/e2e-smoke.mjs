@@ -241,9 +241,52 @@ fs.writeFileSync(
   publisherPublicKey.export({ type: 'spki', format: 'pem' }),
   'utf8',
 );
+const { publicKey: untrustedPublicKey, privateKey: untrustedPrivateKey } =
+  generateKeyPairSync('ed25519');
+const untrustedPublisherKeyPath = path.join(tmp, 'untrusted-publisher.pem');
+fs.writeFileSync(
+  untrustedPublisherKeyPath,
+  untrustedPublicKey.export({ type: 'spki', format: 'pem' }),
+  'utf8',
+);
+const trustedPublisherPolicyPath = path.join(tmp, 'trusted-publisher-policy.json');
+const revokedPublisherPolicyPath = path.join(tmp, 'revoked-publisher-policy.json');
+fs.writeFileSync(
+  trustedPublisherPolicyPath,
+  JSON.stringify(
+    {
+      publishers: {
+        requireSignature: true,
+        trustedKeys: [publisherKeySha256],
+      },
+    },
+    null,
+    2,
+  ),
+  'utf8',
+);
+fs.writeFileSync(
+  revokedPublisherPolicyPath,
+  JSON.stringify(
+    {
+      publishers: {
+        requireSignature: true,
+        revokedKeys: [publisherKeySha256],
+      },
+    },
+    null,
+    2,
+  ),
+  'utf8',
+);
 const remoteSafeSignature = signBytes(null, Buffer.from(remoteSafeContent), publisherPrivateKey).toString(
   'base64',
 );
+const untrustedRemoteSafeSignature = signBytes(
+  null,
+  Buffer.from(remoteSafeContent),
+  untrustedPrivateKey,
+).toString('base64');
 const remoteSafePackageSignature = signBytes(null, remoteSafePackage, publisherPrivateKey).toString(
   'base64',
 );
@@ -961,6 +1004,71 @@ r = run([
   '-C',
   tmp,
   'install',
+  `${remoteBaseUrl}/remote-safe.md`,
+  '--allow-http',
+  '--sha256',
+  remoteSafeDigest,
+  '--config',
+  'trusted-publisher-policy.json',
+  '--force',
+  '--json',
+]);
+check(
+  'publisher policy requires a signature before download',
+  r.status === 1 && JSON.parse(r.stdout).error?.code === 'SIGNATURE_REQUIRED',
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C',
+  tmp,
+  'install',
+  `${remoteBaseUrl}/remote-safe.md`,
+  '--allow-http',
+  '--sha256',
+  remoteSafeDigest,
+  '--signature',
+  `base64:${untrustedRemoteSafeSignature}`,
+  '--public-key',
+  'untrusted-publisher.pem',
+  '--config',
+  'trusted-publisher-policy.json',
+  '--json',
+]);
+check(
+  'publisher policy rejects an untrusted signer',
+  r.status === 1 && JSON.parse(r.stdout).error?.code === 'UNTRUSTED_PUBLISHER',
+  `status=${r.status}`,
+);
+check('publisher policy rejection leaves no installed payload', !fs.existsSync(remoteSafePath));
+
+r = run([
+  '-C',
+  tmp,
+  'install',
+  `${remoteBaseUrl}/remote-safe.md`,
+  '--allow-http',
+  '--sha256',
+  remoteSafeDigest,
+  '--signature',
+  `${remoteBaseUrl}/remote-safe.md.sig`,
+  '--public-key',
+  'trusted-publisher.pem',
+  '--config',
+  'revoked-publisher-policy.json',
+  '--json',
+]);
+check(
+  'publisher policy rejects a revoked signer',
+  r.status === 1 && JSON.parse(r.stdout).error?.code === 'REVOKED_PUBLISHER',
+  `status=${r.status}`,
+);
+check('revoked publisher rejection leaves no installed payload', !fs.existsSync(remoteSafePath));
+
+r = run([
+  '-C',
+  tmp,
+  'install',
   `${remoteBaseUrl}/remote-malicious.md`,
   '--allow-http',
   '--sha256',
@@ -1017,6 +1125,8 @@ r = run([
   `${remoteBaseUrl}/remote-safe.md.sig`,
   '--public-key',
   'trusted-publisher.pem',
+  '--config',
+  'trusted-publisher-policy.json',
   '--json',
 ]);
 const remoteInstallJson = JSON.parse(r.stdout);
@@ -1044,8 +1154,29 @@ check(
 
 r = run(['-C', tmp, 'verify', '.agentwarden/skills/remote-safe.md']);
 check('verify resolves a remotely installed local snapshot', r.status === 0, `status=${r.status}`);
+r = run([
+  '-C',
+  tmp,
+  'verify',
+  '.agentwarden/skills/remote-safe.md',
+  '--config',
+  'trusted-publisher-policy.json',
+]);
+check(
+  'verify enforces the current publisher trust policy',
+  r.status === 0,
+  `status=${r.status}`,
+);
 r = run(['-C', tmp, 'audit', '--json']);
 check('audit passes after a clean remote install', r.status === 0, `status=${r.status}`);
+r = run(['-C', tmp, 'audit', '--config', 'trusted-publisher-policy.json', '--json']);
+const trustedPublisherAudit = JSON.parse(r.stdout);
+check(
+  'audit enforces the current publisher trust policy',
+  r.status === 0 &&
+    trustedPublisherAudit.skills['remote-safe-weather']?.publisherPolicyPassed === true,
+  `status=${r.status}`,
+);
 r = run(['-C', tmp, 'uninstall', 'remote-safe-weather', '--json']);
 check('remote safe entry can be uninstalled', r.status === 0, `status=${r.status}`);
 

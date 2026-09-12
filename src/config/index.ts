@@ -2,6 +2,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Severity } from '../rules/types.ts';
 
+export interface PublisherPolicy {
+  requireSignature?: boolean;
+  trustedKeys?: string[];
+  revokedKeys?: string[];
+}
+
 export interface SkillGuardConfig {
   extends?: string | string[];
   profile?: PolicyProfileName;
@@ -9,6 +15,7 @@ export interface SkillGuardConfig {
   failOn?: Severity;
   minScore?: number;
   allowedDomains?: string[];
+  publishers?: PublisherPolicy;
   baseline?: string;
   severityOverrides?: Record<string, Severity>;
   include?: string[];
@@ -50,6 +57,11 @@ export const DEFAULT_CONFIG: Readonly<SkillGuardConfig> = {
   failOn: 'high',
   minScore: 60,
   allowedDomains: [],
+  publishers: {
+    requireSignature: false,
+    trustedKeys: [],
+    revokedKeys: [],
+  },
   severityOverrides: {},
   include: [],
   exclude: [],
@@ -84,6 +96,60 @@ function cleanSeverityOverrides(value: unknown): Record<string, Severity> {
     }
   }
   return overrides;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cleanPublisherFingerprints(value: unknown, field: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new ConfigError(`Invalid "publishers.${field}" (expected an array of SHA-256 fingerprints)`);
+  }
+
+  return [
+    ...new Set(
+      value.map((entry) => {
+        if (typeof entry !== 'string') {
+          throw new ConfigError(
+            `Invalid "publishers.${field}" entry (expected a SHA-256 fingerprint)`,
+          );
+        }
+        const normalized = entry.trim().toLowerCase().replace(/^sha256:/, '');
+        if (!/^[a-f0-9]{64}$/.test(normalized)) {
+          throw new ConfigError(
+            `Invalid "publishers.${field}" fingerprint "${entry}" (expected 64 hexadecimal characters)`,
+          );
+        }
+        return normalized;
+      }),
+    ),
+  ];
+}
+
+function cleanPublisherPolicy(value: unknown): Required<PublisherPolicy> {
+  if (value === undefined) {
+    return { requireSignature: false, trustedKeys: [], revokedKeys: [] };
+  }
+  if (!isPlainObject(value)) {
+    throw new ConfigError('Invalid "publishers" (expected an object)');
+  }
+  if (value.requireSignature !== undefined && typeof value.requireSignature !== 'boolean') {
+    throw new ConfigError('Invalid "publishers.requireSignature" (expected boolean)');
+  }
+
+  const revokedKeys = cleanPublisherFingerprints(value.revokedKeys, 'revokedKeys');
+  const revoked = new Set(revokedKeys);
+  const trustedKeys = cleanPublisherFingerprints(value.trustedKeys, 'trustedKeys').filter(
+    (fingerprint) => !revoked.has(fingerprint),
+  );
+
+  return {
+    requireSignature: value.requireSignature ?? false,
+    trustedKeys,
+    revokedKeys,
+  };
 }
 
 function parseConfigFile(filePath: string): Partial<SkillGuardConfig> {
@@ -139,6 +205,37 @@ function mergeRawConfigs(
         ? override.severityOverrides
         : {};
     merged.severityOverrides = { ...baseOverrides, ...overrideOverrides };
+  }
+
+  if (base.publishers !== undefined || override.publishers !== undefined) {
+    const basePublishers =
+      base.publishers === undefined
+        ? {}
+        : isPlainObject(base.publishers)
+          ? base.publishers
+          : (() => {
+              throw new ConfigError('Invalid "publishers" (expected an object)');
+            })();
+    const overridePublishers =
+      override.publishers === undefined
+        ? {}
+        : isPlainObject(override.publishers)
+          ? override.publishers
+          : (() => {
+              throw new ConfigError('Invalid "publishers" (expected an object)');
+            })();
+    merged.publishers = {
+      ...basePublishers,
+      ...overridePublishers,
+      trustedKeys: mergeStringLists(
+        basePublishers.trustedKeys,
+        overridePublishers.trustedKeys,
+      ),
+      revokedKeys: mergeStringLists(
+        basePublishers.revokedKeys,
+        overridePublishers.revokedKeys,
+      ),
+    };
   }
 
   return merged;
@@ -211,6 +308,7 @@ export function normalizeConfig(raw?: Partial<SkillGuardConfig>): SkillGuardConf
     failOn,
     minScore,
     allowedDomains: [...new Set(cleanStringList(source.allowedDomains).map((d) => d.toLowerCase().replace(/^\./, '')))],
+    publishers: cleanPublisherPolicy(source.publishers),
     ...(typeof source.baseline === 'string' && source.baseline.trim()
       ? { baseline: source.baseline.trim() }
       : {}),

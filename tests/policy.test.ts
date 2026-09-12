@@ -19,6 +19,9 @@ describe('policy diff', () => {
         profile: 'legacy',
         ignoreRules: ['SEC-INJ-002'],
         allowedDomains: ['old.example'],
+        publishers: {
+          trustedKeys: ['a'.repeat(64)],
+        },
         include: ['skills/**'],
         severityOverrides: { 'SEC-CRED-003': 'high' },
       },
@@ -26,6 +29,11 @@ describe('policy diff', () => {
         profile: 'strict',
         ignoreRules: ['SEC-INJ-003'],
         allowedDomains: ['old.example', 'new.example'],
+        publishers: {
+          requireSignature: true,
+          trustedKeys: ['b'.repeat(64)],
+          revokedKeys: ['a'.repeat(64)],
+        },
         exclude: ['vendor/**'],
         severityOverrides: {
           'SEC-CRED-003': 'medium',
@@ -39,9 +47,33 @@ describe('policy diff', () => {
       { field: 'profile', kind: 'changed', before: 'legacy', after: 'strict' },
       { field: 'failOn', kind: 'changed', before: 'high', after: 'medium' },
       { field: 'minScore', kind: 'changed', before: 60, after: 90 },
+      {
+        field: 'publishers.requireSignature',
+        kind: 'changed',
+        before: false,
+        after: true,
+      },
       { field: 'ignoreRules', key: 'SEC-INJ-002', kind: 'removed', before: 'SEC-INJ-002' },
       { field: 'ignoreRules', key: 'SEC-INJ-003', kind: 'added', after: 'SEC-INJ-003' },
       { field: 'allowedDomains', key: 'new.example', kind: 'added', after: 'new.example' },
+      {
+        field: 'publishers.trustedKeys',
+        key: 'a'.repeat(64),
+        kind: 'removed',
+        before: 'a'.repeat(64),
+      },
+      {
+        field: 'publishers.trustedKeys',
+        key: 'b'.repeat(64),
+        kind: 'added',
+        after: 'b'.repeat(64),
+      },
+      {
+        field: 'publishers.revokedKeys',
+        key: 'a'.repeat(64),
+        kind: 'added',
+        after: 'a'.repeat(64),
+      },
       { field: 'include', key: 'skills/**', kind: 'removed', before: 'skills/**' },
       { field: 'exclude', key: 'vendor/**', kind: 'added', after: 'vendor/**' },
       {

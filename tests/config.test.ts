@@ -87,6 +87,39 @@ describe('config normalization', () => {
     assert.deepEqual(cfg.exclude, ['skills/private/**']);
   });
 
+  it('normalizes publisher trust and keeps revocation authoritative', () => {
+    const trusted = 'A'.repeat(64);
+    const revoked = 'b'.repeat(64);
+    const cfg = normalizeConfig({
+      publishers: {
+        requireSignature: true,
+        trustedKeys: [trusted, `sha256:${revoked}`, trusted],
+        revokedKeys: [revoked],
+      },
+    });
+
+    assert.equal(cfg.publishers?.requireSignature, true);
+    assert.deepEqual(cfg.publishers?.trustedKeys, [trusted.toLowerCase()]);
+    assert.deepEqual(cfg.publishers?.revokedKeys, [revoked]);
+  });
+
+  it('fails closed on malformed publisher policy fields', () => {
+    assert.throws(
+      () =>
+        normalizeConfig({
+          publishers: { requireSignature: 'yes' as never },
+        }),
+      (error) => error instanceof ConfigError && error.message.includes('requireSignature'),
+    );
+    assert.throws(
+      () =>
+        normalizeConfig({
+          publishers: { trustedKeys: ['not-a-fingerprint'] },
+        }),
+      (error) => error instanceof ConfigError && error.message.includes('trustedKeys'),
+    );
+  });
+
   it('loads an explicit config with source metadata', () => {
     const root = tempDir();
     try {
@@ -175,6 +208,10 @@ describe('config normalization', () => {
           profile: 'strict',
           ignoreRules: ['SEC-INJ-002'],
           allowedDomains: ['example.com'],
+          publishers: {
+            requireSignature: true,
+            trustedKeys: ['a'.repeat(64)],
+          },
           include: ['skills/**'],
           severityOverrides: { 'SEC-CRED-003': 'medium' },
         }),
@@ -185,6 +222,9 @@ describe('config normalization', () => {
         JSON.stringify({
           extends: './base.json',
           exclude: ['skills/vendor/**'],
+          publishers: {
+            revokedKeys: ['b'.repeat(64)],
+          },
           severityOverrides: { 'SEC-INJ-002': 'low' },
         }),
         'utf8',
@@ -198,6 +238,9 @@ describe('config normalization', () => {
       assert.equal(loaded.config.minScore, 90);
       assert.deepEqual(loaded.config.ignoreRules, ['SEC-INJ-002']);
       assert.deepEqual(loaded.config.allowedDomains, ['example.com']);
+      assert.equal(loaded.config.publishers?.requireSignature, true);
+      assert.deepEqual(loaded.config.publishers?.trustedKeys, ['a'.repeat(64)]);
+      assert.deepEqual(loaded.config.publishers?.revokedKeys, ['b'.repeat(64)]);
       assert.deepEqual(loaded.config.include, ['skills/**']);
       assert.deepEqual(loaded.config.exclude, ['skills/vendor/**']);
       assert.deepEqual(loaded.config.severityOverrides, {

@@ -6,8 +6,8 @@ export interface PolicyDiffChange {
   field: string;
   key?: string;
   kind: PolicyDiffKind;
-  before?: string | number | null;
-  after?: string | number | null;
+  before?: string | number | boolean | null;
+  after?: string | number | boolean | null;
 }
 
 export interface PolicyDiff {
@@ -18,8 +18,8 @@ export interface PolicyDiff {
 function compareScalar(
   changes: PolicyDiffChange[],
   field: string,
-  before: string | number | null | undefined,
-  after: string | number | null | undefined,
+  before: string | number | boolean | null | undefined,
+  after: string | number | boolean | null | undefined,
 ): void {
   const normalizedBefore = before ?? null;
   const normalizedAfter = after ?? null;
@@ -82,8 +82,26 @@ export function diffPolicyConfigs(from: SkillGuardConfig, to: SkillGuardConfig):
   compareScalar(changes, 'failOn', before.failOn, after.failOn);
   compareScalar(changes, 'minScore', before.minScore, after.minScore);
   compareScalar(changes, 'baseline', before.baseline, after.baseline);
+  compareScalar(
+    changes,
+    'publishers.requireSignature',
+    before.publishers?.requireSignature ?? false,
+    after.publishers?.requireSignature ?? false,
+  );
   compareList(changes, 'ignoreRules', before.ignoreRules ?? [], after.ignoreRules ?? []);
   compareList(changes, 'allowedDomains', before.allowedDomains ?? [], after.allowedDomains ?? []);
+  compareList(
+    changes,
+    'publishers.trustedKeys',
+    before.publishers?.trustedKeys ?? [],
+    after.publishers?.trustedKeys ?? [],
+  );
+  compareList(
+    changes,
+    'publishers.revokedKeys',
+    before.publishers?.revokedKeys ?? [],
+    after.publishers?.revokedKeys ?? [],
+  );
   compareList(changes, 'include', before.include ?? [], after.include ?? []);
   compareList(changes, 'exclude', before.exclude ?? [], after.exclude ?? []);
   compareSeverityOverrides(
