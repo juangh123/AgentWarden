@@ -103,6 +103,19 @@ function isMcpJsonCandidate(filePath: string, content: string): boolean {
   return containsMcpServers(content);
 }
 
+/** Return whether a file is a supported Markdown skill or MCP JSON configuration. */
+export function isSupportedSkillFile(filePath: string): boolean {
+  const extension = path.extname(filePath).toLowerCase();
+  if (MARKDOWN_EXTENSIONS.has(extension)) return true;
+  if (extension !== '.json') return false;
+
+  try {
+    return isMcpJsonCandidate(filePath, fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return false;
+  }
+}
+
 function collectDirectoryFiles(directory: string): string[] {
   const files: string[] = [];
   const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
@@ -120,15 +133,7 @@ function collectDirectoryFiles(directory: string): string[] {
 
     if (!entry.isFile()) continue;
 
-    if (MARKDOWN_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-      files.push(fullPath);
-      continue;
-    }
-
-    if (path.extname(entry.name).toLowerCase() !== '.json') continue;
-
-    const content = fs.readFileSync(fullPath, 'utf8');
-    if (isMcpJsonCandidate(fullPath, content)) {
+    if (isSupportedSkillFile(fullPath)) {
       files.push(fullPath);
     }
   }
@@ -160,6 +165,27 @@ export function discoverSkillFiles(
           discovered.add(file);
         }
       }
+    }
+  }
+
+  return [...discovered].sort((a, b) => a.localeCompare(b));
+}
+
+/** Filter an explicit list of paths to supported skill files within the configured scan scope. */
+export function filterSkillFiles(
+  filePaths: string[],
+  cwd: string = process.cwd(),
+  options: DiscoveryOptions = {},
+): string[] {
+  const discovered = new Set<string>();
+
+  for (const filePath of filePaths) {
+    const absolute = path.resolve(cwd, filePath);
+    if (!fs.existsSync(absolute)) continue;
+    const stat = fs.statSync(absolute);
+    if (!stat.isFile() || !isSupportedSkillFile(absolute)) continue;
+    if (isIncluded(absolute, cwd, options)) {
+      discovered.add(absolute);
     }
   }
 

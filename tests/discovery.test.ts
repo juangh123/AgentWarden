@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { discoverSkillFiles, scanSkillFile, scanSkillPaths } from '../src/index.ts';
+import {
+  discoverSkillFiles,
+  filterSkillFiles,
+  scanSkillFile,
+  scanSkillPaths,
+} from '../src/index.ts';
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-discovery-'));
@@ -116,6 +121,26 @@ describe('skill and MCP discovery', () => {
         }),
         [explicitFile],
       );
+
+      writeFile(root, 'skills/public/mcp.json', JSON.stringify({ mcpServers: {} }));
+      writeFile(root, 'skills/public/notes.json', JSON.stringify({ notes: true }));
+      const filtered = filterSkillFiles(
+        [
+          path.join(root, 'skills', 'public', 'SKILL.md'),
+          path.join(root, 'skills', 'private', 'SKILL.md'),
+          path.join(root, 'skills', 'public', 'mcp.json'),
+          path.join(root, 'skills', 'public', 'notes.json'),
+        ],
+        root,
+        {
+          include: ['skills/**'],
+          exclude: ['skills/private/**'],
+        },
+      )
+        .map((file) => path.relative(root, file).replace(/\\/g, '/'))
+        .sort();
+
+      assert.deepEqual(filtered, ['skills/public/SKILL.md', 'skills/public/mcp.json'].sort());
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

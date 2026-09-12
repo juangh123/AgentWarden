@@ -3,7 +3,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chalk, setColorEnabled } from './reporter/chalk.ts';
 import { scanSkillFile } from './scanner/index.ts';
-import { discoverSkillFiles } from './scanner/discovery.ts';
+import {
+  discoverSkillFiles,
+  filterSkillFiles,
+} from './scanner/discovery.ts';
+import { ChangedFilesError, getChangedFiles } from './git/changed.ts';
 import {
   renderScanReport,
   renderScanReports,
@@ -70,6 +74,7 @@ const VALUE_OPTIONS = new Set([
   'expires-in',
   'expires-at',
   'expiring-within',
+  'changed-from',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'force',
@@ -83,6 +88,7 @@ const BOOLEAN_OPTIONS = new Set([
   'fail-on-expiring',
   'fail-on-unmatched',
   'dry-run',
+  'changed',
 ]);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 const REPEATABLE_OPTIONS: Record<string, string> = {
@@ -349,6 +355,8 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--severity-override <rule=sev>')} Override a rule severity (repeatable)
   ${chalk.yellow('--include <glob>')}       Limit directory scans to matching paths (repeatable)
   ${chalk.yellow('--exclude <glob>')}       Exclude matching paths from directory scans (repeatable)
+  ${chalk.yellow('--changed')}              Scan only files changed from the detected Git base
+  ${chalk.yellow('--changed-from <ref>')}   Scan only files changed since a Git ref
   ${chalk.yellow('--fail-on-diff')}         Exit 1 when policy diff detects changes
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
   ${chalk.yellow('--output <file>')}        Baseline output path (default: ${DEFAULT_BASELINE_NAME})
@@ -370,20 +378,87 @@ ${chalk.bold('EXIT CODES:')}
 `);
 }
 
+function canonicalCliPath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function isPathWithinTarget(filePath: string, targetPath: string): boolean {
+  const target = canonicalCliPath(targetPath);
+  const file = canonicalCliPath(filePath);
+  const targetStat = fs.statSync(target);
+  if (targetStat.isFile()) return file === target;
+  const relative = path.relative(target, file);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function changedScanRequested(options: ParsedArgs['options']): boolean {
+  return Boolean(options.changed) || options['changed-from'] !== undefined;
+}
+
 function scanTargets(
   targets: string[],
   config: SkillGuardConfig,
   format: ReportFormat,
   options: ParsedArgs['options'],
 ): void {
-  const files = discoverSkillFiles(targets.map(resolvePath), process.cwd(), {
-    include: config.include,
-    exclude: config.exclude,
-  });
+  const targetPaths = targets.map(resolvePath);
+  const changedFrom =
+    options['changed-from'] !== undefined ? String(options['changed-from']).trim() : undefined;
+  const changedMode = changedScanRequested(options);
+  let files: string[];
+  let changedBase: string | undefined;
+
+  if (changedMode) {
+    if (changedFrom !== undefined && !changedFrom) {
+      usageError('Option --changed-from requires a Git ref');
+    }
+    try {
+      const changed = getChangedFiles({
+        cwd: process.cwd(),
+        ...(changedFrom ? { base: changedFrom } : {}),
+      });
+      const scanCwd = canonicalCliPath(process.cwd());
+      changedBase = changed.baseRef;
+      files = filterSkillFiles(changed.files, scanCwd, {
+        include: config.include,
+        exclude: config.exclude,
+      }).filter((file) => targetPaths.some((target) => isPathWithinTarget(file, target)));
+    } catch (error) {
+      if (error instanceof ChangedFilesError) usageError(error.message);
+      throw error;
+    }
+  } else {
+    files = discoverSkillFiles(targetPaths, process.cwd(), {
+      include: config.include,
+      exclude: config.exclude,
+    });
+  }
 
   if (files.length === 0) {
+    if (changedMode) {
+      renderScanReports([], format, reportOptions(options));
+      if (format === 'pretty') {
+        console.log(
+          chalk.gray(`No changed skill or MCP configuration files to scan (base: ${changedBase}).`),
+        );
+      }
+      return;
+    }
     console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
     process.exit(EXIT_FAIL);
+  }
+
+  if (changedMode && format === 'pretty') {
+    console.log(
+      chalk.gray(
+        `Changed scan scope: ${files.length} skill/MCP file(s) from Git base ${changedBase}.`,
+      ),
+    );
   }
 
   const scanResults: ScanResult[] = files.map((file) => scanSkillFile(file, config));
@@ -814,6 +889,9 @@ function cmdBaselineStatus(
   format: ReportFormat,
 ): void {
   if (format === 'sarif') usageError('baseline status supports pretty|json output only');
+  if (changedScanRequested(options)) {
+    usageError('baseline status requires the full configured scan scope; --changed is only supported by scan');
+  }
 
   const config = buildConfig(options);
   const baselinePath = config.baseline ?? DEFAULT_BASELINE_NAME;
@@ -911,6 +989,9 @@ function cmdBaselineMaintenance(
   format: ReportFormat,
 ): void {
   if (format === 'sarif') usageError(`baseline ${mode} supports pretty|json output only`);
+  if (changedScanRequested(options)) {
+    usageError(`baseline ${mode} requires the full configured scan scope; --changed is only supported by scan`);
+  }
   if (options['dry-run'] && options.force) {
     usageError('Use either --dry-run or --force, not both');
   }

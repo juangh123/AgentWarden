@@ -19,6 +19,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
 - 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills 与常见 MCP 配置，并可通过 `include` / `exclude` glob 精确限定审计范围。
+- ⚡ **Git 增量扫描**：按 PR 或指定 Git ref 只审计实际变化的 Skill/MCP 文件，减少大型仓库的 CI 扫描时间。
 - 🧱 **可审计基线**：用稳定指纹接受既有告警，支持责任人、审核备注和过期时间；过期后自动恢复阻断，基线不保存原始敏感片段。
 - 🕶️ **默认安全报告**：JSON、SARIF 与终端输出自动隐藏密钥、认证头、私钥、敏感配置值和原始文件内容。
 - 🧩 **规则治理**：查看完整规则目录，并按规则覆盖有效严重级别，无需修改源码或直接关闭规则。
@@ -52,6 +53,8 @@ node dist/cli.js scan fixtures/ --format sarif
 node dist/cli.js scan . --json
 node dist/cli.js scan a.md b.md --json
 node dist/cli.js scan . --profile strict --include "skills/**" --exclude "skills/vendor/**"
+node dist/cli.js scan . --changed --json
+node dist/cli.js scan . --changed-from origin/main --json
 
 # 以 JSON / SARIF 导出（适配 CI/CD 与 GitHub Code Scanning）
 node dist/cli.js scan fixtures/ --sarif
@@ -113,6 +116,8 @@ node dist/cli.js --version
 | `--severity-override <rule=sev>` | 覆盖指定规则的有效严重级别，可重复传入 |
 | `--include <glob>` | 将目录扫描限定到匹配路径，可重复传入 |
 | `--exclude <glob>` | 从目录扫描中排除匹配路径，可重复传入 |
+| `--changed` | 仅扫描相对自动检测 Git 基线发生变化的 Skill/MCP 文件 |
+| `--changed-from <ref>` | 仅扫描相对指定 Git ref 或提交 SHA 发生变化的文件 |
 | `--fail-on-diff` | `policy diff` 检测到差异时返回退出码 `1` |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
 | `--output <file>` | `baseline` 命令输出路径（默认 `.agentwarden-baseline.json`） |
@@ -230,6 +235,18 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 
 `audit` 同时执行两层检查：锁文件 SHA-256 完整性，以及按当前配置重新扫描后的安全策略。即使用 `install --force` 锁定了高风险技能，只要内容未改但策略检查失败，`audit` 仍会返回退出码 `1`。
 
+### 增量扫描
+
+`scan --changed-from <ref>` 使用 Git 三方比较语义（`<ref>...HEAD`）计算提交变更，并合并当前工作区与未跟踪文件；删除或重命名前的旧路径不会进入扫描。`scan --changed` 会按 `AGENTWARDEN_BASE_REF`、`origin/$GITHUB_BASE_REF`、`$GITHUB_BASE_REF`、`HEAD~1` 的顺序选择可用基线。显式传入 `--changed-from` 时不会自动回退。
+
+```bash
+agentwarden scan . --changed --json
+agentwarden scan . --changed-from origin/main --sarif
+agentwarden scan skills/ --changed-from "$BASE_SHA" --include "skills/**"
+```
+
+变更集会与命令行路径、`include` 和 `exclude` 取交集，并只保留 Markdown Skill、MCP 配置或现有文件。没有相关变更时命令返回退出码 `0`，结构化报告中的 `totalScanned` 为 `0`。`baseline status` 和维护命令必须使用全量扫描范围，不接受 `--changed` / `--changed-from`，避免把范围外的基线条目误判为失效。
+
 ### 扫描基线
 
 基线用于接受经过审查的既有发现，适合在已有大型 Skill 仓库中逐步接入安全门禁：
@@ -299,6 +316,7 @@ echo "exit code: $?"   # 0=通过 1=存在风险 2=用法错误
 src/
   cli.ts               CLI 入口与参数解析（命令、选项、退出码）
   baseline/            发现基线生成、校验、应用与稳定指纹
+  git/                 Git 变更集解析与增量扫描范围
   scanner/             扫描编排与评分
   reporter/redaction.ts 报告脱敏与安全输出投影
   parser/              Markdown / Frontmatter 解析
@@ -325,6 +343,8 @@ import {
   diffPolicyConfigs,
   scanSkillContent,
   scanSkillPaths,
+  getChangedFiles,
+  filterSkillFiles,
   createBaseline,
   applyBaseline,
   pruneBaseline,
@@ -350,6 +370,13 @@ const results = scanSkillPaths('./skills', {
 });
 console.log(`Scanned ${results.length} assets`);
 console.log(POLICY_PROFILES.strict); // { failOn: 'medium', minScore: 90 }
+
+// Resolve an incremental scope for CI without shelling out yourself
+const changed = getChangedFiles({ base: 'origin/main' });
+const changedSkillFiles = filterSkillFiles(changed.files, process.cwd(), {
+  include: ['skills/**'],
+});
+console.log(`${changedSkillFiles.length} changed skill files`);
 
 // Compare effective policies before rolling a stricter gate into CI
 const policyDelta = diffPolicyConfigs(POLICY_PROFILES.legacy, POLICY_PROFILES.strict);
@@ -378,6 +405,10 @@ const sarif = buildSarifReport(newResults);
 Add AgentWarden as a security gate in your CI/CD pipeline:
 
 ```yaml
+- uses: actions/checkout@v5
+  with:
+    fetch-depth: 0
+
 - name: Run AgentWarden Security Gate
   uses: juangh123/AgentWarden@main
   with:
@@ -389,6 +420,8 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
       agents/**
     exclude: |
       skills/vendor/**
+    changed: 'true'
+    changed-from: ${{ github.event.pull_request.base.sha }}
     baseline: '.agentwarden-baseline.json'
     baseline-status: 'true'
     baseline-expiring-within: '14'
@@ -401,9 +434,9 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
     node-version: '22'
 ```
 
-Action 的 `fail-on` 和 `min-score` 默认留空并使用 `profile`；显式设置时会覆盖档位默认值。`config` 可加载仓库中的策略文件，`include`、`exclude`、`ignore-rules` 和 `severity-overrides` 使用换行分隔。
+Action 的 `fail-on` 和 `min-score` 默认留空并使用 `profile`；显式设置时会覆盖档位默认值。`config` 可加载仓库中的策略文件，`include`、`exclude`、`ignore-rules` 和 `severity-overrides` 使用换行分隔。启用 `changed` / `changed-from` 前必须让 checkout 获取足够历史；PR 中推荐 `fetch-depth: 0`，或把 `github.event.pull_request.base.sha` 传给 `changed-from`。
 
-设置 `baseline-status: 'true'` 后，Action 会先按相同扫描范围执行基线状态检查，再运行扫描与 SARIF 输出；该选项要求同时提供 `baseline`。`baseline-expiring-within` 定义临近到期的提醒窗口（默认 `30` 天），`baseline-fail-on-expiring` 和 `baseline-fail-on-unmatched` 可分别让临近到期或未匹配条目阻断工作流。基线已过期时始终返回失败，避免过期豁免在 CI 中继续生效。
+设置 `baseline-status: 'true'` 后，Action 会先按全量配置范围执行基线状态检查，再运行增量扫描与 SARIF 输出；该选项要求同时提供 `baseline`。`baseline-expiring-within` 定义临近到期的提醒窗口（默认 `30` 天），`baseline-fail-on-expiring` 和 `baseline-fail-on-unmatched` 可分别让临近到期或未匹配条目阻断工作流。基线已过期时始终返回失败，避免过期豁免在 CI 中继续生效。
 
 ---
 

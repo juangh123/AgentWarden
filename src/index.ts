@@ -1,5 +1,15 @@
 export { scanSkillFile, scanSkillContent, scanSkillPaths } from './scanner/index.ts';
-export { discoverSkillFiles } from './scanner/discovery.ts';
+export {
+  discoverSkillFiles,
+  filterSkillFiles,
+  isSupportedSkillFile,
+} from './scanner/discovery.ts';
+export {
+  ChangedFilesError,
+  getChangedFiles,
+  type ChangedFilesOptions,
+  type ChangedFilesResult,
+} from './git/changed.ts';
 export {
   DEFAULT_BASELINE_NAME,
   createBaseline,

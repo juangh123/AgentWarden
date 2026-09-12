@@ -36,6 +36,14 @@ inputs:
     description: 'Optional newline-separated globs excluded from directory discovery'
     required: false
     default: ''
+  changed:
+    description: 'Scan only files changed from the detected Git base ref'
+    required: false
+    default: 'false'
+  changed-from:
+    description: 'Scan only files changed since this Git ref or commit SHA'
+    required: false
+    default: ''
   ignore-rules:
     description: 'Optional newline-separated rule IDs to ignore'
     required: false
@@ -93,6 +101,8 @@ runs:
         INPUT_MIN_SCORE: ${{ inputs.min-score }}
         INPUT_INCLUDE: ${{ inputs.include }}
         INPUT_EXCLUDE: ${{ inputs.exclude }}
+        INPUT_CHANGED: ${{ inputs.changed }}
+        INPUT_CHANGED_FROM: ${{ inputs.changed-from }}
         INPUT_IGNORE_RULES: ${{ inputs.ignore-rules }}
         INPUT_SEVERITY_OVERRIDES: ${{ inputs.severity-overrides }}
         INPUT_BASELINE: ${{ inputs.baseline }}
@@ -139,6 +149,7 @@ runs:
         validate_boolean baseline-status "$INPUT_BASELINE_STATUS"
         validate_boolean baseline-fail-on-expiring "$INPUT_BASELINE_FAIL_ON_EXPIRING"
         validate_boolean baseline-fail-on-unmatched "$INPUT_BASELINE_FAIL_ON_UNMATCHED"
+        validate_boolean changed "$INPUT_CHANGED"
 
         append_arg --config "$INPUT_CONFIG"
         append_arg --profile "$INPUT_PROFILE"
@@ -171,4 +182,10 @@ runs:
 
         args=(scan "$INPUT_PATH" --sarif)
         args+=("${COMMON_ARGS[@]}")
+        if [[ "$INPUT_CHANGED" == "true" ]]; then
+          args+=(--changed)
+        fi
+        if [[ -n "$INPUT_CHANGED_FROM" ]]; then
+          args+=(--changed-from "$INPUT_CHANGED_FROM")
+        fi
         node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}" > "$INPUT_SARIF"
