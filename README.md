@@ -376,6 +376,10 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
     exclude: |
       skills/vendor/**
     baseline: '.agentwarden-baseline.json'
+    baseline-status: 'true'
+    baseline-expiring-within: '14'
+    baseline-fail-on-expiring: 'true'
+    baseline-fail-on-unmatched: 'true'
     ignore-rules: |
       SEC-INJ-002
     severity-overrides: |
@@ -384,6 +388,8 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
 ```
 
 Action 的 `fail-on` 和 `min-score` 默认留空并使用 `profile`；显式设置时会覆盖档位默认值。`config` 可加载仓库中的策略文件，`include`、`exclude`、`ignore-rules` 和 `severity-overrides` 使用换行分隔。
+
+设置 `baseline-status: 'true'` 后，Action 会先按相同扫描范围执行基线状态检查，再运行扫描与 SARIF 输出；该选项要求同时提供 `baseline`。`baseline-expiring-within` 定义临近到期的提醒窗口（默认 `30` 天），`baseline-fail-on-expiring` 和 `baseline-fail-on-unmatched` 可分别让临近到期或未匹配条目阻断工作流。基线已过期时始终返回失败，避免过期豁免在 CI 中继续生效。
 
 ---
 

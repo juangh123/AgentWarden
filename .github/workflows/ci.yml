@@ -30,3 +30,6 @@ jobs:
         with:
           path: '.'
           config: 'fixtures/ci-policy.json'
+          baseline: 'fixtures/empty-baseline.json'
+          baseline-status: 'true'
+          baseline-fail-on-unmatched: 'true'
