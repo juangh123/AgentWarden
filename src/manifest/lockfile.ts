@@ -8,6 +8,11 @@ export interface LockedSkill {
   sha256: string;
   installedAt: string;
   verifiedScore: number;
+  sourceType?: 'local' | 'remote';
+  remoteUrl?: string;
+  resolvedUrl?: string;
+  downloadSha256?: string;
+  digestVerified?: boolean;
 }
 
 export interface LockfileSchema {
@@ -16,6 +21,51 @@ export interface LockfileSchema {
 }
 
 export const LOCKFILE_NAME = 'skills.lock';
+
+function validateOptionalSourceMetadata(
+  entry: Record<string, unknown>,
+  name: string,
+  lockPath: string,
+): void {
+  const sourceType = entry.sourceType;
+  if (sourceType !== undefined && sourceType !== 'local' && sourceType !== 'remote') {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid sourceType.`,
+    );
+  }
+
+  for (const field of ['remoteUrl', 'resolvedUrl', 'downloadSha256'] as const) {
+    if (entry[field] !== undefined && typeof entry[field] !== 'string') {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid ${field}.`,
+      );
+    }
+  }
+  if (entry.digestVerified !== undefined && typeof entry.digestVerified !== 'boolean') {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid digestVerified.`,
+    );
+  }
+  if (
+    typeof entry.downloadSha256 === 'string' &&
+    !/^[a-f0-9]{64}$/i.test(entry.downloadSha256)
+  ) {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid downloadSha256.`,
+    );
+  }
+
+  const hasRemoteMetadata =
+    entry.remoteUrl !== undefined ||
+    entry.resolvedUrl !== undefined ||
+    entry.downloadSha256 !== undefined ||
+    entry.digestVerified !== undefined;
+  if (hasRemoteMetadata && sourceType !== 'remote') {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has remote metadata without sourceType "remote".`,
+    );
+  }
+}
 
 function parseLockfile(raw: string, lockPath: string): LockfileSchema {
   let parsed: unknown;
@@ -50,6 +100,7 @@ function parseLockfile(raw: string, lockPath: string): LockfileSchema {
     ) {
       throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has missing or invalid fields.`);
     }
+    validateOptionalSourceMetadata(entry, name, lockPath);
   }
 
   return {

@@ -11,6 +11,16 @@ export {
   type ChangedFilesResult,
 } from './git/changed.ts';
 export {
+  DEFAULT_FETCH_TIMEOUT_MS,
+  DEFAULT_MAX_REMOTE_BYTES,
+  RemoteSkillError,
+  fetchRemoteSkill,
+  normalizeExpectedSha256,
+  type FetchRemoteSkillOptions,
+  type RemoteSkillDownload,
+  type RemoteSkillErrorCode,
+} from './source/remote.ts';
+export {
   DEFAULT_BASELINE_NAME,
   createBaseline,
   readBaseline,

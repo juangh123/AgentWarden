@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chalk, setColorEnabled } from './reporter/chalk.ts';
-import { scanSkillFile } from './scanner/index.ts';
+import { scanSkillContent, scanSkillFile } from './scanner/index.ts';
 import {
   discoverSkillFiles,
   filterSkillFiles,
@@ -46,6 +47,7 @@ import {
 } from './baseline/index.ts';
 import { allRules } from './rules/index.ts';
 import { diffPolicyConfigs } from './policy/diff.ts';
+import { RemoteSkillError, fetchRemoteSkill } from './source/remote.ts';
 
 const VERSION = readPackageVersion();
 
@@ -75,6 +77,7 @@ const VALUE_OPTIONS = new Set([
   'expires-at',
   'expiring-within',
   'changed-from',
+  'sha256',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'force',
@@ -89,6 +92,7 @@ const BOOLEAN_OPTIONS = new Set([
   'fail-on-unmatched',
   'dry-run',
   'changed',
+  'allow-http',
 ]);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 const REPEATABLE_OPTIONS: Record<string, string> = {
@@ -332,7 +336,7 @@ ${chalk.bold('USAGE:')}
 
 ${chalk.bold('COMMANDS:')}
   ${chalk.green('scan <file|dir>...')}    Audit skill markdown files or directories of skills
-  ${chalk.green('install <file>')}       Pre-scan, then securely record fingerprint to skills.lock
+  ${chalk.green('install <file|https://url>')} Pre-scan, then securely record fingerprint to skills.lock
   ${chalk.green('verify <file>')}        Verify a single skill file against skills.lock fingerprint
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
   ${chalk.green('rules')}                List active security rules and effective severity
@@ -359,7 +363,9 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--changed-from <ref>')}   Scan only files changed since a Git ref
   ${chalk.yellow('--fail-on-diff')}         Exit 1 when policy diff detects changes
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
-  ${chalk.yellow('--output <file>')}        Baseline output path (default: ${DEFAULT_BASELINE_NAME})
+  ${chalk.yellow('--output <file>')}        Baseline output path or remote install destination
+  ${chalk.yellow('--sha256 <digest>')}      Required SHA-256 pin for remote installs
+  ${chalk.yellow('--allow-http')}           Allow HTTP remote installs (trusted local testing only)
   ${chalk.yellow('--owner <name>')}         Baseline review owner or team
   ${chalk.yellow('--expires-in <days>')}    Expire a new baseline after 1-3650 days
   ${chalk.yellow('--expires-at <date>')}    Explicit baseline expiry date
@@ -467,7 +473,51 @@ function scanTargets(
   if (scanResults.some((r) => !r.passed)) process.exit(EXIT_FAIL);
 }
 
-function cmdInstall(target: string, options: ParsedArgs['options'], format: ReportFormat): void {
+function writeFileAtomic(filePath: string, content: string): void {
+  const directory = path.dirname(filePath);
+  fs.mkdirSync(directory, { recursive: true });
+  const temporaryPath = path.join(
+    directory,
+    `.${path.basename(filePath)}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`,
+  );
+
+  fs.writeFileSync(temporaryPath, content, { encoding: 'utf8', flag: 'wx' });
+  try {
+    try {
+      fs.renameSync(temporaryPath, filePath);
+    } catch (error) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as NodeJS.ErrnoException).code)
+          : '';
+      if (
+        process.platform === 'win32' &&
+        (code === 'EEXIST' || code === 'EPERM' || code === 'EACCES')
+      ) {
+        fs.rmSync(filePath, { force: true });
+        fs.renameSync(temporaryPath, filePath);
+      } else {
+        throw error;
+      }
+    }
+  } finally {
+    fs.rmSync(temporaryPath, { force: true });
+  }
+}
+
+function resolveRemoteInstallPath(filename: string, output: unknown): string {
+  const requestedOutput =
+    output !== undefined ? String(output).trim() : path.join('.agentwarden', 'skills', filename);
+  if (!requestedOutput) usageError('Remote install output path must not be empty');
+
+  const destination = path.resolve(process.cwd(), requestedOutput);
+  if (fs.existsSync(destination) && fs.statSync(destination).isDirectory()) {
+    usageError(`Remote install output path is a directory: ${destination}`);
+  }
+  return destination;
+}
+
+function cmdInstallLocal(target: string, options: ParsedArgs['options'], format: ReportFormat): void {
   const force = Boolean(options.force);
   const fullPath = resolvePath(target);
   const config = buildConfig(options);
@@ -512,11 +562,136 @@ function cmdInstall(target: string, options: ParsedArgs['options'], format: Repo
     sha256: result.sha256,
     installedAt: new Date().toISOString(),
     verifiedScore: result.score,
+    sourceType: 'local',
   });
 
   if (format === 'pretty') {
     console.log(chalk.green(`🔒 Successfully verified and locked signature to skills.lock (source: ${relativePosix})!\n`));
   }
+}
+
+async function cmdInstallRemote(
+  target: string,
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): Promise<void> {
+  const force = Boolean(options.force);
+  const expectedSha256 = options.sha256 !== undefined ? String(options.sha256) : undefined;
+  if (!expectedSha256) {
+    usageError('Remote installs require --sha256 <digest> to pin the downloaded content');
+  }
+
+  const config = buildConfig(options);
+  if (format === 'pretty') {
+    console.log(chalk.cyan(`\n⬇️  Downloading remote skill: ${target}...`));
+  }
+
+  let download: Awaited<ReturnType<typeof fetchRemoteSkill>>;
+  try {
+    download = await fetchRemoteSkill({
+      url: target,
+      expectedSha256,
+      allowHttp: Boolean(options['allow-http']),
+    });
+  } catch (error) {
+    if (
+      error instanceof RemoteSkillError &&
+      (error.code === 'INVALID_URL' ||
+        error.code === 'INVALID_DIGEST' ||
+        error.code === 'INSECURE_URL')
+    ) {
+      usageError(error.message);
+    }
+    throw error;
+  }
+
+  const destination = resolveRemoteInstallPath(download.filename, options.output);
+  const relativePosix = toRelativePosix(destination);
+  const result = scanSkillContent(download.content, download.filename, config);
+  const installAborted = !result.passed && !force;
+  const sourceDetails = {
+    type: 'remote',
+    path: relativePosix,
+    requestedUrl: download.requestedUrl,
+    resolvedUrl: download.resolvedUrl,
+    downloadSha256: download.sha256,
+    digestVerified: download.digestVerified,
+    size: download.size,
+  };
+
+  if (format === 'json') {
+    console.log(
+      JSON.stringify(
+        {
+          ...toReportScanResult(result, reportOptions(options)),
+          source: sourceDetails,
+          installAborted,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    renderScanReport(result, format, reportOptions(options));
+  }
+
+  if (installAborted) {
+    if (format === 'pretty') {
+      console.log(chalk.red('🚫 Aborted installation due to security risk. Use --force to override.\n'));
+    }
+    process.exit(EXIT_FAIL);
+  }
+
+  const lock = readLockfile();
+  const previous = lock.skills[result.parsedSkill.name];
+  if (previous && format === 'pretty') {
+    console.log(chalk.gray(`ℹ️  Updating existing lock entry for "${result.parsedSkill.name}" (was: ${previous.source}).`));
+  }
+
+  writeFileAtomic(destination, download.content);
+  updateLockfileSkill({
+    name: result.parsedSkill.name,
+    version: result.parsedSkill.version || '0.1.0',
+    source: relativePosix,
+    sha256: result.sha256,
+    installedAt: new Date().toISOString(),
+    verifiedScore: result.score,
+    sourceType: 'remote',
+    remoteUrl: download.requestedUrl,
+    resolvedUrl: download.resolvedUrl,
+    downloadSha256: download.sha256,
+    digestVerified: download.digestVerified,
+  });
+
+  if (format === 'pretty') {
+    console.log(
+      chalk.green(
+        `🔒 Successfully verified and locked remote signature to skills.lock (source: ${relativePosix}, URL: ${download.resolvedUrl})!\n`,
+      ),
+    );
+  }
+}
+
+async function cmdInstall(
+  target: string,
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): Promise<void> {
+  if (/^https?:\/\//i.test(target)) {
+    await cmdInstallRemote(target, options, format);
+    return;
+  }
+
+  if (options.sha256 !== undefined) {
+    usageError('--sha256 is only valid when installing a remote HTTPS or HTTP source');
+  }
+  if (options['allow-http']) {
+    usageError('--allow-http is only valid when installing a remote HTTP source');
+  }
+  if (options.output !== undefined) {
+    usageError('--output is only valid for baseline writes or remote installs');
+  }
+  cmdInstallLocal(target, options, format);
 }
 
 function cmdVerify(target: string, config: SkillGuardConfig): void {
@@ -1158,7 +1333,7 @@ function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: 
   console.log(chalk.gray('  Enable it with --baseline <file> or the "baseline" config field.\n'));
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const { positionals, options, errors } = parseArgs(process.argv.slice(2));
 
   if (options['no-color']) setColorEnabled(false);
@@ -1198,8 +1373,8 @@ function main(): void {
 
   if (command === 'install') {
     const target = positionals[1];
-    if (!target) usageError(`Missing skill path to install. Usage: skillguard install <path/to/SKILL.md>`);
-    cmdInstall(target, options, resolveFormat(options));
+    if (!target) usageError(`Missing skill path to install. Usage: skillguard install <path/to/SKILL.md|https://url> --sha256 <digest>`);
+    await cmdInstall(target, options, resolveFormat(options));
     return;
   }
 
@@ -1279,7 +1454,7 @@ function main(): void {
 }
 
 try {
-  main();
+  await main();
 } catch (err) {
   console.error(chalk.red(`Fatal: ${err instanceof Error ? err.message : String(err)}`));
   process.exit(EXIT_FAIL);

@@ -15,6 +15,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
   - 提示词越狱检测（系统角色覆盖、Jailbreak 词库、编码混淆载荷）
   - 隐蔽数据偷放与反向链接识别（Raw IP 外带、webhook.site 等数据收集端点、本地文件上传）
 - 🔒 **完整性指纹锁定 (`skills.lock`)**：类比 `package-lock.json`，记录 SHA-256 签名与安全得分，一键审计本地文件篡改；锁文件损坏或字段缺失会直接报错，不会静默降级为空。
+- 📥 **远程安装与摘要固定**：支持从 HTTPS 下载 Skill，必须先提供 SHA-256 pin；下载、扫描与校验成功后才原子落盘并写入锁文件。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
@@ -64,8 +65,14 @@ node dist/cli.js scan fixtures/safe-skill.md --json
 node dist/cli.js install fixtures/safe-skill.md
 node dist/cli.js install fixtures/safe-skill.md --force   # 跳过阻断，强制锁定
 
+# 从 HTTPS 固定下载摘要后安装；默认保存到 .agentwarden/skills/<filename>
+node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char-sha256>
+node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char-sha256> --output .agentwarden/skills/weather.md
+node dist/cli.js install http://127.0.0.1:8080/weather.md --sha256 <64-char-sha256> --allow-http  # 仅限可信本地测试
+
 # 校验单个技能文件是否与 lockfile 匹配
 node dist/cli.js verify fixtures/safe-skill.md
+node dist/cli.js verify .agentwarden/skills/weather.md
 
 # 审计所有已安装技能的本地完整性，并按当前策略重新扫描
 node dist/cli.js audit
@@ -120,7 +127,9 @@ node dist/cli.js --version
 | `--changed-from <ref>` | 仅扫描相对指定 Git ref 或提交 SHA 发生变化的文件 |
 | `--fail-on-diff` | `policy diff` 检测到差异时返回退出码 `1` |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
-| `--output <file>` | `baseline` 命令输出路径（默认 `.agentwarden-baseline.json`） |
+| `--output <file>` | `baseline` 输出路径，或远程安装的目标文件路径 |
+| `--sha256 <digest>` | 远程安装必填；校验原始下载字节的 SHA-256，支持 `sha256:` 前缀 |
+| `--allow-http` | 允许远程安装使用 HTTP；仅限可信本地测试，默认只接受 HTTPS |
 | `--owner <name>` | 基线责任人、团队或审核工单标识 |
 | `--expires-in <days>` | 新建基线在指定天数后过期，范围 `1-3650` |
 | `--expires-at <date>` | 使用 ISO 日期显式设置基线过期时间 |
@@ -140,6 +149,29 @@ node dist/cli.js --version
 | `0` | 扫描通过 / 操作成功 |
 | `1` | 存在安全风险（扫描未通过、校验篡改、当前策略失败、安装阻断） |
 | `2` | 用法错误 / 文件不存在 / 非法参数 |
+
+---
+
+## 📥 远程安装与完整性固定
+
+远程安装将“下载完整性”和“本地审计完整性”分开记录：
+
+1. 下载响应遵循 `HTTPS` 默认策略，拒绝 URL 内嵌账号密码，限制响应大小不超过 `5 MiB`，整个请求在 `30s` 后中止。
+2. `--sha256` 对原始响应字节执行校验；不匹配时退出码为 `1`，不会创建目标文件或修改 `skills.lock`。
+3. 校验通过后先执行与本地安装相同的策略扫描；未通过且没有 `--force` 时同样不会落盘或写锁。`--force` 只跳过策略阻断，不能跳过摘要校验。
+4. 写文件采用同目录临时文件加原子重命名；成功后锁文件中的 `source` 指向本地快照，因此 `verify` 与 `audit` 无需再次联网。
+
+默认目标路径为 `.agentwarden/skills/<filename>`，可通过 `--output <file>` 修改。远程锁项会额外记录：
+
+| 字段 | 含义 |
+| :--- | :--- |
+| `sourceType` | `local` 或 `remote`；旧版锁项可省略，视为兼容的本地记录 |
+| `remoteUrl` | 用户请求的原始 URL |
+| `resolvedUrl` | 完成重定向后的最终 URL |
+| `downloadSha256` | 原始下载字节的 SHA-256，用于验证传输内容是否与 pin 一致 |
+| `digestVerified` | 本次安装是否执行并通过了摘要校验 |
+
+锁文件中的 `sha256` 仍是本地快照的审计哈希，`verify` / `audit` 使用它检测文件篡改。扫描器会统一换行并将内容按 UTF-8 文本处理；远程安装还会移除 BOM。因此，对包含 CRLF 或 BOM 的响应，`downloadSha256` 不保证与 `sha256` 字符串相同，二者用途不同。新增字段均为可选，现有 v1 `skills.lock` 保持兼容。
 
 ---
 
@@ -317,6 +349,7 @@ src/
   cli.ts               CLI 入口与参数解析（命令、选项、退出码）
   baseline/            发现基线生成、校验、应用与稳定指纹
   git/                 Git 变更集解析与增量扫描范围
+  source/              远程下载、大小限制、超时与 SHA-256 固定
   scanner/             扫描编排与评分
   reporter/redaction.ts 报告脱敏与安全输出投影
   parser/              Markdown / Frontmatter 解析
@@ -343,6 +376,7 @@ import {
   diffPolicyConfigs,
   scanSkillContent,
   scanSkillPaths,
+  fetchRemoteSkill,
   getChangedFiles,
   filterSkillFiles,
   createBaseline,
@@ -370,6 +404,13 @@ const results = scanSkillPaths('./skills', {
 });
 console.log(`Scanned ${results.length} assets`);
 console.log(POLICY_PROFILES.strict); // { failOn: 'medium', minScore: 90 }
+
+// Download a SHA-256-pinned skill without writing it to disk
+const download = await fetchRemoteSkill({
+  url: 'https://example.com/skills/weather.md',
+  expectedSha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+});
+console.log(download.content, download.filename, download.digestVerified);
 
 // Resolve an incremental scope for CI without shelling out yourself
 const changed = getChangedFiles({ base: 'origin/main' });
