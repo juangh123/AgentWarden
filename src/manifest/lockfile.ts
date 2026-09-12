@@ -18,6 +18,10 @@ export interface LockedSkill {
   packageSha256?: string;
   packageEntry?: string;
   packageFiles?: SkillPackageManifestEntry[];
+  signatureAlgorithm?: 'ed25519';
+  signatureVerified?: boolean;
+  signatureKeySha256?: string;
+  signatureSha256?: string;
 }
 
 export interface LockfileSchema {
@@ -69,6 +73,32 @@ function validateOptionalSourceMetadata(
     throw new Error(
       `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has remote metadata without sourceType "remote".`,
     );
+  }
+
+  const signatureFields = [
+    entry.signatureAlgorithm,
+    entry.signatureVerified,
+    entry.signatureKeySha256,
+    entry.signatureSha256,
+  ];
+  if (signatureFields.some((value) => value !== undefined)) {
+    if (entry.signatureAlgorithm !== 'ed25519') {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid signatureAlgorithm.`,
+      );
+    }
+    if (entry.signatureVerified !== true) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid signatureVerified.`,
+      );
+    }
+    for (const field of ['signatureKeySha256', 'signatureSha256'] as const) {
+      if (typeof entry[field] !== 'string' || !/^[a-f0-9]{64}$/i.test(entry[field])) {
+        throw new Error(
+          `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid ${field}.`,
+        );
+      }
+    }
   }
 
   const packageFields = [

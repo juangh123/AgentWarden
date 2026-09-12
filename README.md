@@ -17,6 +17,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
 - 🔒 **完整性指纹锁定 (`skills.lock`)**：类比 `package-lock.json`，记录 SHA-256 签名与安全得分，一键审计本地文件篡改；锁文件损坏或字段缺失会直接报错，不会静默降级为空。
 - 📥 **远程安装与摘要固定**：支持从 HTTPS 下载 Skill，必须先提供 SHA-256 pin；下载、扫描与校验成功后才原子落盘并写入锁文件。
 - 📦 **多文件 Skill 包**：安全解析 `.tar.gz` / `.tgz`，递归扫描包内全部 UTF-8 文本文件，并用整包清单锁定脚本、参考文档和 MCP 配置。
+- ✍️ **Ed25519 发布者来源**：验证与发布者公钥绑定的分离签名，并把公钥、签名指纹及验证状态写入锁文件。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
@@ -71,9 +72,16 @@ node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char
 node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char-sha256> --output .agentwarden/skills/weather.md
 node dist/cli.js install http://127.0.0.1:8080/weather.md --sha256 <64-char-sha256> --allow-http  # 仅限可信本地测试
 
+# 在摘要固定的基础上验证 Ed25519 发布者签名
+node dist/cli.js install https://example.com/skills/weather.md \
+  --sha256 <64-char-sha256> \
+  --signature https://example.com/skills/weather.md.sig \
+  --public-key ./trusted-publisher.pem
+
 # 安装多文件 Skill 包；包根目录必须包含唯一的 SKILL.md
 node dist/cli.js install ./packages/weather.tar.gz
 node dist/cli.js install https://example.com/packages/weather.tar.gz --sha256 <64-char-sha256>
+node dist/cli.js install ./packages/weather.tar.gz --signature ./weather.tar.gz.sig --public-key ./trusted-publisher.pem
 node dist/cli.js verify .agentwarden/skills/weather
 
 # 校验单个技能文件是否与 lockfile 匹配
@@ -135,6 +143,8 @@ node dist/cli.js --version
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
 | `--output <file>` | `baseline` 输出路径，或本地/远程 Skill 包的目标目录 |
 | `--sha256 <digest>` | 远程安装必填；校验原始下载字节的 SHA-256，支持 `sha256:` 前缀 |
+| `--signature <ref>` | 分离的 Ed25519 签名；支持文件、HTTP(S) URL、`base64:` 或 `hex:` |
+| `--public-key <ref>` | 受信任的 Ed25519 公钥；支持 SPKI DER/PEM 文件、`base64:` 或 `pem:` |
 | `--allow-http` | 允许远程安装使用 HTTP；仅限可信本地测试，默认只接受 HTTPS |
 | `--owner <name>` | 基线责任人、团队或审核工单标识 |
 | `--expires-in <days>` | 新建基线在指定天数后过期，范围 `1-3650` |
@@ -178,6 +188,46 @@ node dist/cli.js --version
 | `digestVerified` | 本次安装是否执行并通过了摘要校验 |
 
 锁文件中的 `sha256` 仍是本地快照的审计哈希，`verify` / `audit` 使用它检测文件篡改。扫描器会统一换行并将内容按 UTF-8 文本处理；远程安装还会移除 BOM。因此，对包含 CRLF 或 BOM 的响应，`downloadSha256` 不保证与 `sha256` 字符串相同，二者用途不同。新增字段均为可选，现有 v1 `skills.lock` 保持兼容。
+
+---
+
+## ✍️ Ed25519 发布者签名
+
+`--signature` 与 `--public-key` 必须同时提供。签名是 detached Ed25519 签名；对于单文件，签名对象是下载或本地读取的原始文件字节；对于 Skill 包，签名对象是完整 `.tar.gz` / `.tgz` 压缩包字节。去除 BOM、UTF-8 文本解码和包解压都发生在验签之后，因此发布者签名与实际分发的字节严格对应。
+
+```bash
+# 本地单文件：签名可通过文件、base64: 或 hex: 提供
+agentwarden install ./weather.md \
+  --signature ./weather.md.sig \
+  --public-key ./trusted-publisher.pem
+
+# 远程包：源内容和签名 URL 都必须使用 HTTPS
+agentwarden install https://publisher.example/weather.tar.gz \
+  --sha256 <64-char-sha256> \
+  --signature https://publisher.example/weather.tar.gz.sig \
+  --public-key ./trusted-publisher.pem
+```
+
+签名文件可以是原始 64 字节、128 位十六进制文本或规范 base64 文本。公钥文件接受 SPKI DER 或 PEM，也可通过 `base64:<spki-der>` / `pem:<spki-pem>` 内联提供。远程安装仍然必须提供 `--sha256`；Ed25519 签名证明“谁发布了该字节流”，SHA-256 pin 防止下载内容被替换，两者不能互相替代。
+
+安全边界与行为：
+
+- 仅接受 Ed25519 公钥；拒绝私钥、非 Ed25519 密钥和非法编码。
+- 公钥上限为 `16 KiB`，签名引用上限为 `4 KiB`。
+- 远程签名下载使用与 Skill 下载相同的 HTTPS、大小和超时限制；`--allow-http` 只应用于显式标记的可信本地测试。
+- 验签失败返回退出码 `1`，不会写入目标文件或 `skills.lock`。
+- 缺少配对的 `--signature` / `--public-key`、公钥或签名格式非法返回退出码 `2`。
+
+验证成功后会写入锁文件来源元数据：
+
+| 字段 | 含义 |
+| :--- | :--- |
+| `signatureAlgorithm` | 当前为 `ed25519` |
+| `signatureVerified` | 安装时是否成功完成验签；当前成功记录固定为 `true` |
+| `signatureKeySha256` | 受信任公钥 SPKI DER 的 SHA-256 指纹 |
+| `signatureSha256` | detached 签名字节本身的 SHA-256 指纹 |
+
+`verify` 和 `audit` 仍以锁文件中的内容哈希及包清单检查本地完整性；签名验证发生在安装时，用于建立发布者来源。锁文件中的签名字段均为可选，因此未使用该功能的旧版 v1 `skills.lock` 保持兼容。
 
 ---
 
@@ -380,7 +430,7 @@ src/
   cli.ts               CLI 入口与参数解析（命令、选项、退出码）
   baseline/            发现基线生成、校验、应用与稳定指纹
   git/                 Git 变更集解析与增量扫描范围
-  source/              远程下载、安全 tar.gz 解包、大小限制与整包指纹
+  source/              远程下载、Ed25519 验签、安全 tar.gz 解包与整包指纹
   scanner/             扫描编排与评分
   reporter/redaction.ts 报告脱敏与安全输出投影
   parser/              Markdown / Frontmatter 解析
@@ -408,6 +458,8 @@ import {
   scanSkillContent,
   scanSkillPaths,
   fetchRemoteSkill,
+  verifyPayloadSignature,
+  loadEd25519PublicKey,
   extractSkillPackage,
   inspectInstalledSkillPackage,
   getChangedFiles,
@@ -444,6 +496,18 @@ const download = await fetchRemoteSkill({
   expectedSha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
 });
 console.log(download.content, download.filename, download.digestVerified);
+
+// Verify a detached Ed25519 publisher signature over the original downloaded bytes
+const provenance = await verifyPayloadSignature(download.bytes, {
+  signature: 'https://example.com/skills/weather.md.sig',
+  publicKey: './trusted-publisher.pem',
+  cwd: process.cwd(),
+});
+console.log(provenance.publicKeySha256, provenance.signatureSha256);
+
+// Load and fingerprint a trusted key independently when composing custom provenance flows
+const publisherKey = loadEd25519PublicKey('./trusted-publisher.pem');
+console.log(publisherKey.sha256);
 
 // Inspect a package in memory and retain its full-file manifest
 const skillPackage = extractSkillPackage(

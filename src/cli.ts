@@ -53,11 +53,16 @@ import {
   extractSkillPackage,
   inspectInstalledSkillPackage,
   isSkillPackageSource,
-  readSkillPackage,
+  readSkillPackageBytes,
   writeSkillPackage,
   type SkillPackage,
 } from './source/package.ts';
 import { calculateScore } from './scanner/scoring.ts';
+import {
+  SignatureError,
+  verifyPayloadSignature,
+  type SignatureVerificationResult,
+} from './source/signature.ts';
 
 const VERSION = readPackageVersion();
 
@@ -88,6 +93,8 @@ const VALUE_OPTIONS = new Set([
   'expiring-within',
   'changed-from',
   'sha256',
+  'signature',
+  'public-key',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'force',
@@ -375,6 +382,8 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
   ${chalk.yellow('--output <file>')}        Baseline output or package destination path
   ${chalk.yellow('--sha256 <digest>')}      Required SHA-256 pin for remote installs
+  ${chalk.yellow('--signature <ref>')}      Detached Ed25519 signature file, URL, base64:, or hex:
+  ${chalk.yellow('--public-key <ref>')}     Trusted Ed25519 public key file or inline pem:/base64:
   ${chalk.yellow('--allow-http')}           Allow HTTP remote installs (trusted local testing only)
   ${chalk.yellow('--owner <name>')}         Baseline review owner or team
   ${chalk.yellow('--expires-in <days>')}    Expire a new baseline after 1-3650 days
@@ -481,6 +490,73 @@ function scanTargets(
   renderScanReports(scanResults, format, reportOptions(options));
 
   if (scanResults.some((r) => !r.passed)) process.exit(EXIT_FAIL);
+}
+
+interface InstallSignatureOptions {
+  signature: string;
+  publicKey: string;
+}
+
+function installSignatureOptions(options: ParsedArgs['options']): InstallSignatureOptions | undefined {
+  const signature =
+    options.signature !== undefined ? String(options.signature).trim() : undefined;
+  const publicKey =
+    options['public-key'] !== undefined ? String(options['public-key']).trim() : undefined;
+
+  if (!signature && !publicKey) return undefined;
+  if (!signature || !publicKey) {
+    usageError('--signature and --public-key must be provided together');
+  }
+  return { signature, publicKey };
+}
+
+async function verifyInstallSignature(
+  payload: Uint8Array,
+  signatureOptions: InstallSignatureOptions | undefined,
+  allowHttp: boolean,
+): Promise<SignatureVerificationResult | undefined> {
+  if (!signatureOptions) return undefined;
+  try {
+    return await verifyPayloadSignature(payload, {
+      signature: signatureOptions.signature,
+      publicKey: signatureOptions.publicKey,
+      allowHttp,
+    });
+  } catch (error) {
+    if (
+      error instanceof SignatureError &&
+      (error.code === 'INVALID_PUBLIC_KEY' ||
+        error.code === 'UNSUPPORTED_ALGORITHM' ||
+        error.code === 'INVALID_SIGNATURE')
+    ) {
+      usageError(error.message);
+    }
+    throw error;
+  }
+}
+
+function signatureReport(signature: SignatureVerificationResult | undefined) {
+  return signature
+    ? {
+        algorithm: signature.algorithm,
+        verified: true,
+        keySha256: signature.publicKeySha256,
+        signatureSha256: signature.signatureSha256,
+        publicKeySource: signature.publicKeySource,
+        signatureSource: signature.signatureSource,
+      }
+    : undefined;
+}
+
+function signatureLockMetadata(signature: SignatureVerificationResult | undefined) {
+  return signature
+    ? {
+        signatureAlgorithm: signature.algorithm,
+        signatureVerified: true,
+        signatureKeySha256: signature.publicKeySha256,
+        signatureSha256: signature.signatureSha256,
+      }
+    : {};
 }
 
 function writeFileAtomic(filePath: string, content: string): void {
@@ -617,6 +693,7 @@ interface PackageInstallSource {
   resolvedUrl?: string;
   downloadSha256?: string;
   digestVerified?: boolean;
+  signature?: SignatureVerificationResult;
 }
 
 function installSkillPackage(
@@ -649,8 +726,9 @@ function installSkillPackage(
     path.join(destination, ...skillPackage.entryPath.split('/')),
   );
   const installAborted = !scanned.result.passed && !force;
+  const { signature: verifiedSignature, ...sourceFields } = source;
   const sourceDetails = {
-    ...source,
+    ...sourceFields,
     path: sourcePath,
     packagePath: relativeDirectory,
     packageFormat: 'tar.gz',
@@ -658,6 +736,7 @@ function installSkillPackage(
     packageEntry: skillPackage.entryPath,
     packageFiles: skillPackage.manifest.length,
     scannedFiles: scanned.scannedFiles.length,
+    ...(verifiedSignature ? { signature: signatureReport(verifiedSignature) } : {}),
   };
 
   if (format === 'json') {
@@ -708,31 +787,40 @@ function installSkillPackage(
     packageSha256: skillPackage.sha256,
     packageEntry: skillPackage.entryPath,
     packageFiles: skillPackage.manifest,
+    ...signatureLockMetadata(source.signature),
   });
 
   if (format === 'pretty') {
     console.log(
       chalk.green(
-        `🔒 Successfully verified and locked skill package to skills.lock (${skillPackage.manifest.length} files, package: ${skillPackage.sha256.slice(0, 16)}...).\n`,
+        `🔒 Successfully verified and locked skill package to skills.lock (${skillPackage.manifest.length} files, package: ${skillPackage.sha256.slice(0, 16)}${source.signature ? `, signer: ${source.signature.publicKeySha256.slice(0, 16)}` : ''}...).\n`,
       ),
     );
   }
 }
 
-function cmdInstallLocal(target: string, options: ParsedArgs['options'], format: ReportFormat): void {
+async function cmdInstallLocal(
+  target: string,
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): Promise<void> {
   const force = Boolean(options.force);
   const fullPath = resolvePath(target);
   const config = buildConfig(options);
+  const signatureOptions = installSignatureOptions(options);
 
   if (format === 'pretty') {
     console.log(chalk.cyan(`\n🔍 Analyzing skill package: ${target}...`));
   }
-  const result = scanSkillFile(fullPath, config);
+  const bytes = fs.readFileSync(fullPath);
+  const signature = await verifyInstallSignature(bytes, signatureOptions, false);
+  const result = scanSkillContent(bytes.toString('utf8'), fullPath, config);
   if (format === 'json') {
     console.log(
       JSON.stringify(
         {
           ...toReportScanResult(result, reportOptions(options)),
+          ...(signature ? { signature: signatureReport(signature) } : {}),
           installAborted: !result.passed && !force,
         },
         null,
@@ -765,10 +853,14 @@ function cmdInstallLocal(target: string, options: ParsedArgs['options'], format:
     installedAt: new Date().toISOString(),
     verifiedScore: result.score,
     sourceType: 'local',
+    ...signatureLockMetadata(signature),
   });
 
   if (format === 'pretty') {
-    console.log(chalk.green(`🔒 Successfully verified and locked signature to skills.lock (source: ${relativePosix})!\n`));
+    const signer = signature
+      ? `, signer: ${signature.publicKeySha256.slice(0, 16)}`
+      : '';
+    console.log(chalk.green(`🔒 Successfully verified and locked signature to skills.lock (source: ${relativePosix}${signer})!\n`));
   }
 }
 
@@ -778,6 +870,7 @@ async function cmdInstallRemote(
   format: ReportFormat,
 ): Promise<void> {
   const force = Boolean(options.force);
+  const signatureOptions = installSignatureOptions(options);
   const expectedSha256 = options.sha256 !== undefined ? String(options.sha256) : undefined;
   if (!expectedSha256) {
     usageError('Remote installs require --sha256 <digest> to pin the downloaded content');
@@ -806,6 +899,11 @@ async function cmdInstallRemote(
     }
     throw error;
   }
+  const signature = await verifyInstallSignature(
+    download.bytes,
+    signatureOptions,
+    Boolean(options['allow-http']),
+  );
 
   if (isSkillPackageSource(download.filename, download.contentType)) {
     const skillPackage = extractSkillPackage(download.bytes);
@@ -818,6 +916,7 @@ async function cmdInstallRemote(
         resolvedUrl: download.resolvedUrl,
         downloadSha256: download.sha256,
         digestVerified: download.digestVerified,
+        ...(signature ? { signature } : {}),
       },
       options,
       format,
@@ -839,6 +938,7 @@ async function cmdInstallRemote(
     downloadSha256: download.sha256,
     digestVerified: download.digestVerified,
     size: download.size,
+    ...(signature ? { signature: signatureReport(signature) } : {}),
   };
 
   if (format === 'json') {
@@ -883,32 +983,36 @@ async function cmdInstallRemote(
     resolvedUrl: download.resolvedUrl,
     downloadSha256: download.sha256,
     digestVerified: download.digestVerified,
+    ...signatureLockMetadata(signature),
   });
 
   if (format === 'pretty') {
     console.log(
       chalk.green(
-        `🔒 Successfully verified and locked remote signature to skills.lock (source: ${relativePosix}, URL: ${download.resolvedUrl})!\n`,
+        `🔒 Successfully verified and locked remote signature to skills.lock (source: ${relativePosix}, URL: ${download.resolvedUrl}${signature ? `, signer: ${signature.publicKeySha256.slice(0, 16)}` : ''})!\n`,
       ),
     );
   }
 }
 
-function cmdInstallLocalPackage(
+async function cmdInstallLocalPackage(
   target: string,
   options: ParsedArgs['options'],
   format: ReportFormat,
-): void {
+): Promise<void> {
   const fullPath = resolvePath(target);
   const config = buildConfig(options);
+  const signatureOptions = installSignatureOptions(options);
   if (format === 'pretty') {
     console.log(chalk.cyan(`\n📦 Analyzing local skill package: ${target}...`));
   }
-  const skillPackage = readSkillPackage(fullPath);
+  const bytes = readSkillPackageBytes(fullPath);
+  const signature = await verifyInstallSignature(bytes, signatureOptions, false);
+  const skillPackage = extractSkillPackage(bytes);
   installSkillPackage(
     skillPackage,
     path.basename(fullPath),
-    { type: 'local' },
+    { type: 'local', ...(signature ? { signature } : {}) },
     options,
     format,
     config,
@@ -921,6 +1025,7 @@ async function cmdInstall(
   options: ParsedArgs['options'],
   format: ReportFormat,
 ): Promise<void> {
+  installSignatureOptions(options);
   if (/^https?:\/\//i.test(target)) {
     await cmdInstallRemote(target, options, format);
     return;
@@ -933,13 +1038,13 @@ async function cmdInstall(
     usageError('--allow-http is only valid when installing a remote HTTP source');
   }
   if (isSkillPackageSource(target)) {
-    cmdInstallLocalPackage(target, options, format);
+    await cmdInstallLocalPackage(target, options, format);
     return;
   }
   if (options.output !== undefined) {
     usageError('--output is only valid for baseline writes or remote installs');
   }
-  cmdInstallLocal(target, options, format);
+  await cmdInstallLocal(target, options, format);
 }
 
 function cmdVerify(target: string, config: SkillGuardConfig): void {

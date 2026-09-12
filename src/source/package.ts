@@ -487,10 +487,10 @@ export function extractSkillPackage(
 }
 
 /** Read and inspect a local .tar.gz or .tgz skill package. */
-export function readSkillPackage(
+export function readSkillPackageBytes(
   filePath: string,
   options: ExtractSkillPackageOptions = {},
-): SkillPackage {
+): Buffer {
   const stat = fs.statSync(filePath);
   if (!stat.isFile()) {
     throw new SkillPackageError('INVALID_ARCHIVE', `Skill package is not a file: ${filePath}`);
@@ -502,7 +502,15 @@ export function readSkillPackage(
       `Compressed package is ${stat.size} bytes, exceeding the ${maxCompressedBytes}-byte limit`,
     );
   }
-  return extractSkillPackage(fs.readFileSync(filePath), options);
+  return fs.readFileSync(filePath);
+}
+
+/** Read and inspect a local .tar.gz or .tgz skill package. */
+export function readSkillPackage(
+  filePath: string,
+  options: ExtractSkillPackageOptions = {},
+): SkillPackage {
+  return extractSkillPackage(readSkillPackageBytes(filePath, options), options);
 }
 
 /** Atomically install package files into a directory, replacing an existing package only after staging succeeds. */

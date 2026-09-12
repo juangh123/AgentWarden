@@ -29,6 +29,7 @@ export {
   extractSkillPackage,
   inspectInstalledSkillPackage,
   isSkillPackageSource,
+  readSkillPackageBytes,
   readSkillPackage,
   writeSkillPackage,
   type ExpectedSkillPackage,
@@ -39,6 +40,20 @@ export {
   type SkillPackageInspection,
   type SkillPackageManifestEntry,
 } from './source/package.ts';
+export {
+  DEFAULT_MAX_PUBLIC_KEY_BYTES,
+  DEFAULT_MAX_SIGNATURE_BYTES,
+  SignatureError,
+  loadEd25519PublicKey,
+  resolveSignatureBytes,
+  verifyEd25519Signature,
+  verifyPayloadSignature,
+  type LoadedEd25519PublicKey,
+  type ResolveSignatureOptions,
+  type SignatureErrorCode,
+  type SignatureVerificationResult,
+  type VerifyPayloadSignatureOptions,
+} from './source/signature.ts';
 export {
   DEFAULT_BASELINE_NAME,
   createBaseline,

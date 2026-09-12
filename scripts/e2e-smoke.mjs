@@ -1,7 +1,11 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
+import {
+  createHash,
+  generateKeyPairSync,
+  sign as signBytes,
+} from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -226,6 +230,29 @@ const remoteMaliciousPackageDigest = createHash('sha256')
   .digest('hex');
 const localPackagePath = path.join(tmp, 'local-package.tar.gz');
 fs.writeFileSync(localPackagePath, localPackage);
+const { publicKey: publisherPublicKey, privateKey: publisherPrivateKey } =
+  generateKeyPairSync('ed25519');
+const publisherKeyPath = path.join(tmp, 'trusted-publisher.pem');
+const publisherKeySha256 = createHash('sha256')
+  .update(publisherPublicKey.export({ type: 'spki', format: 'der' }))
+  .digest('hex');
+fs.writeFileSync(
+  publisherKeyPath,
+  publisherPublicKey.export({ type: 'spki', format: 'pem' }),
+  'utf8',
+);
+const remoteSafeSignature = signBytes(null, Buffer.from(remoteSafeContent), publisherPrivateKey).toString(
+  'base64',
+);
+const remoteSafePackageSignature = signBytes(null, remoteSafePackage, publisherPrivateKey).toString(
+  'base64',
+);
+const localPackageSignature = signBytes(null, localPackage, publisherPrivateKey).toString('base64');
+const wrongSignature = signBytes(null, Buffer.from('different payload'), publisherPrivateKey).toString(
+  'base64',
+);
+const localPackageSignaturePath = path.join(tmp, 'local-package.tar.gz.sig');
+fs.writeFileSync(localPackageSignaturePath, localPackageSignature, 'utf8');
 const remoteServerPath = path.join(tmp, 'remote-test-server.mjs');
 fs.writeFileSync(
   remoteServerPath,
@@ -245,6 +272,14 @@ const payloads = ${JSON.stringify({
     '/remote-malicious-package.tar.gz': {
       base64: remoteMaliciousPackage.toString('base64'),
       contentType: 'application/gzip',
+    },
+    '/remote-safe.md.sig': {
+      body: remoteSafeSignature,
+      contentType: 'text/plain; charset=utf-8',
+    },
+    '/remote-package.tar.gz.sig': {
+      body: remoteSafePackageSignature,
+      contentType: 'text/plain; charset=utf-8',
     },
   })};
 
@@ -905,6 +940,27 @@ r = run([
   '-C',
   tmp,
   'install',
+  `${remoteBaseUrl}/remote-safe.md`,
+  '--allow-http',
+  '--sha256',
+  remoteSafeDigest,
+  '--signature',
+  `base64:${wrongSignature}`,
+  '--public-key',
+  'trusted-publisher.pem',
+  '--json',
+]);
+check(
+  'Ed25519 signature mismatch fails before writing',
+  r.status === 1 && r.stderr.includes('signature does not match'),
+  `status=${r.status}`,
+);
+check('signature mismatch leaves no installed payload', !fs.existsSync(remoteSafePath));
+
+r = run([
+  '-C',
+  tmp,
+  'install',
   `${remoteBaseUrl}/remote-malicious.md`,
   '--allow-http',
   '--sha256',
@@ -957,6 +1013,10 @@ r = run([
   '--allow-http',
   '--sha256',
   remoteSafeDigest,
+  '--signature',
+  `${remoteBaseUrl}/remote-safe.md.sig`,
+  '--public-key',
+  'trusted-publisher.pem',
   '--json',
 ]);
 const remoteInstallJson = JSON.parse(r.stdout);
@@ -965,10 +1025,22 @@ check(
   r.status === 0 &&
     remoteInstallJson.parsedSkill?.name === 'remote-safe-weather' &&
     remoteInstallJson.source?.resolvedUrl === `${remoteBaseUrl}/remote-safe.md` &&
-    remoteInstallJson.source?.downloadSha256 === remoteSafeDigest,
+    remoteInstallJson.source?.downloadSha256 === remoteSafeDigest &&
+    remoteInstallJson.source?.signature?.verified === true &&
+    remoteInstallJson.source?.signature?.keySha256 === publisherKeySha256,
   `status=${r.status}`,
 );
 check('remote safe skill is stored under the managed directory', fs.existsSync(remoteSafePath));
+r = run(['-C', tmp, 'list', '--json']);
+const signedRemoteLockEntry = JSON.parse(r.stdout).skills.find(
+  (skill) => skill.name === 'remote-safe-weather',
+);
+check(
+  'lockfile records verified publisher provenance',
+  signedRemoteLockEntry?.signatureAlgorithm === 'ed25519' &&
+    signedRemoteLockEntry?.signatureVerified === true &&
+    signedRemoteLockEntry?.signatureKeySha256 === publisherKeySha256,
+);
 
 r = run(['-C', tmp, 'verify', '.agentwarden/skills/remote-safe.md']);
 check('verify resolves a remotely installed local snapshot', r.status === 0, `status=${r.status}`);
@@ -1009,6 +1081,10 @@ r = run([
   '--allow-http',
   '--sha256',
   remoteSafePackageDigest,
+  '--signature',
+  `${remoteBaseUrl}/remote-package.tar.gz.sig`,
+  '--public-key',
+  'trusted-publisher.pem',
   '--json',
 ]);
 const remotePackageInstall = JSON.parse(r.stdout);
@@ -1017,7 +1093,8 @@ check(
   r.status === 0 &&
     remotePackageInstall.source?.packageSha256?.length === 64 &&
     remotePackageInstall.source?.packageFiles === 2 &&
-    remotePackageInstall.source?.scannedFiles === 2,
+    remotePackageInstall.source?.scannedFiles === 2 &&
+    remotePackageInstall.source?.signature?.verified === true,
   `status=${r.status}`,
 );
 check(
@@ -1052,13 +1129,24 @@ r = run(['-C', tmp, 'uninstall', 'remote-package-demo', '--json']);
 check('remote package entry can be uninstalled', r.status === 0, `status=${r.status}`);
 fs.rmSync(remotePackageRoot, { recursive: true, force: true });
 
-r = run(['-C', tmp, 'install', 'local-package.tar.gz', '--json']);
+r = run([
+  '-C',
+  tmp,
+  'install',
+  'local-package.tar.gz',
+  '--signature',
+  'local-package.tar.gz.sig',
+  '--public-key',
+  'trusted-publisher.pem',
+  '--json',
+]);
 const localPackageInstall = JSON.parse(r.stdout);
 check(
   'local skill package installs without a remote digest',
   r.status === 0 &&
     localPackageInstall.source?.type === 'local' &&
-    localPackageInstall.source?.packageFiles === 2,
+    localPackageInstall.source?.packageFiles === 2 &&
+    localPackageInstall.source?.signature?.verified === true,
   `status=${r.status}`,
 );
 r = run(['-C', tmp, 'audit', '--json']);

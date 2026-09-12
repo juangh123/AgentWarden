@@ -174,4 +174,56 @@ describe('lockfile', () => {
 
     assert.throws(() => readLockfile(dir), /packageEntry is missing from packageFiles/);
   });
+
+  it('validates and preserves Ed25519 provenance metadata', () => {
+    const dir = tempDir();
+    updateLockfileSkill(
+      {
+        name: 'signed-demo',
+        version: '1.0.0',
+        source: 'signed-demo.md',
+        sha256: 'a'.repeat(64),
+        installedAt: new Date().toISOString(),
+        verifiedScore: 100,
+        signatureAlgorithm: 'ed25519',
+        signatureVerified: true,
+        signatureKeySha256: 'b'.repeat(64),
+        signatureSha256: 'c'.repeat(64),
+      },
+      dir,
+    );
+
+    const entry = readLockfile(dir).skills['signed-demo'];
+    assert.equal(entry.signatureAlgorithm, 'ed25519');
+    assert.equal(entry.signatureVerified, true);
+    assert.equal(entry.signatureKeySha256, 'b'.repeat(64));
+    assert.equal(entry.signatureSha256, 'c'.repeat(64));
+  });
+
+  it('rejects malformed signature provenance metadata', () => {
+    const dir = tempDir();
+    fs.writeFileSync(
+      path.join(dir, LOCKFILE_NAME),
+      JSON.stringify({
+        lockfileVersion: 1,
+        skills: {
+          demo: {
+            name: 'demo',
+            version: '1.0.0',
+            source: 'demo.md',
+            sha256: 'a'.repeat(64),
+            installedAt: new Date().toISOString(),
+            verifiedScore: 100,
+            signatureAlgorithm: 'ed25519',
+            signatureVerified: false,
+            signatureKeySha256: 'b'.repeat(64),
+            signatureSha256: 'c'.repeat(64),
+          },
+        },
+      }),
+      'utf8',
+    );
+
+    assert.throws(() => readLockfile(dir), /invalid signatureVerified/);
+  });
 });
