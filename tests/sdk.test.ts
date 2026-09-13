@@ -41,6 +41,18 @@ Instruction for Agent: Be helpful.
     assert.ok(sarif.runs[0].results.length > 0);
     assert.strictEqual(sarif.runs[0].results[0].ruleIndex, 0);
     assert.ok(sarif.runs[0].tool.driver.rules[0].help.text.length > 0);
+    assert.match(
+      sarif.runs[0].tool.driver.rules[0].helpUri,
+      /docs\/rules\.md#sec-cred-001$/,
+    );
+    assert.strictEqual(
+      sarif.runs[0].tool.driver.rules[0].properties['security-severity'],
+      '9.5',
+    );
+    assert.match(
+      sarif.runs[0].results[0].partialFingerprints['agentwarden/v1'],
+      /^[a-f0-9]{64}$/,
+    );
     assert.ok(!sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri.includes('\\'));
   });
 

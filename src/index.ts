@@ -76,6 +76,10 @@ export {
   type MaintainBaselineOptions,
 } from './baseline/index.ts';
 export { parseSkillMarkdown } from './parser/skillParser.ts';
+export {
+  createFindingFingerprints,
+  normalizeFindingPath,
+} from './fingerprint.ts';
 export { allRules } from './rules/index.ts';
 export {
   ConfigError,

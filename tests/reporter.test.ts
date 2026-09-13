@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   buildSarifReport,
+  createBaseline,
   redactText,
   scanSkillContent,
   toReportScanResult,
@@ -53,5 +54,45 @@ describe('report redaction', () => {
     assert.ok(!redacted.includes('BEGIN OPENSSH PRIVATE KEY'));
     assert.ok(redacted.includes('[REDACTED]'));
     assert.ok(redacted.includes('[REDACTED PRIVATE KEY]'));
+  });
+
+  it('emits line-stable SARIF fingerprints shared with baselines', () => {
+    const content = [
+      '---',
+      'name: fingerprint-demo',
+      '---',
+      '```bash',
+      'cat ~/.ssh/id_rsa',
+      '```',
+    ].join('\n');
+    const shiftedContent = `\n\n${content}`;
+    const first = scanSkillContent(content, 'skills/fingerprint-demo.md');
+    const shifted = scanSkillContent(shiftedContent, 'skills/fingerprint-demo.md');
+    const firstFinding = first.findings.find((finding) => finding.ruleId === 'SEC-CRED-001');
+    const shiftedFinding = shifted.findings.find((finding) => finding.ruleId === 'SEC-CRED-001');
+
+    assert.ok(firstFinding);
+    assert.ok(shiftedFinding);
+    assert.notEqual(firstFinding.line, shiftedFinding.line);
+
+    const firstResult = buildSarifReport([first]).runs[0].results.find(
+      (result) => result.ruleId === 'SEC-CRED-001',
+    );
+    const shiftedResult = buildSarifReport([shifted]).runs[0].results.find(
+      (result) => result.ruleId === 'SEC-CRED-001',
+    );
+    const baseline = createBaseline([first]);
+
+    assert.ok(firstResult);
+    assert.ok(shiftedResult);
+    assert.match(firstResult.partialFingerprints['agentwarden/v1'], /^[a-f0-9]{64}$/);
+    assert.equal(
+      firstResult.partialFingerprints['agentwarden/v1'],
+      shiftedResult.partialFingerprints['agentwarden/v1'],
+    );
+    assert.equal(
+      firstResult.partialFingerprints['agentwarden/v1'],
+      baseline.entries.find((entry) => entry.ruleId === 'SEC-CRED-001')?.fingerprint,
+    );
   });
 });

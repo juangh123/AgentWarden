@@ -1,5 +1,8 @@
-import * as path from 'node:path';
 import { chalk } from './chalk.ts';
+import {
+  createFindingFingerprints,
+  normalizeFindingPath,
+} from '../fingerprint.ts';
 import type { ScanResult } from '../rules/types.ts';
 import { readPackageVersion } from '../version.ts';
 import {
@@ -21,13 +24,14 @@ export function renderScanReport(
 }
 
 function toArtifactUri(filePath: string): string {
-  const rel = path.isAbsolute(filePath) ? path.relative(process.cwd(), filePath) : filePath;
-  const uri = (rel && !rel.startsWith('..') ? rel : filePath).replace(/\\/g, '/');
-  return uri || 'unknown';
+  return normalizeFindingPath(filePath, process.cwd()) || 'unknown';
 }
 
 export function buildSarifReport(results: ScanResult[], options: ReportOptions = {}) {
   const reportResults = toReportScanResults(results, options);
+  const fingerprintsByResult = results.map((result) =>
+    createFindingFingerprints(result.filePath, result.findings),
+  );
   const allFindings = reportResults.flatMap(r => r.findings);
   const ruleIds = Array.from(new Set(allFindings.map(f => f.ruleId)));
   const ruleIndexById = new Map(ruleIds.map((id, index) => [id, index]));
@@ -36,6 +40,15 @@ export function buildSarifReport(results: ScanResult[], options: ReportOptions =
     if (severity === 'medium') return 'warning';
     return 'note';
   };
+  const securitySeverityFor = (severity: string): string => {
+    if (severity === 'critical') return '9.5';
+    if (severity === 'high') return '8.0';
+    if (severity === 'medium') return '5.5';
+    if (severity === 'low') return '3.0';
+    return '1.0';
+  };
+  const helpUriFor = (ruleId: string): string =>
+    `https://github.com/juangh123/AgentWarden/blob/main/docs/rules.md#${ruleId.toLowerCase()}`;
 
   return {
     $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
@@ -57,33 +70,50 @@ export function buildSarifReport(results: ScanResult[], options: ReportOptions =
                 defaultConfiguration: {
                   level: levelFor(sample?.severity || 'warning'),
                 },
-                help: { text: sample?.suggestion || '' },
+                helpUri: helpUriFor(id),
+                help: {
+                  text: sample?.suggestion || '',
+                  markdown: sample?.suggestion ? `**Remediation:** ${sample.suggestion}` : '',
+                },
                 properties: {
                   category: sample?.category || '',
                   severity: sample?.severity || '',
+                  'security-severity': securitySeverityFor(sample?.severity || 'info'),
+                  tags: sample?.category ? [sample.category, 'security'] : ['security'],
                 },
               };
             })
           }
         },
-        results: reportResults.flatMap(result => {
-          return result.findings.map(finding => ({
-            ruleId: finding.ruleId,
-            ruleIndex: ruleIndexById.get(finding.ruleId) ?? 0,
-            level: levelFor(finding.severity),
-            message: { text: `${finding.description} (Category: ${finding.category})` },
-            locations: [
-              {
-                physicalLocation: {
-                  artifactLocation: { uri: toArtifactUri(finding.filePath || result.filePath) },
-                  region: {
-                    startLine: Math.max(1, finding.line || 1),
-                    snippet: { text: finding.snippet || '' },
+        results: reportResults.flatMap((result, resultIndex) => {
+          return result.findings.map((finding, findingIndex) => {
+            const fingerprint = fingerprintsByResult[resultIndex][findingIndex];
+            return {
+              ruleId: finding.ruleId,
+              ruleIndex: ruleIndexById.get(finding.ruleId) ?? 0,
+              level: levelFor(finding.severity),
+              message: { text: `${finding.description} (Category: ${finding.category})` },
+              partialFingerprints: {
+                'agentwarden/v1': fingerprint,
+                primaryLocationLineHash: fingerprint,
+              },
+              properties: {
+                'agentwarden/category': finding.category,
+                'agentwarden/severity': finding.severity,
+              },
+              locations: [
+                {
+                  physicalLocation: {
+                    artifactLocation: { uri: toArtifactUri(finding.filePath || result.filePath) },
+                    region: {
+                      startLine: Math.max(1, finding.line || 1),
+                      snippet: { text: finding.snippet || '' },
+                    },
                   },
                 },
-              },
-            ],
-          }));
+              ],
+            };
+          });
         }),
       },
     ],
