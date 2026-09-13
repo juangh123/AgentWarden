@@ -38,7 +38,7 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: juangh123/AgentWarden@v0.3.0
         with:
           path: skills/
@@ -58,7 +58,7 @@ permissions:
   security-events: write
 
 steps:
-  - uses: actions/checkout@v5
+  - uses: actions/checkout@v7
 
   - name: Run AgentWarden
     uses: juangh123/AgentWarden@v0.3.0
@@ -81,7 +81,7 @@ steps:
 增量扫描可以避免大型仓库在每个 PR 上重复审计全部资产：
 
 ```yaml
-- uses: actions/checkout@v5
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
 
