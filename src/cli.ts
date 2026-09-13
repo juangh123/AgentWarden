@@ -68,6 +68,7 @@ import {
   type PublisherPolicyDecision,
   type PublisherProvenance,
 } from './source/provenance.ts';
+import { buildCycloneDxSbom } from './sbom/index.ts';
 
 const VERSION = readPackageVersion();
 
@@ -361,6 +362,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('install <file|archive|https://url>')} Pre-scan, then securely record fingerprint to skills.lock
   ${chalk.green('verify <file>')}        Verify a single skill file against skills.lock fingerprint
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
+  ${chalk.green('sbom')}                 Generate a CycloneDX 1.5 SBOM from skills.lock
   ${chalk.green('rules')}                List active security rules and effective severity
   ${chalk.green('policy [diff <from> <to>]')} Show effective policy or compare two policies
   ${chalk.green('list')}                 List skills recorded in skills.lock
@@ -385,7 +387,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--changed-from <ref>')}   Scan only files changed since a Git ref
   ${chalk.yellow('--fail-on-diff')}         Exit 1 when policy diff detects changes
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
-  ${chalk.yellow('--output <file>')}        Baseline output or package destination path
+  ${chalk.yellow('--output <file>')}        Baseline, package, or SBOM output path
   ${chalk.yellow('--sha256 <digest>')}      Required SHA-256 pin for remote installs
   ${chalk.yellow('--signature <ref>')}      Detached Ed25519 signature file, URL, base64:, or hex:
   ${chalk.yellow('--public-key <ref>')}     Trusted Ed25519 public key file or inline pem:/base64:
@@ -1436,6 +1438,70 @@ function cmdList(lock: LockfileSchema, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(78)) + '\n');
 }
 
+function resolveSbomFormat(options: ParsedArgs['options']): 'pretty' | 'json' {
+  if (options.sarif) usageError('sbom supports pretty|json output only');
+  if (options.json) return 'json';
+  if (options.format !== undefined) {
+    const value = String(options.format).toLowerCase();
+    if (value !== 'pretty' && value !== 'json') {
+      usageError(`Invalid --format "${String(options.format)}" (expected pretty|json)`);
+    }
+    return value;
+  }
+  return 'json';
+}
+
+function cmdSbom(options: ParsedArgs['options']): void {
+  const format = resolveSbomFormat(options);
+  const result = buildCycloneDxSbom({
+    cwd: process.cwd(),
+    config: buildConfig(options),
+  });
+  const document = `${JSON.stringify(result.bom, null, 2)}\n`;
+  const requestedOutput =
+    options.output !== undefined ? String(options.output).trim() : undefined;
+  if (options.output !== undefined && !requestedOutput) {
+    usageError('SBOM output path must not be empty');
+  }
+  const output = requestedOutput ? path.resolve(process.cwd(), requestedOutput) : undefined;
+  if (output) writeFileAtomic(output, document);
+
+  if (!output && format === 'json') {
+    process.stdout.write(document);
+  } else if (format === 'pretty' || output) {
+    const integrityFailures = result.inspections.filter(
+      (inspection) => inspection.integrityPassed === false,
+    ).length;
+    const publisherFailures = result.inspections.filter(
+      (inspection) => !inspection.publisherPolicyPassed,
+    ).length;
+    console.log(chalk.bold.cyan('\nCycloneDX SBOM\n'));
+    console.log(chalk.gray('─'.repeat(78)));
+    if (output) console.log(`  Output:          ${chalk.gray(output)}`);
+    console.log(`  Spec:            ${chalk.white('CycloneDX 1.5')}`);
+    console.log(`  Components:      ${chalk.white(String(result.componentCount))}`);
+    console.log(`  Package files:   ${chalk.white(String(result.packageFileCount))}`);
+    console.log(`  Document SHA256: ${chalk.gray(result.documentSha256)}`);
+    console.log(
+      `  Integrity:       ${
+        integrityFailures === 0
+          ? chalk.green('passed')
+          : chalk.red(`${integrityFailures} failure(s)`)
+      }`,
+    );
+    console.log(
+      `  Publisher policy:${
+        publisherFailures === 0
+          ? ' ' + chalk.green('passed')
+          : ' ' + chalk.red(`${publisherFailures} failure(s)`)
+      }`,
+    );
+    console.log(chalk.gray('─'.repeat(78)) + '\n');
+  }
+
+  if (!result.passed) process.exit(EXIT_FAIL);
+}
+
 function cmdRules(config: SkillGuardConfig, format: ReportFormat): void {
   const ignored = new Set(config.ignoreRules ?? []);
   const overrides = config.severityOverrides ?? {};
@@ -1988,6 +2054,14 @@ async function main(): Promise<void> {
 
   if (command === 'audit') {
     cmdAudit(options, buildConfig(options), resolveFormat(options));
+    return;
+  }
+
+  if (command === 'sbom') {
+    if (positionals.length > 1) {
+      usageError('sbom does not accept positional paths');
+    }
+    cmdSbom(options);
     return;
   }
 

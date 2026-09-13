@@ -19,6 +19,7 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
 - 📦 **多文件 Skill 包**：安全解析 `.tar.gz` / `.tgz`，递归扫描包内全部 UTF-8 文本文件，并用整包清单锁定脚本、参考文档和 MCP 配置。
 - ✍️ **Ed25519 发布者来源**：验证与发布者公钥绑定的分离签名，并把公钥、签名指纹及验证状态写入锁文件。
 - 🛡️ **可信发布者策略**：可要求安装必须验签，只允许指定公钥指纹，并在安装、`verify` 和 `audit` 阶段阻断已撤销密钥。
+- 🧾 **CycloneDX SBOM**：从 `skills.lock` 导出标准 CycloneDX 1.5 清单，记录整包/单文件哈希、包内清单、远程来源和发布者 provenance。
 - 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
@@ -92,6 +93,11 @@ node dist/cli.js verify .agentwarden/skills/weather.md
 # 审计所有已安装技能的本地完整性，并按当前策略重新扫描
 node dist/cli.js audit
 
+# 从 skills.lock 生成 CycloneDX 1.5 SBOM
+node dist/cli.js sbom
+node dist/cli.js sbom --output agentwarden.cdx.json
+node dist/cli.js sbom --format pretty --config .agentwarden/publisher-policy.json
+
 # 查看已安装列表 / 卸载
 node dist/cli.js list
 node dist/cli.js uninstall safe-weather-reporter
@@ -142,7 +148,7 @@ node dist/cli.js --version
 | `--changed-from <ref>` | 仅扫描相对指定 Git ref 或提交 SHA 发生变化的文件 |
 | `--fail-on-diff` | `policy diff` 检测到差异时返回退出码 `1` |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
-| `--output <file>` | `baseline` 输出路径，或本地/远程 Skill 包的目标目录 |
+| `--output <file>` | `baseline` / SBOM 输出路径，或本地/远程 Skill 包的目标目录 |
 | `--sha256 <digest>` | 远程安装必填；校验原始下载字节的 SHA-256，支持 `sha256:` 前缀 |
 | `--signature <ref>` | 分离的 Ed25519 签名；支持文件、HTTP(S) URL、`base64:` 或 `hex:` |
 | `--public-key <ref>` | 受信任的 Ed25519 公钥；支持 SPKI DER/PEM 文件、`base64:` 或 `pem:` |
@@ -274,6 +280,34 @@ agentwarden policy --config .agentwarden/publisher-policy.json --json
 `trustedKeys` 和 `revokedKeys` 在配置继承中追加合并；后出现的 `revokedKeys` 会从最终可信集合中移除同一指纹，便于在子配置中撤销父配置曾信任的发布者。`requireSignature` 由子配置覆盖。`policy` 与 `policy diff` 输出均包含发布者策略，便于在变更进入主分支前审查。
 
 当 `requireSignature: true` 且 `trustedKeys` 为空时，策略只要求存在一个可验证的 Ed25519 签名，不限制签名者身份；若目标包含团队或供应链信任边界，应显式配置 `trustedKeys`。
+
+---
+
+## 🧾 CycloneDX SBOM
+
+`sbom` 从当前工作目录的 `skills.lock` 生成 CycloneDX 1.5 JSON，并由当前配置执行本地完整性和发布者策略检查。默认直接向标准输出写入完整 SBOM，适合保存为 CI 制品或交给依赖分析平台：
+
+```bash
+agentwarden sbom > agentwarden.cdx.json
+agentwarden sbom --output agentwarden.cdx.json
+agentwarden sbom --config .agentwarden/publisher-policy.json --output review.cdx.json
+agentwarden sbom --format pretty --config .agentwarden/publisher-policy.json
+```
+
+每个锁项会生成一个 `library` 组件，包内文件生成嵌套的 `file` 组件。除标准组件名称、版本和 SHA-256 外，`agentwarden:*` properties 还记录：
+
+| Property | 含义 |
+| :--- | :--- |
+| `source` / `sourceType` | 本地锁定的相对路径及 `local` / `remote` 来源 |
+| `integrityPassed` / `observedSha256` | 当前磁盘内容是否符合锁文件记录，以及实际观察到的哈希 |
+| `entrySha256` / `packageFileCount` | 包入口兼容哈希及包内文件数量 |
+| `missingFiles` / `extraFiles` / `modifiedFiles` / `unsafePaths` | 包级完整性差异 |
+| `remoteUrl` / `resolvedUrl` / `downloadSha256` | 去除账号密码、查询串和片段后的分发来源及下载摘要 |
+| `signatureAlgorithm` / `signatureVerified` | 安装时记录的发布者签名算法和验证状态 |
+| `signatureKeySha256` / `signatureSha256` | 发布者公钥指纹和 detached 签名字节指纹 |
+| `publisherPolicyPassed` / `publisherPolicyCode` | 按当前配置重新计算出的发布者策略判定 |
+
+SBOM 的 `serialNumber` 基于锁文件、发布者策略和工具版本确定性生成；相同输入会得到相同文档及 `documentSha256`。任何锁项内容不匹配、包内文件变化、必需签名缺失、发布者不受信或密钥已撤销时，SBOM 仍会完整输出并返回退出码 `1`，可直接作为 CI 供应链门禁。`--format pretty` 仅用于人工检查，`--format sarif` 会被拒绝。
 
 ---
 
@@ -483,6 +517,7 @@ src/
   baseline/            发现基线生成、校验、应用与稳定指纹
   git/                 Git 变更集解析与增量扫描范围
   source/              远程下载、Ed25519 验签、安全 tar.gz 解包与整包指纹
+  sbom/                CycloneDX 1.5 组件、包内文件和 provenance 导出
   scanner/             扫描编排与评分
   reporter/redaction.ts 报告脱敏与安全输出投影
   parser/              Markdown / Frontmatter 解析
@@ -513,6 +548,7 @@ import {
   verifyPayloadSignature,
   loadEd25519PublicKey,
   evaluatePublisherPolicy,
+  buildCycloneDxSbom,
   extractSkillPackage,
   inspectInstalledSkillPackage,
   getChangedFiles,
@@ -575,6 +611,18 @@ const publisherDecision = evaluatePublisherPolicy(
   },
 );
 console.log(publisherDecision.passed, publisherDecision.code);
+
+// Export the current lockfile as a CycloneDX 1.5 document with integrity checks
+const sbom = buildCycloneDxSbom({
+  cwd: process.cwd(),
+  config: {
+    publishers: {
+      requireSignature: true,
+      trustedKeys: [publisherKey.sha256],
+    },
+  },
+});
+console.log(sbom.bom.specVersion, sbom.componentCount, sbom.documentSha256, sbom.passed);
 
 // Inspect a package in memory and retain its full-file manifest
 const skillPackage = extractSkillPackage(

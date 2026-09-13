@@ -98,6 +98,18 @@ export {
   type PublisherProvenance,
 } from './source/provenance.ts';
 export {
+  buildCycloneDxSbom,
+  type BuildSbomOptions,
+  type CycloneDxBom,
+  type CycloneDxComponent,
+  type CycloneDxDependency,
+  type CycloneDxExternalReference,
+  type CycloneDxHash,
+  type CycloneDxProperty,
+  type SbomBuildResult,
+  type SbomEntryInspection,
+} from './sbom/index.ts';
+export {
   readLockfile,
   writeLockfile,
   updateLockfileSkill,

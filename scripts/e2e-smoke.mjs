@@ -1177,6 +1177,52 @@ check(
     trustedPublisherAudit.skills['remote-safe-weather']?.publisherPolicyPassed === true,
   `status=${r.status}`,
 );
+r = run([
+  '-C',
+  tmp,
+  'sbom',
+  '--config',
+  'trusted-publisher-policy.json',
+  '--json',
+]);
+const sbom = JSON.parse(r.stdout);
+const sbomComponent = sbom.components?.find(
+  (component) => component.name === 'remote-safe-weather',
+);
+check(
+  'sbom exports verified provenance as CycloneDX 1.5',
+  r.status === 0 &&
+    sbom.bomFormat === 'CycloneDX' &&
+    sbom.specVersion === '1.5' &&
+    sbom.components?.length === 1 &&
+    sbomComponent?.properties?.some(
+      (property) =>
+        property.name === 'agentwarden:signatureKeySha256' &&
+        property.value === publisherKeySha256,
+    ) === true,
+  `status=${r.status}`,
+);
+r = run([
+  '-C',
+  tmp,
+  'sbom',
+  '--config',
+  'trusted-publisher-policy.json',
+  '--format',
+  'pretty',
+  '--output',
+  'agentwarden-sbom.json',
+]);
+check(
+  'sbom writes a CycloneDX document to --output',
+  r.status === 0 &&
+    r.stdout.includes('CycloneDX 1.5') &&
+    JSON.parse(fs.readFileSync(path.join(tmp, 'agentwarden-sbom.json'), 'utf8')).bomFormat ===
+      'CycloneDX',
+  `status=${r.status}`,
+);
+r = run(['-C', tmp, 'sbom', '--sarif']);
+check('sbom rejects SARIF output', r.status === 2, `status=${r.status}`);
 r = run(['-C', tmp, 'uninstall', 'remote-safe-weather', '--json']);
 check('remote safe entry can be uninstalled', r.status === 0, `status=${r.status}`);
 
@@ -1256,6 +1302,8 @@ check(
     tamperedPackageAudit.skills['remote-package-demo']?.packageMatch === false,
   `status=${r.status}`,
 );
+r = run(['-C', tmp, 'sbom', '--json']);
+check('sbom exits nonzero for tampered packages', r.status === 1, `status=${r.status}`);
 r = run(['-C', tmp, 'uninstall', 'remote-package-demo', '--json']);
 check('remote package entry can be uninstalled', r.status === 0, `status=${r.status}`);
 fs.rmSync(remotePackageRoot, { recursive: true, force: true });
