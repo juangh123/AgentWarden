@@ -68,7 +68,7 @@
     "prepublishOnly": "npm run typecheck && npm test && npm run smoke"
   },
   "devDependencies": {
-    "@types/node": "^22.20.2",
+    "@types/node": "^26.5.1",
     "typescript": "^5.7.0"
   }
 }
