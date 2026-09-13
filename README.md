@@ -53,7 +53,7 @@ echo "blocked exit: $?"     # 1
 ### GitHub Action
 
 ```yaml
-- uses: actions/checkout@v5
+- uses: actions/checkout@v7
 - uses: juangh123/AgentWarden@v0.3.0
   with:
     path: skills/
@@ -721,7 +721,7 @@ const sarif = buildSarifReport(newResults);
 Add AgentWarden as a security gate in your CI/CD pipeline:
 
 ```yaml
-- uses: actions/checkout@v5
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
 
