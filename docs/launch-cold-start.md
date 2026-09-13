@@ -41,21 +41,22 @@ npm pack --dry-run --json
 agentwarden-cli
 ```
 
-优先方案是 npm Trusted Publisher：
-
-1. 登录 npm，打开 `agentwarden-cli` 包设置。
-2. 配置 Trusted Publisher：GitHub owner `juangh123`，repository `AgentWarden`，workflow `release.yml`。
-3. 保留 GitHub Actions `id-token: write`。
-4. 设置仓库变量 `NPM_PUBLISH_ENABLED=true`。
-5. 推送匹配 package version 的 tag，例如 `v0.3.0`。
-
-备用方案是在 GitHub 仓库添加 `NPM_TOKEN` secret，然后重跑 Release workflow：
+首次发布必须先把新包名写入 npm registry，Trusted Publisher 只能在包创建后配置。推荐使用短期 `NPM_TOKEN` 完成引导，由 GitHub Actions 生成 provenance：
 
 ```bash
 gh variable set NPM_PUBLISH_ENABLED --repo juangh123/AgentWarden --body true
 gh secret set NPM_TOKEN --repo juangh123/AgentWarden
-gh run list --repo juangh123/AgentWarden --workflow release.yml
+gh run rerun <release-run-id> --repo juangh123/AgentWarden
 ```
+
+`NPM_TOKEN` 应使用只对 `agentwarden-cli` 有写权限的 granular token。当前 `v0.3.0` Release run 的 ID 是 `34735455673`。
+
+首次发布成功后，切换到 Trusted Publisher：
+
+1. 在 npm 打开已创建的 `agentwarden-cli` 包设置。
+2. 配置 Trusted Publisher：GitHub owner `juangh123`，repository `AgentWarden`，workflow `release.yml`。
+3. 保留 GitHub Actions `id-token: write` 和仓库变量 `NPM_PUBLISH_ENABLED=true`。
+4. 删除 `NPM_TOKEN`，后续版本推送完整 tag 即可由 OIDC 发布。
 
 本地检查登录状态：
 
