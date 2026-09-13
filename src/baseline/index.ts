@@ -1,7 +1,7 @@
-import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { BaselineMetadata, Finding, ScanResult, Severity } from '../rules/types.ts';
+import { createFindingFingerprints, normalizeFindingPath } from '../fingerprint.ts';
 import { calculateScore, passesPolicy } from '../scanner/scoring.ts';
 
 export const DEFAULT_BASELINE_NAME = '.agentwarden-baseline.json';
@@ -95,34 +95,8 @@ export interface BaselineMaintenance {
   };
 }
 
-function toBaselinePath(filePath: string, cwd: string): string {
-  const relative = path.isAbsolute(filePath) ? path.relative(cwd, filePath) : filePath;
-  return (relative && !relative.startsWith('..') ? relative : filePath).replace(/\\/g, '/');
-}
-
-function baseFingerprint(filePath: string, finding: Finding, cwd: string): string {
-  const normalizedSnippet = (finding.snippet || '').replace(/\s+/g, ' ').trim();
-  return [
-    finding.ruleId,
-    finding.category,
-    finding.severity,
-    toBaselinePath(filePath, cwd),
-    normalizedSnippet,
-  ].join('\n');
-}
-
-function fingerprintWithOccurrence(material: string, occurrence: number): string {
-  return crypto.createHash('sha256').update(`${material}\n${occurrence}`, 'utf8').digest('hex');
-}
-
 function fingerprintsForResult(result: ScanResult, cwd: string): string[] {
-  const occurrences = new Map<string, number>();
-  return result.findings.map((finding) => {
-    const material = baseFingerprint(result.filePath, finding, cwd);
-    const occurrence = occurrences.get(material) || 0;
-    occurrences.set(material, occurrence + 1);
-    return fingerprintWithOccurrence(material, occurrence);
-  });
+  return createFindingFingerprints(result.filePath, result.findings, cwd);
 }
 
 function normalizeTimestamp(value: string | Date, field: string): string {
@@ -172,7 +146,7 @@ export function createBaseline(
       entries.push({
         fingerprint: fingerprints[index],
         ruleId: finding.ruleId,
-        file: toBaselinePath(result.filePath, cwd),
+        file: normalizeFindingPath(result.filePath, cwd),
         line: finding.line,
         severity: finding.severity,
         acceptedAt: createdAt,
@@ -498,7 +472,7 @@ function maintainBaseline(
         added.push({
           fingerprint,
           ruleId: finding.ruleId,
-          file: toBaselinePath(result.filePath, cwd),
+          file: normalizeFindingPath(result.filePath, cwd),
           line: finding.line,
           severity: finding.severity,
           acceptedAt: now,

@@ -6,6 +6,21 @@ versioning.
 
 ## [Unreleased]
 
+### Added
+
+- SARIF results now carry stable partial fingerprints shared with baselines, so
+  GitHub Code Scanning can retain finding identity when line numbers move.
+- SARIF rules now include GitHub security severity, category/security tags, and
+  remediation links to the complete rule catalog.
+- Added `docs/rules.md` with detection scope and remediation guidance for all
+  current rules.
+- Exported the shared finding fingerprint helpers through the programmatic SDK.
+
+### Changed
+
+- Baselines and SARIF now derive finding identity from the same normalized
+  path, rule, category, severity, and snippet implementation.
+
 ## [0.3.0] - 2026-09-13
 
 ### Added

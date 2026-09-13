@@ -79,7 +79,7 @@ echo "blocked exit: $?"     # 1
 - ✍️ **Ed25519 发布者来源**：验证与发布者公钥绑定的分离签名，并把公钥、签名指纹及验证状态写入锁文件。
 - 🛡️ **可信发布者策略**：可要求安装必须验签，只允许指定公钥指纹，并在安装、`verify` 和 `audit` 阶段阻断已撤销密钥。
 - 🧾 **CycloneDX SBOM**：从 `skills.lock` 导出标准 CycloneDX 1.5 清单，记录整包/单文件哈希、包内清单、远程来源和发布者 provenance。
-- 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）。
+- 📊 **企业级报告格式**：控制台彩色展示、**JSON** 导出以及 **SARIF 2.1.0**（可直接接入 GitHub Code Scanning / CI）；SARIF 包含跨行号稳定的指纹、修复帮助链接与 GitHub `security-severity`。
 - 🎛️ **策略化配置**：内置 `legacy` / `balanced` / `strict` 策略档位，支持配置继承、自定义 `failOn`、`minScore`、规则忽略清单与 `allowedDomains` 白名单。
 - 🔎 **策略可观测性**：`policy` 命令展示最终生效配置，`policy diff` 可在升档或配置变更前生成结构化差异，JSON 输出可纳入审计流水线。
 - 🧭 **统一资产发现**：目录扫描自动发现 Markdown Skills 与常见 MCP 配置，并可通过 `include` / `exclude` glob 精确限定审计范围。
@@ -440,6 +440,8 @@ agentwarden policy diff current .warden/policy.json --fail-on-diff --json
 agentwarden rules --json
 agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 ```
+
+包含全部检测目标、默认级别和修复建议的目录见 [安全规则目录](docs/rules.md)。
 
 严重级别覆盖会参与评分和 `failOn` 判断，因此修改级别或收敛基线前应经过代码审查。无效规则 ID 不会报错，但也不会出现在规则目录中；可通过 `rules --json` 检查目标规则是否显示 `overridden: true`，确认覆盖已实际生效。
 
