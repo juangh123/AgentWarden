@@ -69,7 +69,12 @@ jobs:
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             echo "GitHub Release ${GITHUB_REF_NAME} already exists."
           else
-            gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "AgentWarden ${GITHUB_REF_NAME}"
+            NOTES_FILE="docs/release-notes-${GITHUB_REF_NAME}.md"
+            if [[ -f "${NOTES_FILE}" ]]; then
+              gh release create "${GITHUB_REF_NAME}" --verify-tag --notes-file "${NOTES_FILE}" --title "AgentWarden ${GITHUB_REF_NAME}"
+            else
+              gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "AgentWarden ${GITHUB_REF_NAME}"
+            fi
           fi
       - name: Update floating major tag
         shell: bash
