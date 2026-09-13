@@ -1,0 +1,22 @@
+{
+  "profile": "strict",
+  "failOn": "medium",
+  "minScore": 90,
+  "allowedDomains": [
+    "api.open-meteo.com",
+    "registry.npmjs.org"
+  ],
+  "include": [
+    "skills/**",
+    "agents/**"
+  ],
+  "exclude": [
+    "skills/vendor/**",
+    "**/node_modules/**"
+  ],
+  "publishers": {
+    "requireSignature": true,
+    "trustedKeys": [],
+    "revokedKeys": []
+  }
+}

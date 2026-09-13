@@ -1,67 +1,93 @@
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
 import { parseSkillMarkdown } from '../parser/skillParser.ts';
+import { discoverSkillFiles } from './discovery.ts';
 import { allRules } from '../rules/index.ts';
-import type { ScanResult, Finding, Severity } from '../rules/types.ts';
+import type { ScanResult, Finding } from '../rules/types.ts';
 import { loadConfig, normalizeConfig, type SkillGuardConfig } from '../config/index.ts';
+import { applyBaseline, readBaseline } from '../baseline/index.ts';
+import { calculateScore, passesPolicy } from './scoring.ts';
 
-const SEVERITY_WEIGHTS: Record<Severity, number> = {
-  critical: 40,
-  high: 25,
-  medium: 15,
-  low: 5,
-  info: 0,
-};
-
-const SEVERITY_ORDER: Record<Severity, number> = {
-  info: 0,
-  low: 1,
-  medium: 2,
-  high: 3,
-  critical: 4,
-};
-
-export function scanSkillFile(filePath: string, customConfig?: SkillGuardConfig): ScanResult {
-  const content = fs.readFileSync(filePath, 'utf8');
-  const parsed = parseSkillMarkdown(content);
-  const config = normalizeConfig(customConfig || loadConfig());
-
-  const normalizedForHash = content.replace(/\r\n/g, '\n');
-  const sha256 = crypto.createHash('sha256').update(normalizedForHash, 'utf8').digest('hex');
-
-  let allFindings: Finding[] = [];
-  const ignored = new Set(config.ignoreRules || []);
-
-  for (const rule of allRules) {
-    if (ignored.has(rule.id)) {
-      continue;
-    }
-    const findings = rule.check(parsed, { allowedDomains: config.allowedDomains });
-    allFindings.push(...findings);
-  }
-
-  // Calculate score (100 is cleanest, min 0)
-  let totalDeduction = 0;
-  for (const finding of allFindings) {
-    totalDeduction += SEVERITY_WEIGHTS[finding.severity] || 0;
-  }
-
-  const score = Math.max(0, 100 - totalDeduction);
-
+function evaluateFindings(
+  findings: Finding[],
+  config: SkillGuardConfig,
+  filePath: string,
+  parsed: any,
+  sha256: string
+): ScanResult {
+  const score = calculateScore(findings);
   const minScore = config.minScore !== undefined ? config.minScore : 60;
   const failOn = config.failOn || 'high';
-
-  const minSeverity = SEVERITY_ORDER[failOn] ?? SEVERITY_ORDER.high;
-  const hasFailingSeverity = allFindings.some((f) => SEVERITY_ORDER[f.severity] >= minSeverity);
-
-  const passed = !hasFailingSeverity && score >= minScore;
 
   return {
     filePath,
     parsedSkill: parsed,
-    findings: allFindings,
+    findings,
     score,
-    passed,
+    passed: passesPolicy(findings, failOn, minScore),
     sha256,
   };
+}
+
+/** Scan a skill or MCP configuration directly from a raw string in memory. */
+export function scanSkillContent(
+  content: string,
+  virtualPath: string = 'inline.md',
+  customConfig?: SkillGuardConfig,
+  cwd: string = process.cwd(),
+): ScanResult {
+  const parsed = parseSkillMarkdown(content, virtualPath);
+  const config = normalizeConfig(customConfig || loadConfig(cwd));
+
+  const normalizedForHash = content.replace(/\r\n/g, '\n');
+  const sha256 = crypto.createHash('sha256').update(normalizedForHash, 'utf8').digest('hex');
+
+  const allFindings: Finding[] = [];
+  const ignored = new Set(config.ignoreRules || []);
+
+  for (const rule of allRules) {
+    if (ignored.has(rule.id)) continue;
+    const findings = rule.check(parsed, { allowedDomains: config.allowedDomains });
+    const effectiveSeverity = config.severityOverrides?.[rule.id] ?? rule.severity;
+    allFindings.push(
+      ...findings.map((finding) =>
+        finding.severity === effectiveSeverity
+          ? finding
+          : { ...finding, severity: effectiveSeverity },
+      ),
+    );
+  }
+
+  const result = evaluateFindings(allFindings, config, virtualPath, parsed, sha256);
+  if (!config.baseline) return result;
+
+  return applyBaseline(result, readBaseline(config.baseline, cwd), {
+    baselinePath: config.baseline,
+    cwd,
+    failOn: config.failOn,
+    minScore: config.minScore,
+  });
+}
+
+/** Scan a skill or MCP configuration file on disk. */
+export function scanSkillFile(
+  filePath: string,
+  customConfig?: SkillGuardConfig,
+  cwd: string = process.cwd(),
+): ScanResult {
+  const content = fs.readFileSync(filePath, 'utf8');
+  return scanSkillContent(content, filePath, customConfig, cwd);
+}
+
+/** Discover and scan all supported skills and MCP configurations under the provided paths. */
+export function scanSkillPaths(
+  targetPaths: string | string[],
+  customConfig?: SkillGuardConfig,
+  cwd: string = process.cwd(),
+): ScanResult[] {
+  const config = normalizeConfig(customConfig || loadConfig(cwd));
+  return discoverSkillFiles(targetPaths, cwd, {
+    include: config.include,
+    exclude: config.exclude,
+  }).map((filePath) => scanSkillFile(filePath, config, cwd));
 }

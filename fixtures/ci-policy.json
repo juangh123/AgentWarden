@@ -1,0 +1,4 @@
+{
+  "extends": "./ci-base-policy.json",
+  "minScore": 95
+}

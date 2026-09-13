@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/juangh123/AgentWarden/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Usage and contribution guide
+    url: https://github.com/juangh123/AgentWarden/blob/main/CONTRIBUTING.md
+    about: Read setup, testing, and pull request expectations.

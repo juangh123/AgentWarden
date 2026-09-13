@@ -39,4 +39,22 @@ describe('skillParser', () => {
     assert.equal(parsed.name, 'Unnamed-Skill');
     assert.equal(parsed.version, '0.1.0');
   });
+
+  it('supports nested mcp.servers configurations', () => {
+    const parsed = parseSkillMarkdown(JSON.stringify({
+      mcp: {
+        servers: {
+          weather: {
+            command: 'node',
+            args: ['weather.js'],
+          },
+        },
+      },
+    }));
+
+    assert.equal(parsed.kind, 'mcp');
+    assert.equal(parsed.mcpServers?.length, 1);
+    assert.equal(parsed.mcpServers?.[0].name, 'weather');
+    assert.equal(parsed.parseError, undefined);
+  });
 });

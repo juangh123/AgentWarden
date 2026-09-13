@@ -1,6 +1,8 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
-export type FindingCategory = 'credential' | 'destructive_command' | 'prompt_injection' | 'exfiltration';
+export type FindingCategory = 'credential' | 'destructive_command' | 'prompt_injection' | 'exfiltration' | 'mcp_misconfig';
+
+export type SkillKind = 'skill' | 'mcp' | 'agent-instruction';
 
 export interface CodeBlock {
   language: string;
@@ -17,6 +19,14 @@ export interface ParsedSkill {
   promptText: string;
   codeBlocks: CodeBlock[];
   rawContent: string;
+  kind?: SkillKind;
+  parseError?: string;
+  mcpServers?: Array<{
+    name: string;
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>;
 }
 
 export interface Finding {
@@ -25,6 +35,7 @@ export interface Finding {
   category: FindingCategory;
   severity: Severity;
   description: string;
+  filePath?: string;
   line?: number;
   snippet?: string;
   suggestion?: string;
@@ -49,7 +60,18 @@ export interface ScanResult {
   filePath: string;
   parsedSkill: ParsedSkill;
   findings: Finding[];
+  suppressedFindings?: Finding[];
+  baseline?: BaselineMetadata;
   score: number; // 0 to 100
   passed: boolean;
   sha256: string;
+}
+
+export interface BaselineMetadata {
+  path: string;
+  suppressed: number;
+  unmatched: number;
+  expired?: boolean;
+  expiresAt?: string;
+  owner?: string;
 }

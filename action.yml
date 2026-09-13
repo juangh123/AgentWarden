@@ -1,0 +1,195 @@
+name: AgentWarden Security Gate
+
+description: 'Scan and gate AI Agent skills and MCP configurations against prompt injections and supply chain risks'
+author: 'juangh123'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  node-version:
+    description: 'Node.js version used to build and run AgentWarden'
+    required: false
+    default: '22'
+  path:
+    description: 'Path to a skill, MCP config, or directory to scan'
+    required: false
+    default: '.'
+  config:
+    description: 'Optional explicit JSON configuration file'
+    required: false
+    default: ''
+  profile:
+    description: 'Policy profile: legacy, balanced, or strict'
+    required: false
+    default: 'balanced'
+  fail-on:
+    description: 'Optional failure severity override: critical, high, medium, low, info'
+    required: false
+    default: ''
+  min-score:
+    description: 'Optional minimum security score override (0-100)'
+    required: false
+    default: ''
+  include:
+    description: 'Optional newline-separated globs that limit directory discovery'
+    required: false
+    default: ''
+  exclude:
+    description: 'Optional newline-separated globs excluded from directory discovery'
+    required: false
+    default: ''
+  changed:
+    description: 'Scan only files changed from the detected Git base ref'
+    required: false
+    default: 'false'
+  changed-from:
+    description: 'Scan only files changed since this Git ref or commit SHA'
+    required: false
+    default: ''
+  ignore-rules:
+    description: 'Optional newline-separated rule IDs to ignore'
+    required: false
+    default: ''
+  severity-overrides:
+    description: 'Optional newline-separated RULE_ID=severity overrides'
+    required: false
+    default: ''
+  baseline:
+    description: 'Optional baseline file containing reviewed findings to suppress'
+    required: false
+    default: ''
+  baseline-status:
+    description: 'Run baseline status before scanning to enforce freshness and entry matching'
+    required: false
+    default: 'false'
+  baseline-expiring-within:
+    description: 'Fail baseline status when expiry is within this many days (when baseline-fail-on-expiring is true)'
+    required: false
+    default: '30'
+  baseline-fail-on-expiring:
+    description: 'Fail when the configured baseline is nearing expiry'
+    required: false
+    default: 'false'
+  baseline-fail-on-unmatched:
+    description: 'Fail when any configured baseline entry no longer matches current findings'
+    required: false
+    default: 'false'
+  sarif:
+    description: 'Path to write SARIF output report for GitHub Security Tab'
+    required: false
+    default: 'agentwarden-results.sarif'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: ${{ inputs.node-version }}
+    - name: Build AgentWarden
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH"
+        npm ci --ignore-scripts
+        npm run build
+    - name: Run AgentWarden Scanner
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_INCLUDE: ${{ inputs.include }}
+        INPUT_EXCLUDE: ${{ inputs.exclude }}
+        INPUT_CHANGED: ${{ inputs.changed }}
+        INPUT_CHANGED_FROM: ${{ inputs.changed-from }}
+        INPUT_IGNORE_RULES: ${{ inputs.ignore-rules }}
+        INPUT_SEVERITY_OVERRIDES: ${{ inputs.severity-overrides }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_BASELINE_STATUS: ${{ inputs.baseline-status }}
+        INPUT_BASELINE_EXPIRING_WITHIN: ${{ inputs.baseline-expiring-within }}
+        INPUT_BASELINE_FAIL_ON_EXPIRING: ${{ inputs.baseline-fail-on-expiring }}
+        INPUT_BASELINE_FAIL_ON_UNMATCHED: ${{ inputs.baseline-fail-on-unmatched }}
+        INPUT_SARIF: ${{ inputs.sarif }}
+      run: |
+        set -euo pipefail
+        COMMON_ARGS=()
+
+        validate_boolean() {
+          local name="$1"
+          local value="$2"
+          case "$value" in
+            true|false) ;;
+            *)
+              echo "Input $name must be true or false" >&2
+              exit 2
+              ;;
+          esac
+        }
+
+        append_arg() {
+          local option="$1"
+          local value="$2"
+          if [[ -n "$value" ]]; then
+            COMMON_ARGS+=("$option" "$value")
+          fi
+        }
+
+        append_lines() {
+          local option="$1"
+          local value="$2"
+          while IFS= read -r line; do
+            line="${line%$'\r'}"
+            if [[ -n "$line" ]]; then
+              COMMON_ARGS+=("$option" "$line")
+            fi
+          done <<< "$value"
+        }
+
+        validate_boolean baseline-status "$INPUT_BASELINE_STATUS"
+        validate_boolean baseline-fail-on-expiring "$INPUT_BASELINE_FAIL_ON_EXPIRING"
+        validate_boolean baseline-fail-on-unmatched "$INPUT_BASELINE_FAIL_ON_UNMATCHED"
+        validate_boolean changed "$INPUT_CHANGED"
+
+        append_arg --config "$INPUT_CONFIG"
+        append_arg --profile "$INPUT_PROFILE"
+        append_arg --fail-on "$INPUT_FAIL_ON"
+        append_arg --min-score "$INPUT_MIN_SCORE"
+        append_lines --include "$INPUT_INCLUDE"
+        append_lines --exclude "$INPUT_EXCLUDE"
+        append_lines --ignore-rule "$INPUT_IGNORE_RULES"
+        append_lines --severity-override "$INPUT_SEVERITY_OVERRIDES"
+        append_arg --baseline "$INPUT_BASELINE"
+
+        if [[ "$INPUT_BASELINE_STATUS" == "true" ]]; then
+          if [[ -z "$INPUT_BASELINE" ]]; then
+            echo "baseline-status requires the baseline input" >&2
+            exit 2
+          fi
+          status_args=(baseline status "$INPUT_PATH")
+          status_args+=("${COMMON_ARGS[@]}")
+          if [[ -n "$INPUT_BASELINE_EXPIRING_WITHIN" ]]; then
+            status_args+=(--expiring-within "$INPUT_BASELINE_EXPIRING_WITHIN")
+          fi
+          if [[ "$INPUT_BASELINE_FAIL_ON_EXPIRING" == "true" ]]; then
+            status_args+=(--fail-on-expiring)
+          fi
+          if [[ "$INPUT_BASELINE_FAIL_ON_UNMATCHED" == "true" ]]; then
+            status_args+=(--fail-on-unmatched)
+          fi
+          node "$GITHUB_ACTION_PATH/dist/cli.js" "${status_args[@]}"
+        fi
+
+        args=(scan "$INPUT_PATH" --sarif)
+        args+=("${COMMON_ARGS[@]}")
+        if [[ "$INPUT_CHANGED" == "true" ]]; then
+          args+=(--changed)
+        fi
+        if [[ -n "$INPUT_CHANGED_FROM" ]]; then
+          args+=(--changed-from "$INPUT_CHANGED_FROM")
+        fi
+        node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}" > "$INPUT_SARIF"

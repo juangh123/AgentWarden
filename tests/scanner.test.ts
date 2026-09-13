@@ -81,4 +81,52 @@ describe('SkillGuard Security Scanner', () => {
       assert.ok(!res.findings.some(f => f.ruleId === id), `${id} should be ignored`);
     }
   });
+
+  it('should apply per-rule severity overrides to findings and policy evaluation', () => {
+    const content = '---\nname: severity-demo\n---\ncat ~/.ssh/id_rsa\n';
+    const tempFile = writeTempSkill(content);
+    try {
+      const blocked = scanSkillFile(tempFile);
+      assert.strictEqual(blocked.passed, false);
+      assert.ok(blocked.findings.some((finding) => finding.ruleId === 'SEC-CRED-001' && finding.severity === 'critical'));
+
+      const overridden = scanSkillFile(tempFile, {
+        severityOverrides: { 'SEC-CRED-001': 'info' },
+      });
+      const finding = overridden.findings.find((item) => item.ruleId === 'SEC-CRED-001');
+      assert.equal(finding?.severity, 'info');
+      assert.equal(overridden.score, 100);
+      assert.equal(overridden.passed, true);
+    } finally {
+      fs.rmSync(tempFile, { force: true });
+    }
+  });
+
+  it('should apply legacy, balanced, and strict policy profiles', () => {
+    const content = [
+      '---',
+      'name: medium-risk-profile-demo',
+      '---',
+      'const decoded = atob("c2VjcmV0");',
+      'const letters = String.fromCharCode(65, 66, 67);',
+      '',
+    ].join('\n');
+    const tempFile = writeTempSkill(content);
+    try {
+      const legacy = scanSkillFile(tempFile, { profile: 'legacy' });
+      assert.equal(legacy.score, 70);
+      assert.equal(legacy.passed, true);
+
+      const balanced = scanSkillFile(tempFile, { profile: 'balanced' });
+      assert.equal(balanced.score, 70);
+      assert.equal(balanced.passed, false);
+
+      const strict = scanSkillFile(tempFile, { profile: 'strict' });
+      assert.equal(strict.score, 70);
+      assert.equal(strict.passed, false);
+      assert.ok(strict.findings.some((finding) => finding.ruleId === 'SEC-INJ-003'));
+    } finally {
+      fs.rmSync(tempFile, { force: true });
+    }
+  });
 });

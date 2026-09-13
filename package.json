@@ -1,9 +1,27 @@
 {
-  "name": "agentwarden",
-  "version": "0.2.0",
+  "name": "agentwarden-cli",
+  "version": "0.3.0",
   "description": "Zero-dependency Security Warden, Supply-Chain Linter & Integrity Manager for AI Agent Skills",
-  "main": "dist/cli.js",
+  "author": "juangh123",
+  "homepage": "https://github.com/juangh123/AgentWarden#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juangh123/AgentWarden.git"
+  },
+  "bugs": {
+    "url": "https://github.com/juangh123/AgentWarden/issues"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./cli": "./dist/cli.js"
+  },
   "bin": {
+    "agentwarden-cli": "dist/cli.js",
     "agentwarden": "dist/cli.js",
     "warden": "dist/cli.js",
     "skillguard": "dist/cli.js"
@@ -13,21 +31,30 @@
   "keywords": [
     "ai-agent",
     "skills",
+    "mcp",
+    "mcp-security",
     "security",
+    "ai-security",
+    "supply-chain-security",
     "audit",
     "prompt-injection",
     "sast",
     "cli",
-    "supply-chain"
+    "supply-chain",
+    "sbom",
+    "cyclonedx"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=22.6.0"
   },
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "skills.lock"
+    "LICENSE"
   ],
   "scripts": {
     "build": "npm run clean && tsc",
@@ -35,8 +62,10 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types --no-warnings tests/*.test.ts",
     "smoke": "npm run build && node scripts/e2e-smoke.mjs",
+    "test:package": "npm run build && node scripts/package-install-smoke.mjs",
     "start": "node --experimental-strip-types --no-warnings src/cli.ts",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test && npm run smoke"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

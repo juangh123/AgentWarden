@@ -1,0 +1,4 @@
+{
+  "profile": "strict",
+  "include": ["fixtures/safe-skill.md"]
+}
