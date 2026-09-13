@@ -3,6 +3,10 @@ name: AgentWarden Security Gate
 description: 'Scan and gate AI Agent skills and MCP configurations against prompt injections and supply chain risks'
 author: 'juangh123'
 
+branding:
+  icon: 'shield'
+  color: 'blue'
+
 inputs:
   node-version:
     description: 'Node.js version used to build and run AgentWarden'

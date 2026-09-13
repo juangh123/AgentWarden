@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible defect in AgentWarden.
+title: '[Bug]: '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here. Follow SECURITY.md and use a private GitHub Security Advisory.
+  - type: input
+    id: version
+    attributes:
+      label: AgentWarden version
+      description: Output from `agentwarden --version`.
+      placeholder: agentwarden v0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - GitHub Actions
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the exact command, a minimal test file, and any required configuration.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include the exit code and redacted output.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add workarounds or related issues. Do not include secrets.
+    validations:
+      required: false

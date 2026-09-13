@@ -1,0 +1,9 @@
+{
+  "publishers": {
+    "requireSignature": true,
+    "trustedKeys": [
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    ],
+    "revokedKeys": []
+  }
+}

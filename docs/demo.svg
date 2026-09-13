@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="640" viewBox="0 0 1120 640" role="img" aria-labelledby="title desc">
+  <title id="title">AgentWarden scans and blocks a malicious agent skill</title>
+  <desc id="desc">A terminal-style demonstration showing a blocked scan, an integrity lock, and a generated CycloneDX SBOM.</desc>
+  <rect width="1120" height="640" rx="24" fill="#0b1020"/>
+  <rect x="26" y="24" width="1068" height="592" rx="18" fill="#10172b" stroke="#26324f" stroke-width="2"/>
+  <circle cx="58" cy="57" r="7" fill="#ff6b6b"/>
+  <circle cx="82" cy="57" r="7" fill="#ffd166"/>
+  <circle cx="106" cy="57" r="7" fill="#4ecdc4"/>
+  <text x="146" y="63" fill="#8ea0c3" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">AgentWarden security gate</text>
+
+  <text x="62" y="122" fill="#76e4f7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19">$ npx agentwarden-cli scan examples/malicious-skill.md</text>
+
+  <rect x="62" y="148" width="996" height="120" rx="10" fill="#231728" stroke="#ff5d73" stroke-width="2"/>
+  <text x="86" y="183" fill="#ff7b8c" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19" font-weight="700">[BLOCKED] 5 findings  score 0/100</text>
+  <text x="86" y="216" fill="#ffd9df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">CRITICAL  secret access and credential exfiltration</text>
+  <text x="86" y="244" fill="#ffd9df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">HIGH      prompt injection, unsafe command, network upload</text>
+
+  <text x="62" y="308" fill="#76e4f7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19">$ agentwarden verify .agentwarden/skills/weather</text>
+  <text x="62" y="336" fill="#76e4f7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19">$ agentwarden sbom --output agentwarden.cdx.json</text>
+  <rect x="62" y="356" width="486" height="122" rx="10" fill="#102421" stroke="#49d6a6" stroke-width="2"/>
+  <text x="86" y="391" fill="#58e3b4" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19" font-weight="700">[OK] integrity verified</text>
+  <text x="86" y="423" fill="#b9f5df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">sha256: 9d2a...c4e1</text>
+  <text x="86" y="451" fill="#b9f5df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">ed25519: trusted publisher</text>
+
+  <rect x="572" y="356" width="486" height="122" rx="10" fill="#171b35" stroke="#7c8cff" stroke-width="2"/>
+  <text x="596" y="391" fill="#aab5ff" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19" font-weight="700">[OK] CycloneDX 1.5</text>
+  <text x="596" y="423" fill="#d9ddff" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">1 skill  |  4 files  |  provenance</text>
+  <text x="596" y="451" fill="#d9ddff" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">agentwarden.cdx.json</text>
+
+  <rect x="62" y="512" width="996" height="68" rx="10" fill="#151d33" stroke="#2e3b5c"/>
+  <text x="86" y="540" fill="#a9b8d8" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">exit 1 on unsafe skills  |  exit 0 after lock and provenance checks</text>
+  <text x="86" y="565" fill="#6ee7d1" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">npm: agentwarden-cli  |  github: juangh123/AgentWarden</text>
+</svg>

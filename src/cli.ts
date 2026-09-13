@@ -1210,7 +1210,7 @@ function cmdVerify(target: string, config: SkillGuardConfig): void {
   const lockedEntry = key ? lock.skills[key] : undefined;
 
   if (!lockedEntry) {
-    console.error(chalk.yellow(`⚠️  Skill "${skillName}" is not registered in skills.lock. Run "skillguard install ${target}" first.`));
+    console.error(chalk.yellow(`⚠️  Skill "${skillName}" is not registered in skills.lock. Run "agentwarden install ${target}" first.`));
     process.exit(EXIT_FAIL);
   }
   enforcePublisherPolicy(
@@ -2016,12 +2016,12 @@ async function main(): Promise<void> {
 
   if (errors.length > 0) {
     for (const error of errors) console.error(chalk.red(`Error: ${error}`));
-    console.error(`Run ${chalk.yellow('"skillguard help"')} for usage.`);
+    console.error(`Run ${chalk.yellow('"agentwarden help"')} for usage.`);
     process.exit(EXIT_USAGE);
   }
 
   if (options.version) {
-    console.log(`skillguard v${VERSION}`);
+    console.log(`agentwarden v${VERSION}`);
     return;
   }
 
@@ -2033,21 +2033,21 @@ async function main(): Promise<void> {
 
   if (command === 'scan') {
     const targets = positionals.slice(1);
-    if (targets.length === 0) usageError(`Missing file or directory path to scan. Usage: skillguard scan <path> [--format pretty|json|sarif]`);
+    if (targets.length === 0) usageError(`Missing file or directory path to scan. Usage: agentwarden scan <path> [--format pretty|json|sarif]`);
     scanTargets(targets, buildConfig(options), resolveFormat(options), options);
     return;
   }
 
   if (command === 'install') {
     const target = positionals[1];
-    if (!target) usageError(`Missing skill path to install. Usage: skillguard install <path/to/SKILL.md|https://url> --sha256 <digest>`);
+    if (!target) usageError(`Missing skill path to install. Usage: agentwarden install <path/to/SKILL.md|https://url> --sha256 <digest>`);
     await cmdInstall(target, options, resolveFormat(options));
     return;
   }
 
   if (command === 'verify') {
     const target = positionals[1];
-    if (!target) usageError(`Missing skill path to verify. Usage: skillguard verify <path/to/SKILL.md>`);
+    if (!target) usageError(`Missing skill path to verify. Usage: agentwarden verify <path/to/SKILL.md>`);
     cmdVerify(target, buildConfig(options));
     return;
   }
@@ -2076,7 +2076,7 @@ async function main(): Promise<void> {
       const from = positionals[2];
       const to = positionals[3];
       if (!from || !to) {
-        usageError('Missing policy comparison inputs. Usage: skillguard policy diff <from> <to>');
+        usageError('Missing policy comparison inputs. Usage: agentwarden policy diff <from> <to>');
       }
       if (positionals.length > 4) {
         usageError('policy diff accepts exactly two comparison inputs');
@@ -2098,7 +2098,7 @@ async function main(): Promise<void> {
 
   if (command === 'uninstall') {
     const name = positionals[1];
-    if (!name) usageError(`Missing skill name to uninstall. Usage: skillguard uninstall <name>`);
+    if (!name) usageError(`Missing skill name to uninstall. Usage: agentwarden uninstall <name>`);
     cmdUninstall(name, resolveFormat(options));
     return;
   }
@@ -2121,7 +2121,7 @@ async function main(): Promise<void> {
   }
 
   if (command === 'version') {
-    console.log(`skillguard v${VERSION}`);
+    console.log(`agentwarden v${VERSION}`);
     return;
   }
 

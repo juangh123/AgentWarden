@@ -3,5 +3,5 @@ dist/
 *.tsbuildinfo
 coverage/
 .skillguard/
+.agentwarden/
 npm-debug.log*
-

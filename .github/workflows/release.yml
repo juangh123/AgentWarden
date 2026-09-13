@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run smoke
+      - run: npm run test:package
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${PACKAGE_VERSION}"
+      - name: Publish to npm
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_PUBLISH_ENABLED: ${{ vars.NPM_PUBLISH_ENABLED }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${NODE_AUTH_TOKEN:-}" && "${NPM_PUBLISH_ENABLED:-false}" != "true" ]]; then
+            echo "::notice title=npm publish skipped::Configure npm Trusted Publisher and set NPM_PUBLISH_ENABLED=true, or provide NPM_TOKEN, then rerun this workflow."
+            npm pack --dry-run --json >/dev/null
+            exit 0
+          fi
+          npm publish --access public --provenance
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "GitHub Release ${GITHUB_REF_NAME} already exists."
+          else
+            gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "AgentWarden ${GITHUB_REF_NAME}"
+          fi

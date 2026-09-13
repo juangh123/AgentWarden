@@ -1,8 +1,67 @@
-# 🛡️ AgentWarden (formerly SkillGuard)
+# AgentWarden
 
-> **Zero-Dependency Security Package Manager & Audit CLI for Agent Skills (Codex, MCP, OpenAI Tools, etc.)**
+[![CI](https://github.com/juangh123/AgentWarden/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juangh123/AgentWarden/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/agentwarden-cli.svg)](https://www.npmjs.com/package/agentwarden-cli)
+[![node](https://img.shields.io/node/v/agentwarden-cli.svg)](https://www.npmjs.com/package/agentwarden-cli)
+[![license](https://img.shields.io/github/license/juangh123/AgentWarden.svg)](LICENSE)
+[![GitHub Action](https://img.shields.io/badge/GitHub%20Action-AgentWarden-blue.svg)](docs/github-action.md)
 
-AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 AI Agent 技能生态（Skills / Tools）打造的企业级供应链安全与审计工具。它在 Skill 安装前执行静态安全扫描与提示词越狱审查，并通过 `skills.lock` 指纹锁定防范本地代码篡改与配置漂移。
+> **Scan, verify, lock, and gate AI agent skills before they reach an agent.**
+
+AgentWarden 是面向 AI Agent Skill / Tool / MCP 配置的零运行时依赖安全门禁。它在安装前执行静态安全与提示词注入扫描，通过 `skills.lock` 锁定完整性和发布者来源，并可导出 SARIF、JSON 与 CycloneDX SBOM。
+
+![AgentWarden demo](docs/demo.svg)
+
+## 🚀 快速开始
+
+需要 Node.js >= 22.6。无需先安装，可直接运行：
+
+```bash
+# 扫描 Skill 或目录
+npx agentwarden-cli scan ./skills
+
+# 使用 SHA-256 固定远程 Skill，再扫描、验签并写入 skills.lock
+npx agentwarden-cli install https://example.com/skills/weather.md \
+  --sha256 <64-char-sha256> \
+  --signature https://example.com/skills/weather.md.sig \
+  --public-key ./trusted-publisher.pem
+
+# 从 skills.lock 导出 CycloneDX 1.5 SBOM
+npx agentwarden-cli sbom --output agentwarden.cdx.json
+```
+
+全局安装后可使用 `agentwarden`、`warden` 和兼容别名 `skillguard`：
+
+```bash
+npm install --global agentwarden-cli
+agentwarden scan ./skills
+warden verify .agentwarden/skills/weather.md
+```
+
+### 30 秒演示
+
+```bash
+npx agentwarden-cli scan examples/safe-skill.md
+echo "safe exit: $?"        # 0
+
+npx agentwarden-cli scan examples/malicious-skill.md
+echo "blocked exit: $?"     # 1
+```
+
+恶意 Skill 会显示命中的凭证读取、命令执行、提示词注入和数据外带规则，并返回非零退出码，便于直接作为 CI 门禁。
+
+### GitHub Action
+
+```yaml
+- uses: actions/checkout@v5
+- uses: juangh123/AgentWarden@v0.3.0
+  with:
+    path: skills/
+    profile: strict
+    config: .agentwarden/policy.json
+```
+
+完整示例与 SARIF 上传见 [GitHub Action 指南](docs/github-action.md)。
 
 ---
 
@@ -29,105 +88,85 @@ AgentWarden（命令别名 `warden` / `agentwarden` / `skillguard`）是专为 A
 - 🕶️ **默认安全报告**：JSON、SARIF 与终端输出自动隐藏密钥、认证头、私钥、敏感配置值和原始文件内容。
 - 🧩 **规则治理**：查看完整规则目录，并按规则覆盖有效严重级别，无需修改源码或直接关闭规则。
 
----
-
-## 🚀 快速上手
-
-需要 Node.js ≥ 22.6。
-
-```bash
-# 安装开发依赖（构建与类型检查所需）
-npm install
-
-# 运行单元测试
-npm test
-
-# 构建发行产物（生成 dist/cli.js）
-npm run build
-
-# 端到端冒烟测试（构建 + CLI 全流程）
-npm run smoke
-```
-
 ## 📖 命令用法
 
 ```bash
 # 扫描单个 Skill 文件或整个目录（支持多个路径）
-node dist/cli.js scan fixtures/malicious-skill.md
-node dist/cli.js scan fixtures/ --format sarif
-node dist/cli.js scan . --json
-node dist/cli.js scan a.md b.md --json
-node dist/cli.js scan . --profile strict --include "skills/**" --exclude "skills/vendor/**"
-node dist/cli.js scan . --changed --json
-node dist/cli.js scan . --changed-from origin/main --json
+agentwarden scan fixtures/malicious-skill.md
+agentwarden scan fixtures/ --format sarif
+agentwarden scan . --json
+agentwarden scan a.md b.md --json
+agentwarden scan . --profile strict --include "skills/**" --exclude "skills/vendor/**"
+agentwarden scan . --changed --json
+agentwarden scan . --changed-from origin/main --json
 
 # 以 JSON / SARIF 导出（适配 CI/CD 与 GitHub Code Scanning）
-node dist/cli.js scan fixtures/ --sarif
-node dist/cli.js scan fixtures/safe-skill.md --json
+agentwarden scan fixtures/ --sarif
+agentwarden scan fixtures/safe-skill.md --json
 
 # 安装并锁定安全技能（存在高危风险将自动阻断安装）
-node dist/cli.js install fixtures/safe-skill.md
-node dist/cli.js install fixtures/safe-skill.md --force   # 跳过阻断，强制锁定
+agentwarden install fixtures/safe-skill.md
+agentwarden install fixtures/safe-skill.md --force   # 跳过阻断，强制锁定
 
 # 从 HTTPS 固定下载摘要后安装；默认保存到 .agentwarden/skills/<filename>
-node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char-sha256>
-node dist/cli.js install https://example.com/skills/weather.md --sha256 <64-char-sha256> --output .agentwarden/skills/weather.md
-node dist/cli.js install http://127.0.0.1:8080/weather.md --sha256 <64-char-sha256> --allow-http  # 仅限可信本地测试
+agentwarden install https://example.com/skills/weather.md --sha256 <64-char-sha256>
+agentwarden install https://example.com/skills/weather.md --sha256 <64-char-sha256> --output .agentwarden/skills/weather.md
+agentwarden install http://127.0.0.1:8080/weather.md --sha256 <64-char-sha256> --allow-http  # 仅限可信本地测试
 
 # 在摘要固定的基础上验证 Ed25519 发布者签名
-node dist/cli.js install https://example.com/skills/weather.md \
+agentwarden install https://example.com/skills/weather.md \
   --sha256 <64-char-sha256> \
   --signature https://example.com/skills/weather.md.sig \
   --public-key ./trusted-publisher.pem
 
 # 安装多文件 Skill 包；包根目录必须包含唯一的 SKILL.md
-node dist/cli.js install ./packages/weather.tar.gz
-node dist/cli.js install https://example.com/packages/weather.tar.gz --sha256 <64-char-sha256>
-node dist/cli.js install ./packages/weather.tar.gz --signature ./weather.tar.gz.sig --public-key ./trusted-publisher.pem
-node dist/cli.js verify .agentwarden/skills/weather
+agentwarden install ./packages/weather.tar.gz
+agentwarden install https://example.com/packages/weather.tar.gz --sha256 <64-char-sha256>
+agentwarden install ./packages/weather.tar.gz --signature ./weather.tar.gz.sig --public-key ./trusted-publisher.pem
+agentwarden verify .agentwarden/skills/weather
 
 # 校验单个技能文件是否与 lockfile 匹配
-node dist/cli.js verify fixtures/safe-skill.md
-node dist/cli.js verify .agentwarden/skills/weather.md
+agentwarden verify fixtures/safe-skill.md
+agentwarden verify .agentwarden/skills/weather.md
 
 # 审计所有已安装技能的本地完整性，并按当前策略重新扫描
-node dist/cli.js audit
+agentwarden audit
 
 # 从 skills.lock 生成 CycloneDX 1.5 SBOM
-node dist/cli.js sbom
-node dist/cli.js sbom --output agentwarden.cdx.json
-node dist/cli.js sbom --format pretty --config .agentwarden/publisher-policy.json
+agentwarden sbom
+agentwarden sbom --output agentwarden.cdx.json
+agentwarden sbom --format pretty --config .agentwarden/publisher-policy.json
 
 # 查看已安装列表 / 卸载
-node dist/cli.js list
-node dist/cli.js uninstall safe-weather-reporter
+agentwarden list
+agentwarden uninstall safe-weather-reporter
 
 # 查看规则与有效严重级别
-node dist/cli.js rules
-node dist/cli.js rules --json
-node dist/cli.js scan skills/ --severity-override SEC-CRED-003=medium
+agentwarden rules
+agentwarden rules --json
+agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 
 # 查看最终生效策略与扫描范围
-node dist/cli.js policy
-node dist/cli.js policy --profile strict --include "skills/**" --json
-node dist/cli.js policy --config .agentwarden/policy.json --json
-node dist/cli.js policy diff legacy strict
-node dist/cli.js policy diff current .agentwarden/policy.json --fail-on-diff --json
-node dist/cli.js scan . --config .agentwarden/policy.json
+agentwarden policy
+agentwarden policy --profile strict --include "skills/**" --json
+agentwarden policy --config .agentwarden/policy.json --json
+agentwarden policy diff legacy strict
+agentwarden policy diff current .agentwarden/policy.json --fail-on-diff --json
+agentwarden scan . --config .agentwarden/policy.json
 
 # 生成或应用已接受发现的基线
-node dist/cli.js baseline create skills/ --output .agentwarden-baseline.json
-node dist/cli.js baseline create skills/ --owner security-platform --expires-in 30 --note "Migration tracked in SEC-142"
-node dist/cli.js baseline status skills/ --baseline .agentwarden-baseline.json --json
-node dist/cli.js baseline status skills/ --baseline .agentwarden-baseline.json --expiring-within 14 --fail-on-expiring --fail-on-unmatched
-node dist/cli.js baseline prune skills/ --baseline .agentwarden-baseline.json --json
-node dist/cli.js baseline prune skills/ --baseline .agentwarden-baseline.json --force
-node dist/cli.js baseline update skills/ --baseline .agentwarden-baseline.json --force
-node dist/cli.js scan skills/ --baseline .agentwarden-baseline.json
+agentwarden baseline create skills/ --output .agentwarden-baseline.json
+agentwarden baseline create skills/ --owner security-platform --expires-in 30 --note "Migration tracked in SEC-142"
+agentwarden baseline status skills/ --baseline .agentwarden-baseline.json --json
+agentwarden baseline status skills/ --baseline .agentwarden-baseline.json --expiring-within 14 --fail-on-expiring --fail-on-unmatched
+agentwarden baseline prune skills/ --baseline .agentwarden-baseline.json --json
+agentwarden baseline prune skills/ --baseline .agentwarden-baseline.json --force
+agentwarden baseline update skills/ --baseline .agentwarden-baseline.json --force
+agentwarden scan skills/ --baseline .agentwarden-baseline.json
 
 # 帮助与版本
-node dist/cli.js help
-node dist/cli.js --version
+agentwarden help
+agentwarden --version
 ```
 
 ### 常用选项
@@ -489,13 +528,13 @@ agentwarden scan skills/ --baseline .agentwarden-baseline.json
 ### GitHub Actions（代码扫描）
 
 ```yaml
-- name: SkillGuard Scan
-  run: npm ci && npm run build && node dist/cli.js scan skills/ --sarif > skillguard.sarif
+- name: AgentWarden Scan
+  run: npx agentwarden-cli scan skills/ --sarif > agentwarden.sarif
 
 - name: Upload SARIF
   uses: github/codeql-action/upload-sarif@v3
   with:
-    sarif_file: skillguard.sarif
+    sarif_file: agentwarden.sarif
 ```
 
 ### 一般 CI（JSON + 退出码）
@@ -505,11 +544,19 @@ warden scan skills/ --json
 echo "exit code: $?"   # 0=通过 1=存在风险 2=用法错误
 ```
 
-本仓库已内置 `.github/workflows/ci.yml`，在 Node 22/24 上自动执行 typecheck、单测、构建与扫描冒烟测试。
+本仓库已内置 `.github/workflows/ci.yml`，在 Node 22/24 上执行 typecheck、单测、构建与扫描冒烟测试，并在 Linux、macOS、Windows 上验证 npm tarball 安装、命令别名、扫描退出码和 SBOM 输出。
 
 ---
 
 ## 🏗️ 开发说明
+
+```bash
+npm ci
+npm run typecheck
+npm test
+npm run smoke
+npm run test:package
+```
 
 ```text
 src/
@@ -528,8 +575,10 @@ src/
 scripts/
   clean.mjs            清理构建产物
   e2e-smoke.mjs        CLI 端到端冒烟测试
+  package-install-smoke.mjs npm 封装、安装与发布产物验证
 tests/                 单元测试（node:test，免框架）
 fixtures/              安全 / 恶意 / 混淆 / 硬编码密钥样本
+examples/              可直接运行的策略、Skill 与 GitHub Action 示例
 ```
 
 构建产物为真实编译的 CommonJS-free ESM JavaScript，`dist/cli.js` 直接可执行；源代码使用 Node 原生 TypeScript 支持，测试无需额外运行时。
@@ -558,7 +607,7 @@ import {
   pruneBaseline,
   updateBaseline,
   buildSarifReport,
-} from 'agentwarden';
+} from 'agentwarden-cli';
 
 // Scan arbitrary skill prompt or code in-memory
 const result = scanSkillContent(`
@@ -677,7 +726,7 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
     fetch-depth: 0
 
 - name: Run AgentWarden Security Gate
-  uses: juangh123/AgentWarden@main
+  uses: juangh123/AgentWarden@v0.3.0
   with:
     path: '.'
     config: '.agentwarden/policy.json'
