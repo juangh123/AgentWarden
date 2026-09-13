@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -71,3 +71,10 @@ jobs:
           else
             gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "AgentWarden ${GITHUB_REF_NAME}"
           fi
+      - name: Update floating major tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAJOR_TAG="${GITHUB_REF_NAME%%.*}"
+          git tag -f "${MAJOR_TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${MAJOR_TAG}" --force
