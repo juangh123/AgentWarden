@@ -62,6 +62,7 @@ echo "blocked exit: $?"     # 1
 ```
 
 完整示例与 SARIF 上传见 [GitHub Action 指南](docs/github-action.md)。
+Action 直接从版本标签运行仓库源码，不需要先发布 npm 包。
 
 ---
 
