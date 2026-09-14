@@ -75,4 +75,72 @@ describe('project initialization', () => {
       fs.rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  it('previews changes without writing files when dryRun is set', () => {
+    const cwd = tempDir();
+    try {
+      const preview = initializeAgentWarden(cwd, { dryRun: true });
+      assert.equal(preview.dryRun, true);
+      assert.deepEqual(
+        [...preview.created].sort(),
+        [INIT_CONFIG_PATH, INIT_WORKFLOW_PATH].sort(),
+      );
+      assert.equal(fs.existsSync(path.join(cwd, INIT_CONFIG_PATH)), false);
+      assert.equal(fs.existsSync(path.join(cwd, INIT_WORKFLOW_PATH)), false);
+
+      initializeAgentWarden(cwd, { profile: 'strict' });
+
+      const existing = initializeAgentWarden(cwd, { dryRun: true, force: true });
+      assert.deepEqual(existing.created, []);
+      assert.deepEqual(
+        [...existing.overwritten].sort(),
+        [INIT_CONFIG_PATH, INIT_WORKFLOW_PATH].sort(),
+      );
+      assert.equal(loadConfig(cwd).profile, 'strict');
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('supports a custom workflow path and action ref', () => {
+    const cwd = tempDir();
+    try {
+      const workflowPath = '.github/workflows/security.yml';
+      const result = initializeAgentWarden(cwd, {
+        workflowPath,
+        actionRef: 'example/warden@v0',
+      });
+
+      assert.equal(result.workflowPath, workflowPath);
+      assert.deepEqual(result.created, [INIT_CONFIG_PATH, workflowPath]);
+      assert.match(
+        fs.readFileSync(path.join(cwd, workflowPath), 'utf8'),
+        /uses: example\/warden@v0/,
+      );
+      assert.equal(fs.existsSync(path.join(cwd, INIT_WORKFLOW_PATH)), false);
+
+      assert.throws(
+        () => initializeAgentWarden(cwd, { workflowPath: '../escape.yml', force: true }),
+        (error) => error instanceof InitError && /inside the repository/.test(error.message),
+      );
+      assert.throws(
+        () => initializeAgentWarden(cwd, { workflowPath: 'C:\\tmp\\escape.yml', force: true }),
+        (error) => error instanceof InitError && /inside the repository/.test(error.message),
+      );
+      assert.throws(
+        () =>
+          initializeAgentWarden(cwd, {
+            workflowPath: '.github/workflows/security.txt',
+            force: true,
+          }),
+        (error) => error instanceof InitError && /\.yml or \.yaml/.test(error.message),
+      );
+      assert.throws(
+        () => initializeAgentWarden(cwd, { workflowPath: INIT_CONFIG_PATH, force: true }),
+        (error) => error instanceof InitError && /\.yml or \.yaml/.test(error.message),
+      );
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
 });

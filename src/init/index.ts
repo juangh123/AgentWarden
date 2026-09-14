@@ -12,12 +12,15 @@ export interface InitializeOptions {
   workflow?: boolean;
   force?: boolean;
   actionRef?: string;
+  workflowPath?: string;
+  dryRun?: boolean;
 }
 
 export interface InitializeResult {
   profile: PolicyProfileName;
   configPath: string;
   workflowPath: string | null;
+  dryRun: boolean;
   created: string[];
   overwritten: string[];
 }
@@ -27,6 +30,33 @@ export class InitError extends Error {
     super(message);
     this.name = 'InitError';
   }
+}
+
+/**
+ * Normalize a custom workflow path and keep it inside the repository so init
+ * never writes outside the project it was pointed at.
+ */
+function normalizeWorkflowPath(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new InitError('Invalid --workflow-path "" (expected a repository-relative path)');
+  }
+
+  const normalized = path.posix.normalize(trimmed.replace(/\\/g, '/'));
+  const escapesRepository =
+    path.posix.isAbsolute(normalized) ||
+    /^[A-Za-z]:/.test(normalized) ||
+    normalized === '..' ||
+    normalized.startsWith('../');
+  if (escapesRepository) {
+    throw new InitError(
+      `Invalid --workflow-path "${input}" (expected a path inside the repository)`,
+    );
+  }
+  if (!/\.(ya?ml)$/i.test(normalized)) {
+    throw new InitError(`Invalid --workflow-path "${input}" (expected a .yml or .yaml file)`);
+  }
+  return normalized;
 }
 
 export function buildInitPolicy(profile: PolicyProfileName): string {
@@ -94,20 +124,24 @@ export function initializeAgentWarden(
     throw new InitError(`Invalid profile "${profile}" (expected legacy|balanced|strict)`);
   }
 
-  const configAbsolutePath = path.resolve(cwd, INIT_CONFIG_PATH);
-  const workflowAbsolutePath = path.resolve(cwd, INIT_WORKFLOW_PATH);
+  const workflowPath =
+    options.workflow === false
+      ? null
+      : normalizeWorkflowPath(options.workflowPath ?? INIT_WORKFLOW_PATH);
+
+  const dryRun = Boolean(options.dryRun);
   const targets = [
     {
-      path: configAbsolutePath,
+      path: path.resolve(cwd, INIT_CONFIG_PATH),
       displayPath: INIT_CONFIG_PATH,
       content: buildInitPolicy(profile),
     },
-    ...(options.workflow === false
+    ...(workflowPath === null
       ? []
       : [
           {
-            path: workflowAbsolutePath,
-            displayPath: INIT_WORKFLOW_PATH,
+            path: path.resolve(cwd, workflowPath),
+            displayPath: workflowPath,
             content: buildInitWorkflow(options.actionRef),
           },
         ]),
@@ -130,13 +164,14 @@ export function initializeAgentWarden(
     } else {
       created.push(target.displayPath);
     }
-    writeFileAtomic(target.path, target.content);
+    if (!dryRun) writeFileAtomic(target.path, target.content);
   }
 
   return {
     profile,
     configPath: INIT_CONFIG_PATH,
-    workflowPath: options.workflow === false ? null : INIT_WORKFLOW_PATH,
+    workflowPath,
+    dryRun,
     created,
     overwritten,
   };
