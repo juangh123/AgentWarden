@@ -38,6 +38,14 @@ agentwarden scan ./skills
 warden verify .agentwarden/skills/weather.md
 ```
 
+在新仓库中生成策略文件和 GitHub Actions 安全门禁：
+
+```bash
+npx agentwarden-cli init
+npx agentwarden-cli init --profile strict
+npx agentwarden-cli init --force --no-workflow
+```
+
 ### 30 秒演示
 
 ```bash
@@ -88,10 +96,16 @@ Action 直接从版本标签运行仓库源码，不需要先发布 npm 包。
 - 🧱 **可审计基线**：用稳定指纹接受既有告警，支持责任人、审核备注和过期时间；过期后自动恢复阻断，基线不保存原始敏感片段。
 - 🕶️ **默认安全报告**：JSON、SARIF 与终端输出自动隐藏密钥、认证头、私钥、敏感配置值和原始文件内容。
 - 🧩 **规则治理**：查看完整规则目录，并按规则覆盖有效严重级别，无需修改源码或直接关闭规则。
+- **一键接入**：`init` 生成可自动发现的策略文件和 GitHub Actions SARIF 门禁，无需手工拼接工作流。
 
 ## 📖 命令用法
 
 ```bash
+# 初始化策略与 GitHub Actions 门禁
+agentwarden init
+agentwarden init --profile strict
+agentwarden init --force --no-workflow
+
 # 扫描单个 Skill 文件或整个目录（支持多个路径）
 agentwarden scan fixtures/malicious-skill.md
 agentwarden scan fixtures/ --format sarif
@@ -174,10 +188,10 @@ agentwarden --version
 
 | 选项 | 说明 |
 | :--- | :--- |
-| `-f, --force` | 跳过高危阻断，或确认写入基线的新建与维护变更 |
+| `-f, --force` | 跳过高危阻断，或确认写入基线/允许 `init` 覆盖已有文件 |
 | `--format pretty\|json\|sarif` | 输出格式（也支持 `--json` / `--sarif` 简写） |
 | `--config <file>` | 显式加载 JSON 策略文件；缺失或格式错误时退出码为 `2` |
-| `--profile <name>` | 策略档位：`legacy`/`balanced`/`strict`（默认 `legacy`） |
+| `--profile <name>` | 策略档位：`legacy`/`balanced`/`strict`（扫描默认 `legacy`，`init` 默认 `balanced`） |
 | `--fail-on <sev>` | 判定失败的严重级别阈值：`critical`/`high`/`medium`/`low`/`info` |
 | `--min-score <0-100>` | 最低安全得分 |
 | `--ignore-rule <id>` | 跳过指定规则，可重复传入 |
@@ -201,6 +215,7 @@ agentwarden --version
 | `--fail-on-expiring` | `baseline status` 检测到临近到期时返回退出码 `1` |
 | `--fail-on-unmatched` | `baseline status` 检测到未匹配项时返回退出码 `1` |
 | `--dry-run` | 预览 `baseline prune/update` 的增删结果，不写入文件 |
+| `--no-workflow` | `init` 只生成策略文件，不生成 GitHub Actions 工作流 |
 | `--no-redact` | 在报告中保留原始片段和完整文件内容，仅用于受信任的本地调试 |
 | `-C, --cwd <dir>` | 指定工作目录（lockfile 与相对路径均基于该目录解析） |
 | `--no-color` | 关闭 ANSI 颜色（同时遵循 `NO_COLOR` 环境变量） |
@@ -378,7 +393,9 @@ SBOM 的 `serialNumber` 基于锁文件、发布者策略和工具版本确定�
 
 ## ⚙️ 配置文件
 
-在项目根目录放置 `.wardenrc.json / .skillguardrc.json`（或 `.skillguardrc` / `skillguard.config.json`）即可覆盖默认策略，也可以通过 `--config <file>` 显式指定：
+在项目根目录放置 `.agentwarden/policy.json` 即可覆盖默认策略，也可以通过
+`--config <file>` 显式指定。`.wardenrc.json`、`.skillguardrc.json` 等旧候选名
+仍然兼容；当多个候选同时存在时，`.agentwarden/policy.json` 优先。
 
 ```json
 {
