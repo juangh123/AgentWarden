@@ -16,6 +16,8 @@ versioning.
   replace without writing to disk.
 - Added `agentwarden init --workflow-path <file>` for a custom workflow location
   and `agentwarden init --action-ref <ref>` to choose the generated Action ref.
+- Added `npm run test:git-install` with a matching CI job, so a regression in the
+  git-sourced install path fails the build instead of shipping silently.
 
 ### Fixed
 

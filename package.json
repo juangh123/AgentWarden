@@ -63,6 +63,7 @@
     "test": "node --test --experimental-strip-types --no-warnings tests/*.test.ts",
     "smoke": "npm run build && node scripts/e2e-smoke.mjs",
     "test:package": "npm run build && node scripts/package-install-smoke.mjs",
+    "test:git-install": "node scripts/git-install-smoke.mjs",
     "start": "node --experimental-strip-types --no-warnings src/cli.ts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run typecheck && npm test && npm run smoke"
