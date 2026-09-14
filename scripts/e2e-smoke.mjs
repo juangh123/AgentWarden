@@ -876,6 +876,60 @@ check(
   `status=${r.status}`,
 );
 
+const initCustomDir = path.join(tmp, 'init-custom');
+fs.mkdirSync(initCustomDir, { recursive: true });
+
+r = run([
+  '-C', initCustomDir,
+  'init',
+  '--dry-run',
+  '--workflow-path', '.github/workflows/security.yml',
+  '--action-ref', 'juangh123/AgentWarden@v0',
+  '--json',
+]);
+const initDryRun = JSON.parse(r.stdout);
+check(
+  'init dry-run previews files without writing them',
+  r.status === 0 &&
+    initDryRun.dryRun === true &&
+    initDryRun.workflowPath === '.github/workflows/security.yml' &&
+    initDryRun.created.length === 2 &&
+    !fs.existsSync(path.join(initCustomDir, '.agentwarden', 'policy.json')) &&
+    !fs.existsSync(path.join(initCustomDir, '.github', 'workflows', 'security.yml')),
+  `status=${r.status}`,
+);
+
+r = run([
+  '-C', initCustomDir,
+  'init',
+  '--workflow-path', '.github/workflows/security.yml',
+  '--action-ref', 'juangh123/AgentWarden@v0',
+]);
+const customWorkflowFile = path.join(initCustomDir, '.github', 'workflows', 'security.yml');
+const customWorkflow = fs.existsSync(customWorkflowFile)
+  ? fs.readFileSync(customWorkflowFile, 'utf8')
+  : '';
+check(
+  'init writes a custom workflow path with a custom action ref',
+  r.status === 0 &&
+    !fs.existsSync(path.join(initCustomDir, '.github', 'workflows', 'agentwarden.yml')) &&
+    customWorkflow.includes('uses: juangh123/AgentWarden@v0') &&
+    customWorkflow.includes('config: .agentwarden/policy.json'),
+  `status=${r.status}`,
+);
+
+r = run(['-C', initCustomDir, 'init', '--workflow-path', '..\\escape.yml']);
+check('init rejects workflow paths outside the project', r.status === 2, `status=${r.status}`);
+
+r = run(['-C', initCustomDir, 'init', '--workflow-path', '.github/workflows/security.txt']);
+check('init rejects non-YAML workflow paths', r.status === 2, `status=${r.status}`);
+
+r = run(['-C', initCustomDir, 'init', '--no-workflow', '--action-ref', 'juangh123/AgentWarden@v0']);
+check(
+  'init rejects workflow options combined with --no-workflow',
+  r.status === 2,
+  `status=${r.status}`,
+);
 r = run(['-C', initProjectDir, 'init', '--sarif']);
 check('init rejects SARIF output', r.status === 2, `status=${r.status}`);
 

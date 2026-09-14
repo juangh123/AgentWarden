@@ -37,7 +37,16 @@ npx agentwarden-cli init
 - `.github/workflows/agentwarden.yml`：全量扫描、SARIF 输出和 GitHub Code Scanning 上传示例。
 
 使用 `--profile strict` 提高门禁级别；使用 `--no-workflow` 只生成策略文件。
-命令默认拒绝覆盖已有文件，确认替换时显式传入 `--force`。
+命令默认拒绝覆盖已有文件，确认替换时显式传入 `--force`。`--dry-run` 只预览将要写入的文件，`--json` 便于脚本继续处理结果。
+
+| 选项 | 作用 |
+| :--- | :--- |
+| `--profile <name>` | 写入策略文件的档位：`legacy` / `balanced` / `strict`，默认 `balanced` |
+| `--workflow-path <file>` | 自定义工作流输出路径；必须位于仓库内且扩展名为 `.yml` / `.yaml` |
+| `--action-ref <ref>` | 生成的 `uses:` 引用，默认为当前 CLI 版本；可改为 `@v0` 或固定 commit SHA |
+| `--dry-run` | 只输出将要创建或替换的文件，不写入磁盘 |
+| `--no-workflow` | 不生成工作流，只写策略文件 |
+| `--json` | 以 JSON 输出初始化结果 |
 
 ## 最小示例
 

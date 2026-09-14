@@ -44,7 +44,18 @@ warden verify .agentwarden/skills/weather.md
 npx agentwarden-cli init
 npx agentwarden-cli init --profile strict
 npx agentwarden-cli init --force --no-workflow
+npx agentwarden-cli init --dry-run --json
+npx agentwarden-cli init --workflow-path .github/workflows/security.yml --action-ref juangh123/AgentWarden@v0
 ```
+
+> `agentwarden-cli` 的 npm 首次发布仍在等待 registry 凭据。发布前可以直接从 GitHub 固定提交安装使用：
+>
+> ```bash
+> npm install --global "github:juangh123/AgentWarden#<commit-sha>"
+> warden scan ./skills
+> ```
+>
+> 安全流水线中请固定完整 commit SHA，不要长期依赖默认分支。
 
 ### 30 秒演示
 
@@ -214,8 +225,10 @@ agentwarden --version
 | `--expiring-within <days>` | `baseline status` 在基线剩余天数不超过该值时标记临近到期（默认 `30`） |
 | `--fail-on-expiring` | `baseline status` 检测到临近到期时返回退出码 `1` |
 | `--fail-on-unmatched` | `baseline status` 检测到未匹配项时返回退出码 `1` |
-| `--dry-run` | 预览 `baseline prune/update` 的增删结果，不写入文件 |
+| `--dry-run` | 预览 `baseline prune/update` 的增删结果，或预览 `init` 将生成的文件，不写入磁盘 |
 | `--no-workflow` | `init` 只生成策略文件，不生成 GitHub Actions 工作流 |
+| `--workflow-path <file>` | `init` 自定义工作流输出路径；限定 `.yml` / `.yaml`，且必须位于仓库内 |
+| `--action-ref <ref>` | `init` 生成工作流时使用的 Action 引用，默认固定为当前 CLI 版本 |
 | `--no-redact` | 在报告中保留原始片段和完整文件内容，仅用于受信任的本地调试 |
 | `-C, --cwd <dir>` | 指定工作目录（lockfile 与相对路径均基于该目录解析） |
 | `--no-color` | 关闭 ANSI 颜色（同时遵循 `NO_COLOR` 环境变量） |

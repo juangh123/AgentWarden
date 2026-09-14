@@ -105,6 +105,8 @@ const VALUE_OPTIONS = new Set([
   'sha256',
   'signature',
   'public-key',
+  'workflow-path',
+  'action-ref',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'force',
@@ -405,8 +407,10 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--expiring-within <days>')} Warn when a baseline expires within N days (default: 30)
   ${chalk.yellow('--fail-on-expiring')}      Exit 1 when a baseline is nearing expiry
   ${chalk.yellow('--fail-on-unmatched')}     Exit 1 when baseline entries no longer match
-  ${chalk.yellow('--dry-run')}               Preview baseline prune/update without writing
+  ${chalk.yellow('--dry-run')}               Preview baseline prune/update or init output without writing
   ${chalk.yellow('--no-workflow')}           Skip GitHub Actions workflow generation during init
+  ${chalk.yellow('--workflow-path <file>')}  Write the init workflow to a custom repository path
+  ${chalk.yellow('--action-ref <ref>')}      Action ref for the generated init workflow (default: pinned version)
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
   ${chalk.yellow('--no-color')}             Disable ANSI colors (also honors NO_COLOR env)
   ${chalk.yellow('--no-redact')}            Include raw snippets and file content in reports
@@ -1493,12 +1497,23 @@ function cmdInit(options: ParsedArgs['options'], format: 'pretty' | 'json'): voi
     usageError(`Invalid --profile "${String(options.profile)}" (expected legacy|balanced|strict)`);
   }
 
+  const workflowPath =
+    options['workflow-path'] === undefined ? undefined : String(options['workflow-path']);
+  const actionRef = options['action-ref'] === undefined ? undefined : String(options['action-ref']);
+  if (options['no-workflow'] && (workflowPath !== undefined || actionRef !== undefined)) {
+    usageError('Use either --no-workflow or --workflow-path/--action-ref, not both');
+  }
+  const dryRun = Boolean(options['dry-run']);
+
   let result: ReturnType<typeof initializeAgentWarden>;
   try {
     result = initializeAgentWarden(process.cwd(), {
       profile: requestedProfile,
       workflow: !options['no-workflow'],
       force: Boolean(options.force),
+      workflowPath,
+      actionRef,
+      dryRun,
     });
   } catch (error) {
     if (error instanceof InitError) usageError(error.message);
@@ -1512,12 +1527,17 @@ function cmdInit(options: ParsedArgs['options'], format: 'pretty' | 'json'): voi
 
   const defaults = POLICY_PROFILES[result.profile];
   console.log(chalk.bold.cyan('\nAgentWarden initialization\n'));
+  if (dryRun) {
+    console.log(chalk.yellow('  Dry run: no files were written\n'));
+  }
   console.log(chalk.gray('─'.repeat(78)));
+  const createdLabel = (dryRun ? 'Would create:' : 'Created:').padEnd(18);
+  const replacedLabel = (dryRun ? 'Would replace:' : 'Replaced:').padEnd(18);
   for (const filePath of result.created) {
-    console.log(`  Created:          ${chalk.green(filePath)}`);
+    console.log(`  ${createdLabel}${chalk.green(filePath)}`);
   }
   for (const filePath of result.overwritten) {
-    console.log(`  Replaced:         ${chalk.yellow(filePath)}`);
+    console.log(`  ${replacedLabel}${chalk.yellow(filePath)}`);
   }
   console.log(
     `  Profile:          ${chalk.bold.white(result.profile)} ` +
@@ -1525,6 +1545,11 @@ function cmdInit(options: ParsedArgs['options'], format: 'pretty' | 'json'): voi
   );
   console.log(chalk.gray('─'.repeat(78)));
   console.log(chalk.gray('\nNext steps:'));
+  if (dryRun) {
+    console.log(`  1. Re-run without ${chalk.gray('--dry-run')} to write these files`);
+    console.log('');
+    return;
+  }
   console.log(`  1. Review ${chalk.gray(result.configPath)}`);
   console.log(`  2. Run ${chalk.gray('agentwarden scan .')}`);
   console.log(

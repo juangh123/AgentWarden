@@ -12,6 +12,16 @@ versioning.
   Actions SARIF security gate without hand-writing workflow configuration.
 - Added documentation drift checks that keep the rule catalog aligned with the
   implemented rule IDs and count.
+- Added `agentwarden init --dry-run` to preview the files init would create or
+  replace without writing to disk.
+- Added `agentwarden init --workflow-path <file>` for a custom workflow location
+  and `agentwarden init --action-ref <ref>` to choose the generated Action ref.
+
+### Fixed
+
+- Git-sourced installs such as `npm install github:juangh123/AgentWarden#<sha>`
+  now build `dist/` through the `prepare` lifecycle, so the published `bin`
+  entries resolve instead of pointing at a missing file.
 
 ## [0.3.1] - 2026-09-14
 

@@ -1,6 +1,9 @@
 # AgentWarden 冷启动执行清单
 
 > 状态更新：`v0.3.1` 已创建 GitHub Release，GitHub Action 可不依赖 npm 包独立运行。`agentwarden-cli` 的 npm 首次发布仍需配置短期 token 或 Trusted Publisher；本页其余内容保留为 v0.3.0 首发记录。
+>
+> npm 包发布前，CLI 可直接从 GitHub 固定提交安装：
+> `npm install --global "github:juangh123/AgentWarden#<commit-sha>"`。安装过程中会执行 `prepare` 构建 `dist/`，因此 `warden` / `agentwarden` 等命令可直接使用。
 
 本清单用于 v0.3.0 首次公开发布。目标不是制造安全能力的错觉，而是让开发者能在五分钟内完成一次扫描、看到明确退出码，并在 CI 中复用同一策略。
 
