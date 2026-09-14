@@ -1,6 +1,6 @@
 # AgentWarden 冷启动执行清单
 
-> 状态更新：`v0.3.1` 的 GitHub Action 已可不依赖 npm 包独立运行。npm 首次发布仍需配置短期 token 或 Trusted Publisher；本页其余内容保留为 v0.3.0 首发记录。
+> 状态更新：`v0.3.1` 已创建 GitHub Release，GitHub Action 可不依赖 npm 包独立运行。`agentwarden-cli` 的 npm 首次发布仍需配置短期 token 或 Trusted Publisher；本页其余内容保留为 v0.3.0 首发记录。
 
 本清单用于 v0.3.0 首次公开发布。目标不是制造安全能力的错觉，而是让开发者能在五分钟内完成一次扫描、看到明确退出码，并在 CI 中复用同一策略。
 
@@ -51,7 +51,7 @@ gh secret set NPM_TOKEN --repo juangh123/AgentWarden
 gh run rerun <release-run-id> --repo juangh123/AgentWarden
 ```
 
-`NPM_TOKEN` 应使用只对 `agentwarden-cli` 有写权限的 granular token。当前 `v0.3.0` Release run 的 ID 是 `34735455673`。
+`NPM_TOKEN` 应使用只对 `agentwarden-cli` 有写权限的 granular token。当前 `v0.3.1` Release run 的 ID 是 `34841807999`。
 
 首次发布成功后，切换到 Trusted Publisher：
 
