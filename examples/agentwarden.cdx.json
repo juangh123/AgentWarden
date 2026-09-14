@@ -10,7 +10,7 @@
           "type": "application",
           "bom-ref": "urn:agentwarden:tool:agentwarden",
           "name": "agentwarden",
-          "version": "0.3.1",
+          "version": "0.3.2",
           "scope": "required"
         }
       ]
@@ -19,7 +19,7 @@
       "type": "application",
       "bom-ref": "urn:agentwarden:workspace",
       "name": "agentwarden-lockfile",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "scope": "required"
     }
   },
