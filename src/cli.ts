@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chalk, setColorEnabled } from './reporter/chalk.ts';
@@ -69,6 +68,11 @@ import {
   type PublisherProvenance,
 } from './source/provenance.ts';
 import { buildCycloneDxSbom } from './sbom/index.ts';
+import {
+  InitError,
+  initializeAgentWarden,
+} from './init/index.ts';
+import { writeFileAtomic } from './utils/atomicWrite.ts';
 
 const VERSION = readPackageVersion();
 
@@ -116,6 +120,7 @@ const BOOLEAN_OPTIONS = new Set([
   'dry-run',
   'changed',
   'allow-http',
+  'no-workflow',
 ]);
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 const REPEATABLE_OPTIONS: Record<string, string> = {
@@ -364,6 +369,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('audit')}                Audit all installed skills in skills.lock against local tampering
   ${chalk.green('sbom')}                 Generate a CycloneDX 1.5 SBOM from skills.lock
   ${chalk.green('rules')}                List active security rules and effective severity
+  ${chalk.green('init')}                 Create a policy file and GitHub Actions security gate
   ${chalk.green('policy [diff <from> <to>]')} Show effective policy or compare two policies
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
@@ -400,6 +406,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--fail-on-expiring')}      Exit 1 when a baseline is nearing expiry
   ${chalk.yellow('--fail-on-unmatched')}     Exit 1 when baseline entries no longer match
   ${chalk.yellow('--dry-run')}               Preview baseline prune/update without writing
+  ${chalk.yellow('--no-workflow')}           Skip GitHub Actions workflow generation during init
   ${chalk.yellow('-C, --cwd <dir>')}        Run as if started from <dir>
   ${chalk.yellow('--no-color')}             Disable ANSI colors (also honors NO_COLOR env)
   ${chalk.yellow('--no-redact')}            Include raw snippets and file content in reports
@@ -611,38 +618,6 @@ function enforcePublisherPolicy(
 ): void {
   const decision = evaluatePublisherPolicy(config.publishers, provenance);
   if (!decision.passed) failPublisherPolicy(decision, format, operation);
-}
-
-function writeFileAtomic(filePath: string, content: string): void {
-  const directory = path.dirname(filePath);
-  fs.mkdirSync(directory, { recursive: true });
-  const temporaryPath = path.join(
-    directory,
-    `.${path.basename(filePath)}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`,
-  );
-
-  fs.writeFileSync(temporaryPath, content, { encoding: 'utf8', flag: 'wx' });
-  try {
-    try {
-      fs.renameSync(temporaryPath, filePath);
-    } catch (error) {
-      const code =
-        error && typeof error === 'object' && 'code' in error
-          ? String((error as NodeJS.ErrnoException).code)
-          : '';
-      if (
-        process.platform === 'win32' &&
-        (code === 'EEXIST' || code === 'EPERM' || code === 'EACCES')
-      ) {
-        fs.rmSync(filePath, { force: true });
-        fs.renameSync(temporaryPath, filePath);
-      } else {
-        throw error;
-      }
-    }
-  } finally {
-    fs.rmSync(temporaryPath, { force: true });
-  }
 }
 
 function resolveRemoteInstallPath(filename: string, output: unknown): string {
@@ -1502,6 +1477,63 @@ function cmdSbom(options: ParsedArgs['options']): void {
   if (!result.passed) process.exit(EXIT_FAIL);
 }
 
+function resolveInitFormat(options: ParsedArgs['options']): 'pretty' | 'json' {
+  if (options.sarif) usageError('init supports pretty|json output only');
+  const format = resolveFormat(options);
+  if (format === 'sarif') usageError('init supports pretty|json output only');
+  return format === 'json' ? 'json' : 'pretty';
+}
+
+function cmdInit(options: ParsedArgs['options'], format: 'pretty' | 'json'): void {
+  const requestedProfile =
+    options.profile !== undefined
+      ? (String(options.profile).trim().toLowerCase() as PolicyProfileName)
+      : 'balanced';
+  if (!Object.hasOwn(POLICY_PROFILES, requestedProfile)) {
+    usageError(`Invalid --profile "${String(options.profile)}" (expected legacy|balanced|strict)`);
+  }
+
+  let result: ReturnType<typeof initializeAgentWarden>;
+  try {
+    result = initializeAgentWarden(process.cwd(), {
+      profile: requestedProfile,
+      workflow: !options['no-workflow'],
+      force: Boolean(options.force),
+    });
+  } catch (error) {
+    if (error instanceof InitError) usageError(error.message);
+    throw error;
+  }
+
+  if (format === 'json') {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  const defaults = POLICY_PROFILES[result.profile];
+  console.log(chalk.bold.cyan('\nAgentWarden initialization\n'));
+  console.log(chalk.gray('─'.repeat(78)));
+  for (const filePath of result.created) {
+    console.log(`  Created:          ${chalk.green(filePath)}`);
+  }
+  for (const filePath of result.overwritten) {
+    console.log(`  Replaced:         ${chalk.yellow(filePath)}`);
+  }
+  console.log(
+    `  Profile:          ${chalk.bold.white(result.profile)} ` +
+      chalk.gray(`(failOn: ${defaults.failOn}, minScore: ${defaults.minScore})`),
+  );
+  console.log(chalk.gray('─'.repeat(78)));
+  console.log(chalk.gray('\nNext steps:'));
+  console.log(`  1. Review ${chalk.gray(result.configPath)}`);
+  console.log(`  2. Run ${chalk.gray('agentwarden scan .')}`);
+  console.log(
+    `  3. Commit the generated file${result.workflowPath ? 's' : ''}` +
+      (result.workflowPath ? `, including ${chalk.gray(result.workflowPath)}` : ''),
+  );
+  console.log('');
+}
+
 function cmdRules(config: SkillGuardConfig, format: ReportFormat): void {
   const ignored = new Set(config.ignoreRules ?? []);
   const overrides = config.severityOverrides ?? {};
@@ -2028,6 +2060,14 @@ async function main(): Promise<void> {
   const command = positionals[0];
   if (!command || command === 'help' || command === '--help' || command === '-h' || options.help) {
     printHelp();
+    return;
+  }
+
+  if (command === 'init') {
+    if (positionals.length > 1) {
+      usageError('init does not accept positional paths');
+    }
+    cmdInit(options, resolveInitFormat(options));
     return;
   }
 

@@ -6,6 +6,13 @@ versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Added `agentwarden init` to generate an auto-discovered policy and a GitHub
+  Actions SARIF security gate without hand-writing workflow configuration.
+- Added documentation drift checks that keep the rule catalog aligned with the
+  implemented rule IDs and count.
+
 ## [0.3.1] - 2026-09-14
 
 ### Added

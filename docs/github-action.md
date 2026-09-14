@@ -23,6 +23,22 @@ GitHub Marketplace 发布后可直接从 Marketplace 添加。仓库内也可以
 Action 直接从固定版本中运行 `src/cli.ts`，不执行 `npm install`，也不要求
 `agentwarden-cli` 已发布到 npm。`node-version` 必须为 22.6 或更高版本。
 
+## 初始化
+
+在仓库根目录执行：
+
+```bash
+npx agentwarden-cli init
+```
+
+该命令会生成：
+
+- `.agentwarden/policy.json`：默认使用 `balanced` 档位，后续本地扫描和 CI 都自动读取。
+- `.github/workflows/agentwarden.yml`：全量扫描、SARIF 输出和 GitHub Code Scanning 上传示例。
+
+使用 `--profile strict` 提高门禁级别；使用 `--no-workflow` 只生成策略文件。
+命令默认拒绝覆盖已有文件，确认替换时显式传入 `--force`。
+
 ## 最小示例
 
 ```yaml

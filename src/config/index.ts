@@ -70,6 +70,7 @@ export const DEFAULT_CONFIG: Readonly<SkillGuardConfig> = {
 const VALID_FAIL_ON: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 const VALID_PROFILES: PolicyProfileName[] = ['legacy', 'balanced', 'strict'];
 const CONFIG_FILE_NAMES = [
+  path.join('.agentwarden', 'policy.json'),
   '.wardenrc.json',
   '.wardenrc',
   'warden.config.json',

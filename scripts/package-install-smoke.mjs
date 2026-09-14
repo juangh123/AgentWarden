@@ -105,6 +105,19 @@ try {
   const safeScan = run('npx', ['--no-install', 'warden', 'scan', safeSkill, '--json'], consumer);
   assert(safeScan.status === 0, `safe package scan failed: ${safeScan.stderr || safeScan.stdout}`);
 
+  const initProject = path.join(consumer, 'init-project');
+  fs.mkdirSync(initProject, { recursive: true });
+  const initRun = run(
+    'npx',
+    ['--no-install', 'warden', 'init', '--no-workflow', '--json'],
+    initProject,
+  );
+  assert(initRun.status === 0, `packaged init command failed: ${initRun.stderr || initRun.stdout}`);
+  assert(
+    fs.existsSync(path.join(initProject, '.agentwarden', 'policy.json')),
+    'packaged init command did not create a policy file',
+  );
+
   const blockedScan = run(
     'npx',
     ['--no-install', 'warden', 'scan', maliciousSkill, '--json'],

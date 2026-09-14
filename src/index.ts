@@ -96,6 +96,16 @@ export {
   type SkillGuardConfig,
 } from './config/index.ts';
 export {
+  InitError,
+  INIT_CONFIG_PATH,
+  INIT_WORKFLOW_PATH,
+  buildInitPolicy,
+  buildInitWorkflow,
+  initializeAgentWarden,
+  type InitializeOptions,
+  type InitializeResult,
+} from './init/index.ts';
+export {
   evaluatePublisherPolicy,
   type PublisherPolicyDecision,
   type PublisherPolicyViolationCode,

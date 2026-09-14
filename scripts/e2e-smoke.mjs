@@ -842,6 +842,43 @@ check(
   `status=${r.status}`,
 );
 
+const initProjectDir = path.join(tmp, 'init-project');
+fs.mkdirSync(initProjectDir, { recursive: true });
+
+r = run(['-C', initProjectDir, 'init']);
+check(
+  'init creates policy and workflow files',
+  r.status === 0 &&
+    fs.existsSync(path.join(initProjectDir, '.agentwarden', 'policy.json')) &&
+    fs.existsSync(path.join(initProjectDir, '.github', 'workflows', 'agentwarden.yml')),
+  `status=${r.status}`,
+);
+
+r = run(['-C', initProjectDir, 'policy', '--json']);
+const initializedPolicy = JSON.parse(r.stdout);
+check(
+  'init policy is auto-discovered',
+  r.status === 0 && initializedPolicy.profile === 'balanced' && initializedPolicy.minScore === 80,
+  `status=${r.status}`,
+);
+
+r = run(['-C', initProjectDir, 'init']);
+check('init refuses overwrite without force', r.status === 2, `status=${r.status}`);
+
+r = run(['-C', initProjectDir, 'init', '--force', '--no-workflow', '--json']);
+const initialized = JSON.parse(r.stdout);
+check(
+  'init supports force and workflow-free output',
+  r.status === 0 &&
+    initialized.workflowPath === null &&
+    initialized.overwritten.includes('.agentwarden/policy.json') &&
+    fs.existsSync(path.join(initProjectDir, '.github', 'workflows', 'agentwarden.yml')),
+  `status=${r.status}`,
+);
+
+r = run(['-C', initProjectDir, 'init', '--sarif']);
+check('init rejects SARIF output', r.status === 2, `status=${r.status}`);
+
 r = run([
   '-C',
   tmp,
