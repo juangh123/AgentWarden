@@ -6,6 +6,8 @@ versioning.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-14
+
 ### Added
 
 - SARIF results now carry stable partial fingerprints shared with baselines, so
@@ -20,6 +22,8 @@ versioning.
 
 - Baselines and SARIF now derive finding identity from the same normalized
   path, rule, category, severity, and snippet implementation.
+- The GitHub Action now runs the checked-in TypeScript source with Node type
+  stripping instead of installing dependencies and building on every job.
 
 ## [0.3.0] - 2026-09-13
 
@@ -54,5 +58,6 @@ versioning.
 - Publisher policy can require signatures and reject revoked keys.
 - Package publishing excludes the repository `skills.lock`.
 
-[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.1
 [0.3.0]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.0

@@ -5,6 +5,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const packageVersion = JSON.parse(
+  fs.readFileSync(path.join(root, 'package.json'), 'utf8'),
+).version;
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-package-'));
 const packDirectory = path.join(temp, 'pack');
 const consumer = path.join(temp, 'consumer');
@@ -76,13 +79,13 @@ try {
 
   const version = run('npx', ['--no-install', 'agentwarden-cli', '--version'], consumer);
   assert(
-    version.status === 0 && /v0\.3\.0/.test(version.stdout),
+    version.status === 0 && version.stdout.includes(`v${packageVersion}`),
     `installed package-name command failed: ${version.stderr || version.stdout}`,
   );
 
   const wardenVersion = run('npx', ['--no-install', 'warden', '--version'], consumer);
   assert(
-    wardenVersion.status === 0 && wardenVersion.stdout.includes('v0.3.0'),
+    wardenVersion.status === 0 && wardenVersion.stdout.includes(`v${packageVersion}`),
     `warden alias failed: ${wardenVersion.stderr || wardenVersion.stdout}`,
   );
 

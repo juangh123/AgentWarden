@@ -9,7 +9,7 @@ branding:
 
 inputs:
   node-version:
-    description: 'Node.js version used to build and run AgentWarden'
+    description: 'Node.js version used to run AgentWarden (must be 22.6 or newer)'
     required: false
     default: '22'
   path:
@@ -88,13 +88,6 @@ runs:
       uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
-    - name: Build AgentWarden
-      shell: bash
-      run: |
-        set -euo pipefail
-        cd "$GITHUB_ACTION_PATH"
-        npm ci --ignore-scripts
-        npm run build
     - name: Run AgentWarden Scanner
       shell: bash
       env:
@@ -117,6 +110,7 @@ runs:
         INPUT_SARIF: ${{ inputs.sarif }}
       run: |
         set -euo pipefail
+        CLI=(node --experimental-strip-types --no-warnings "$GITHUB_ACTION_PATH/src/cli.ts")
         COMMON_ARGS=()
 
         validate_boolean() {
@@ -181,7 +175,7 @@ runs:
           if [[ "$INPUT_BASELINE_FAIL_ON_UNMATCHED" == "true" ]]; then
             status_args+=(--fail-on-unmatched)
           fi
-          node "$GITHUB_ACTION_PATH/dist/cli.js" "${status_args[@]}"
+          "${CLI[@]}" "${status_args[@]}"
         fi
 
         args=(scan "$INPUT_PATH" --sarif)
@@ -192,4 +186,4 @@ runs:
         if [[ -n "$INPUT_CHANGED_FROM" ]]; then
           args+=(--changed-from "$INPUT_CHANGED_FROM")
         fi
-        node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}" > "$INPUT_SARIF"
+        "${CLI[@]}" "${args[@]}" > "$INPUT_SARIF"

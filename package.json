@@ -1,6 +1,6 @@
 {
   "name": "agentwarden-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Zero-dependency Security Warden, Supply-Chain Linter & Integrity Manager for AI Agent Skills",
   "author": "juangh123",
   "homepage": "https://github.com/juangh123/AgentWarden#readme",
