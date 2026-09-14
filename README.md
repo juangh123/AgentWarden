@@ -589,6 +589,7 @@ npm run typecheck
 npm test
 npm run smoke
 npm run test:package
+npm run test:git-install
 ```
 
 ```text
@@ -609,6 +610,7 @@ scripts/
   clean.mjs            清理构建产物
   e2e-smoke.mjs        CLI 端到端冒烟测试
   package-install-smoke.mjs npm 封装、安装与发布产物验证
+  git-install-smoke.mjs git 依赖安装与 prepare 构建验证
 tests/                 单元测试（node:test，免框架）
 fixtures/              安全 / 恶意 / 混淆 / 硬编码密钥样本
 examples/              可直接运行的策略、Skill 与 GitHub Action 示例

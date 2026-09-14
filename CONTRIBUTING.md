@@ -15,11 +15,16 @@ npm run typecheck
 npm test
 npm run smoke
 npm run test:package
+npm run test:git-install
 ```
 
 `npm run test:package` builds the project, creates an npm tarball, installs it
 into a temporary consumer, and verifies the published command aliases, scan
 exit codes, and SBOM output.
+
+`npm run test:git-install` clones this repository into a temporary directory and
+installs it as a git dependency, which fails if the `prepare` build hook stops
+producing `dist/` for git-sourced installs.
 
 ## Change Scope
 
@@ -40,6 +45,7 @@ npm run typecheck
 npm test
 npm run smoke
 npm run test:package
+npm run test:git-install
 ```
 
 ## Pull Requests
