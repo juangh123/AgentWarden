@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:5b88750f-3bd6-52d4-8d72-63c2a39db2be",
+  "serialNumber": "urn:uuid:e893ee88-4e74-5d38-ba39-e94e2d322c18",
   "version": 1,
   "metadata": {
     "tools": {
@@ -9,44 +9,77 @@
         {
           "type": "application",
           "bom-ref": "urn:agentwarden:tool:agentwarden",
-          "name": "AgentWarden",
-          "version": "0.3.0",
-          "hashes": [
-            {
-              "alg": "SHA-256",
-              "content": "e8c8f5748914a2c94ee0dbfaa15bb05c16673ca786ef00b4d7a304522c1b528e"
-            }
-          ]
+          "name": "agentwarden",
+          "version": "0.3.1",
+          "scope": "required"
         }
       ]
     },
     "component": {
       "type": "application",
       "bom-ref": "urn:agentwarden:workspace",
-      "name": "agentwarden-workspace"
+      "name": "agentwarden-lockfile",
+      "version": "0.3.1",
+      "scope": "required"
     }
   },
   "components": [
     {
       "type": "library",
-      "bom-ref": "pkg:generic/release-notes-helper@1.0.0",
-      "name": "release-notes-helper",
+      "bom-ref": "pkg:generic/safe-weather-reporter@1.0.0",
+      "name": "safe-weather-reporter",
       "version": "1.0.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f8a4a7f52c82f2155ea86ca9f8c9f4d6a585acf6847c5e39f041ea48b62532dd"
+          "content": "ee67a0a40c9b33590e52a5befa04605bffc34280b2dc4cfc775c49256bbb99e2"
         }
       ],
       "properties": [
         {
           "name": "agentwarden:source",
-          "value": "./examples/safe-skill.md"
+          "value": "fixtures/safe-skill.md"
+        },
+        {
+          "name": "agentwarden:sourceType",
+          "value": "local"
+        },
+        {
+          "name": "agentwarden:installedAt",
+          "value": "2026-09-09T04:18:20.839Z"
+        },
+        {
+          "name": "agentwarden:verifiedScore",
+          "value": "100"
         },
         {
           "name": "agentwarden:integrityPassed",
           "value": "true"
+        },
+        {
+          "name": "agentwarden:observedSha256",
+          "value": "ee67a0a40c9b33590e52a5befa04605bffc34280b2dc4cfc775c49256bbb99e2"
+        },
+        {
+          "name": "agentwarden:packageFileCount",
+          "value": "0"
+        },
+        {
+          "name": "agentwarden:missingFiles",
+          "value": ""
+        },
+        {
+          "name": "agentwarden:extraFiles",
+          "value": ""
+        },
+        {
+          "name": "agentwarden:modifiedFiles",
+          "value": ""
+        },
+        {
+          "name": "agentwarden:unsafePaths",
+          "value": ""
         },
         {
           "name": "agentwarden:publisherPolicyPassed",
@@ -59,8 +92,11 @@
     {
       "ref": "urn:agentwarden:workspace",
       "dependsOn": [
-        "pkg:generic/release-notes-helper@1.0.0"
+        "pkg:generic/safe-weather-reporter@1.0.0"
       ]
+    },
+    {
+      "ref": "pkg:generic/safe-weather-reporter@1.0.0"
     }
   ]
 }

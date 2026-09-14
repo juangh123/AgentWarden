@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Scan changed agent assets
-        uses: juangh123/AgentWarden@v0.3.0
+        uses: juangh123/AgentWarden@v0.3.1
         with:
           path: .
           profile: strict

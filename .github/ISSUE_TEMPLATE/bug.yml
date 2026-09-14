@@ -13,7 +13,7 @@ body:
     attributes:
       label: AgentWarden version
       description: Output from `agentwarden --version`.
-      placeholder: agentwarden v0.3.0
+      placeholder: agentwarden v0.3.1
     validations:
       required: true
   - type: dropdown

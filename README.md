@@ -54,7 +54,7 @@ echo "blocked exit: $?"     # 1
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: juangh123/AgentWarden@v0.3.0
+- uses: juangh123/AgentWarden@v0.3.1
   with:
     path: skills/
     profile: strict
@@ -728,7 +728,7 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
     fetch-depth: 0
 
 - name: Run AgentWarden Security Gate
-  uses: juangh123/AgentWarden@v0.3.0
+  uses: juangh123/AgentWarden@v0.3.1
   with:
     path: '.'
     config: '.agentwarden/policy.json'
