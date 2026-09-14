@@ -24,17 +24,24 @@ jobs:
 
   action-smoke:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [22, 24]
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: ./
+      - name: Run Action on Node 22
+        uses: ./
         with:
-          node-version: ${{ matrix.node }}
+          node-version: '22'
+          path: '.'
+          config: 'fixtures/ci-policy.json'
+          baseline: 'fixtures/empty-baseline.json'
+          baseline-status: 'true'
+          baseline-fail-on-unmatched: 'true'
+          changed: 'true'
+      - name: Run Action on Node 24
+        uses: ./
+        with:
+          node-version: '24'
           path: '.'
           config: 'fixtures/ci-policy.json'
           baseline: 'fixtures/empty-baseline.json'
