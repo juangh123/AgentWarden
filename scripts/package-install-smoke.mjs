@@ -49,6 +49,17 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function parsePackReport(stdout, stderr) {
+  // npm 10 can interleave lifecycle script output with `--json` output, so read
+  // only the JSON array that `npm pack` returns.
+  const start = stdout.indexOf('[');
+  const end = stdout.lastIndexOf(']');
+  if (start === -1 || end < start) {
+    throw new Error(`npm pack did not return JSON output: ${stdout || stderr}`);
+  }
+  return JSON.parse(stdout.slice(start, end + 1));
+}
+
 try {
   fs.mkdirSync(packDirectory, { recursive: true });
   fs.mkdirSync(consumer, { recursive: true });
@@ -59,7 +70,7 @@ try {
     root,
   );
   assert(packed.status === 0, `npm pack failed: ${packed.stderr || packed.stdout}`);
-  const packResult = JSON.parse(packed.stdout);
+  const packResult = parsePackReport(packed.stdout, packed.stderr);
   const tarball = path.join(packDirectory, packResult[0].filename);
   const packagedFiles = new Set(packResult[0].files.map((file) => file.path));
   assert(packagedFiles.has('dist/cli.js'), 'packed artifact is missing dist/cli.js');
