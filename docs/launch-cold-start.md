@@ -1,8 +1,9 @@
 # AgentWarden 冷启动执行清单
 
 > 状态更新：`v0.3.2` GitHub Release 与 npm 首发均已完成，GitHub Action 和
-> `npx agentwarden-cli` 都可用。npm 账号已启用 2FA；当前剩余步骤是配置
-> Trusted Publisher，让后续 tag 通过 GitHub OIDC 自动发布 provenance。
+> `npx agentwarden-cli` 都可用。npm 账号已启用 2FA，Trusted Publisher 已
+> 绑定 `juangh123/AgentWarden` 的 `release.yml`，后续 tag 可通过 GitHub
+> OIDC 自动发布 provenance。
 >
 > 如需绕过 npm，仍可从 GitHub 固定提交安装：
 > `npm install --global "github:juangh123/AgentWarden#<commit-sha>"`。安装过程中会执行 `prepare` 构建 `dist/`，因此 `warden` / `agentwarden` 等命令可直接使用。
@@ -57,19 +58,14 @@ npm view agentwarden-cli@0.3.2 version dist.integrity
 npx --yes agentwarden-cli --version
 ```
 
-首次 bootstrap 版本没有 provenance。现在通过 npm 的官方 `trust` 命令创建
-GitHub Actions Trusted Publisher：
+首次 bootstrap 版本没有 provenance。GitHub Actions Trusted Publisher 已
+通过 npm 官方 `trust` 命令完成配置：
 
-```bash
-npm trust github agentwarden-cli \
-  --file release.yml \
-  --repository juangh123/AgentWarden \
-  --allow-publish \
-  --dry-run --json
-```
+- workflow：`release.yml`
+- repository：`juangh123/AgentWarden`
+- permissions：publish、stage publish
 
-去掉 `--dry-run` 并完成安全密钥验证后，后续版本推送完整 tag 即可由 OIDC
-发布，不再需要 `NPM_TOKEN`。
+后续版本推送完整 tag 即可由 OIDC 发布，不再需要 `NPM_TOKEN`。
 
 本地检查登录状态：
 
