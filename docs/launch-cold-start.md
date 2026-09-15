@@ -27,16 +27,18 @@ npm run typecheck
 npm test
 npm run smoke
 npm run test:package
-npm pack --dry-run --json
+npm run test:mvp
 ```
 
-确认 tarball：
+`npm run test:mvp` 会生成并校验 `release/agentwarden-cli-<version>.tgz` 与
+`release/SHA256SUMS`，再把 tarball 安装到干净目录并验证完整命令链。确认产物：
 
 - 包名为 `agentwarden-cli`
-- 版本为 `0.3.0`
+- 版本与 `package.json` 一致
 - 包含 `dist`、`README.md`、`LICENSE`
 - 不包含仓库根目录的 `skills.lock`
-- `agentwarden-cli --version` 输出 `agentwarden v0.3.0`
+- 四个命令别名均指向已安装的 `dist/cli.js`
+- tarball 的 SHA-256 与 `SHA256SUMS` 一致
 
 ## npm 发布
 
@@ -80,7 +82,9 @@ git tag -a v0.3.0 -m "AgentWarden v0.3.0"
 git push origin v0.3.0
 ```
 
-workflow 会再次验证 tag 与 package version 一致，然后创建 GitHub Release。发布后确认：
+workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 tarball，
+发布同一个已验收产物，并把 tarball 与 `SHA256SUMS` 附加到 GitHub Release。
+发布后确认：
 
 ```bash
 gh release view v0.3.0 --repo juangh123/AgentWarden

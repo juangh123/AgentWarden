@@ -63,10 +63,11 @@
     "test": "node --test --experimental-strip-types --no-warnings tests/*.test.ts",
     "smoke": "npm run build && node scripts/e2e-smoke.mjs",
     "test:package": "npm run build && node scripts/package-install-smoke.mjs",
+    "test:mvp": "npm run build && node scripts/mvp-acceptance.mjs",
     "test:git-install": "node scripts/git-install-smoke.mjs",
     "start": "node --experimental-strip-types --no-warnings src/cli.ts",
     "prepare": "npm run build",
-    "prepublishOnly": "npm run typecheck && npm test && npm run smoke"
+    "prepublishOnly": "npm run typecheck && npm test && npm run smoke && npm run test:mvp"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",

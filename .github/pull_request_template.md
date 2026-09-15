@@ -12,6 +12,8 @@ What changed, and why is this approach appropriate for the existing codebase?
 - [ ] `npm test`
 - [ ] `npm run smoke`
 - [ ] `npm run test:package`
+- [ ] `npm run test:mvp`
+- [ ] `npm run test:git-install`
 - [ ] Documentation updated when behavior or usage changed
 
 ## Security and Compatibility

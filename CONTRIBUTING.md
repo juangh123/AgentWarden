@@ -15,12 +15,17 @@ npm run typecheck
 npm test
 npm run smoke
 npm run test:package
+npm run test:mvp
 npm run test:git-install
 ```
 
 `npm run test:package` builds the project, creates an npm tarball, installs it
 into a temporary consumer, and verifies the published command aliases, scan
 exit codes, and SBOM output.
+
+`npm run test:mvp` creates the release tarball and checksum, installs it into a
+clean consumer, and walks the complete packaged CLI surface from `init` through
+scan, SARIF, install, verify, audit, SBOM, rules, baseline, and uninstall.
 
 `npm run test:git-install` clones this repository into a temporary directory and
 installs it as a git dependency, which fails if the `prepare` build hook stops
@@ -45,6 +50,7 @@ npm run typecheck
 npm test
 npm run smoke
 npm run test:package
+npm run test:mvp
 npm run test:git-install
 ```
 

@@ -4,6 +4,20 @@ All notable changes to AgentWarden are documented here. The project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic
 versioning.
 
+## [Unreleased]
+
+### Added
+
+- Added `npm run test:mvp` to package the release tarball, write
+  `release/SHA256SUMS`, install the artifact into a clean consumer, and verify
+  the full user-facing CLI lifecycle through the installed package.
+
+### Changed
+
+- CI and the release workflow now enforce the MVP packaging gate. Releases
+  publish the exact tarball that passed verification and attach the tarball and
+  checksum to the GitHub Release.
+
 ## [0.3.2] - 2026-09-14
 
 ### Added
