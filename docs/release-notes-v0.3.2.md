@@ -48,9 +48,9 @@ The package is published as `agentwarden-cli@0.3.2`:
 npx --yes agentwarden-cli --version
 ```
 
-This bootstrap release has no npm provenance. Configure the GitHub Actions
-Trusted Publisher before the next tagged release so subsequent versions are
-published through OIDC with provenance.
+This bootstrap release has no npm provenance. The GitHub Actions Trusted
+Publisher is now configured for `release.yml` in `juangh123/AgentWarden`, so
+subsequent tagged versions will be published through OIDC with provenance.
 
 ## Security Scope
 

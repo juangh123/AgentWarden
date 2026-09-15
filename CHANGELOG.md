@@ -17,8 +17,9 @@ versioning.
 - CI and the release workflow now enforce the MVP packaging gate. Releases
   publish the exact tarball that passed verification and attach the tarball and
   checksum to the GitHub Release.
-- Published the first npm bootstrap release as `agentwarden-cli@0.3.2`;
-  subsequent tagged releases will use the GitHub Actions Trusted Publisher.
+- Published the first npm bootstrap release as `agentwarden-cli@0.3.2` and
+  configured the GitHub Actions Trusted Publisher for subsequent tagged
+  releases.
 
 ## [0.3.2] - 2026-09-14
 

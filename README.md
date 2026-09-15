@@ -49,8 +49,9 @@ npx agentwarden-cli init --workflow-path .github/workflows/security.yml --action
 ```
 
 > `agentwarden-cli@0.3.2` 已发布到 npm。首个 bootstrap 版本未附带
-> provenance；后续 tag 版本将通过 GitHub Actions Trusted Publisher/OIDC
-> 发布。生产流水线请固定版本或 commit SHA，不要长期依赖浮动的 `latest`。
+> provenance；GitHub Actions Trusted Publisher 已配置，后续 tag 版本将通过
+> OIDC 发布。生产流水线请固定版本或 commit SHA，不要长期依赖浮动的
+> `latest`。
 
 ### 30 秒演示
 
