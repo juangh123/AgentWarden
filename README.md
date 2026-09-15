@@ -48,14 +48,9 @@ npx agentwarden-cli init --dry-run --json
 npx agentwarden-cli init --workflow-path .github/workflows/security.yml --action-ref juangh123/AgentWarden@v0
 ```
 
-> `agentwarden-cli` 的 npm 首次发布仍在等待 registry 凭据。发布前可以直接从 GitHub 固定提交安装使用：
->
-> ```bash
-> npm install --global "github:juangh123/AgentWarden#<commit-sha>"
-> warden scan ./skills
-> ```
->
-> 安全流水线中请固定完整 commit SHA，不要长期依赖默认分支。
+> `agentwarden-cli@0.3.2` 已发布到 npm。首个 bootstrap 版本未附带
+> provenance；后续 tag 版本将通过 GitHub Actions Trusted Publisher/OIDC
+> 发布。生产流水线请固定版本或 commit SHA，不要长期依赖浮动的 `latest`。
 
 ### 30 秒演示
 

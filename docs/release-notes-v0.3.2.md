@@ -1,7 +1,8 @@
 # AgentWarden v0.3.2
 
-AgentWarden v0.3.2 makes project initialization easier to review and makes
-git-sourced installs work while the npm package is still unpublished.
+AgentWarden v0.3.2 makes project initialization easier to review, fixes
+git-sourced installs, and is the first version published as
+`agentwarden-cli` on npm.
 
 ## Highlights
 
@@ -19,6 +20,10 @@ git-sourced installs work while the npm package is still unpublished.
 ## Install Today
 
 ```bash
+npm install --global agentwarden-cli
+warden init --dry-run
+
+# Git fallback:
 npm install --global "github:juangh123/AgentWarden#v0.3.2"
 warden init --dry-run
 ```
@@ -32,15 +37,20 @@ warden init --dry-run
     profile: strict
 ```
 
-The Action runs from the tagged repository checkout and does not require the
-`agentwarden-cli` npm package to be published.
+The Action runs directly from the tagged repository checkout and can be used
+independently of the npm package.
 
 ## npm Status
 
-The npm package name remains `agentwarden-cli`. First publication is still
-pending npm authentication or Trusted Publisher configuration. When those
-credentials are available, rerun the v0.3.2 Release workflow; the tag and
-package version already match.
+The package is published as `agentwarden-cli@0.3.2`:
+
+```bash
+npx --yes agentwarden-cli --version
+```
+
+This bootstrap release has no npm provenance. Configure the GitHub Actions
+Trusted Publisher before the next tagged release so subsequent versions are
+published through OIDC with provenance.
 
 ## Security Scope
 
@@ -50,6 +60,7 @@ human review, and runtime controls for high-risk agent tools.
 
 ## Verification
 
-The release workflow runs type checking, unit tests, end-to-end smoke tests, and
-package installation tests before publishing. Main CI additionally covers the
-git-sourced install path and package smoke tests on Linux, macOS, and Windows.
+The release workflow runs type checking, unit tests, end-to-end smoke tests,
+package installation tests, and the full installed-artifact MVP acceptance
+gate before publishing. Main CI additionally covers the git-sourced install
+path and package smoke tests on Linux, macOS, and Windows.
