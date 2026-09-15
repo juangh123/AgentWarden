@@ -8,6 +8,11 @@
 
 > **Scan, verify, lock, and gate AI agent skills before they reach an agent.**
 
+AgentWarden is a zero-runtime-dependency security gate for AI Agent Skills,
+tools, and MCP configurations. It statically scans prompts and bundled scripts
+before installation, locks reviewed assets with SHA-256, verifies publisher
+provenance, and exports redacted SARIF, JSON, and CycloneDX SBOM reports.
+
 AgentWarden 是面向 AI Agent Skill / Tool / MCP 配置的零运行时依赖安全门禁。它在安装前执行静态安全与提示词注入扫描，通过 `skills.lock` 锁定完整性和发布者来源，并可导出 SARIF、JSON 与 CycloneDX SBOM。
 
 ![AgentWarden demo](docs/demo.svg)
@@ -55,12 +60,14 @@ npx agentwarden-cli init --workflow-path .github/workflows/security.yml --action
 
 ### 30 秒演示
 
-```bash
-npx agentwarden-cli scan examples/safe-skill.md
-echo "safe exit: $?"        # 0
+在任意空目录下载公开样例，无需先克隆仓库：
 
-npx agentwarden-cli scan examples/malicious-skill.md
-echo "blocked exit: $?"     # 1
+```bash
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/safe-skill.md
+npx agentwarden-cli scan safe-skill.md  # exits 0
+
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
+npx agentwarden-cli scan malicious-skill.md  # exits 1
 ```
 
 恶意 Skill 会显示命中的凭证读取、命令执行、提示词注入和数据外带规则，并返回非零退出码，便于直接作为 CI 门禁。
@@ -784,6 +791,16 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
 Action 的 `fail-on` 和 `min-score` 默认留空并使用 `profile`；显式设置时会覆盖档位默认值。`config` 可加载仓库中的策略文件，`include`、`exclude`、`ignore-rules` 和 `severity-overrides` 使用换行分隔。启用 `changed` / `changed-from` 前必须让 checkout 获取足够历史；PR 中推荐 `fetch-depth: 0`，或把 `github.event.pull_request.base.sha` 传给 `changed-from`。
 
 设置 `baseline-status: 'true'` 后，Action 会先按全量配置范围执行基线状态检查，再运行增量扫描与 SARIF 输出；该选项要求同时提供 `baseline`。`baseline-expiring-within` 定义临近到期的提醒窗口（默认 `30` 天），`baseline-fail-on-expiring` 和 `baseline-fail-on-unmatched` 可分别让临近到期或未匹配条目阻断工作流。基线已过期时始终返回失败，避免过期豁免在 CI 中继续生效。
+
+---
+
+## 💬 反馈与社区
+
+- 使用问题、集成经验和 MCP / Skill 格式反馈：前往 [GitHub Discussions](https://github.com/juangh123/AgentWarden/discussions)。
+- 可复现缺陷和误报：使用 [Issue 模板](https://github.com/juangh123/AgentWarden/issues/new/choose)。
+- 安全漏洞：不要公开提交，按 [SECURITY.md](SECURITY.md) 使用私密安全公告。
+
+最有价值的反馈是可以复现的真实 workflow，包括安装失败、误报、规则绕过、MCP 配置格式缺口和 CI 接入问题。
 
 ---
 
