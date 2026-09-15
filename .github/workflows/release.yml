@@ -46,10 +46,15 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
+      - name: Install trusted publishing CLI
+        run: |
+          npm install --global npm@^11.5.1
+          node --version
+          npm --version
       - name: Verify tag matches package version
         shell: bash
         run: |
@@ -67,20 +72,13 @@ jobs:
           set -euo pipefail
           cd release
           sha256sum -c SHA256SUMS
-      - name: Publish to npm
+      - name: Publish to npm with trusted publishing
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_PUBLISH_ENABLED: ${{ vars.NPM_PUBLISH_ENABLED }}
         run: |
           set -euo pipefail
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           TARBALL="release/agentwarden-cli-${PACKAGE_VERSION}.tgz"
           test -f "${TARBALL}"
-          if [[ -z "${NODE_AUTH_TOKEN:-}" && "${NPM_PUBLISH_ENABLED:-false}" != "true" ]]; then
-            echo "::notice title=npm publish skipped::Configure npm Trusted Publisher and set NPM_PUBLISH_ENABLED=true, or provide NPM_TOKEN, then rerun this workflow."
-            exit 0
-          fi
           npm publish "${TARBALL}" --access public --provenance --ignore-scripts
       - name: Create GitHub Release
         shell: bash
