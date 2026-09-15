@@ -1,8 +1,10 @@
 # AgentWarden 冷启动执行清单
 
-> 状态更新：`v0.3.2` 已创建 GitHub Release，GitHub Action 可不依赖 npm 包独立运行。`agentwarden-cli` 的 npm 首次发布仍需配置短期 token 或 Trusted Publisher；本页其余内容保留为 v0.3.0 首发记录。
+> 状态更新：`v0.3.2` GitHub Release 与 npm 首发均已完成，GitHub Action 和
+> `npx agentwarden-cli` 都可用。npm 账号已启用 2FA；当前剩余步骤是配置
+> Trusted Publisher，让后续 tag 通过 GitHub OIDC 自动发布 provenance。
 >
-> npm 包发布前，CLI 可直接从 GitHub 固定提交安装：
+> 如需绕过 npm，仍可从 GitHub 固定提交安装：
 > `npm install --global "github:juangh123/AgentWarden#<commit-sha>"`。安装过程中会执行 `prepare` 构建 `dist/`，因此 `warden` / `agentwarden` 等命令可直接使用。
 
 本清单用于 v0.3.0 首次公开发布。目标不是制造安全能力的错觉，而是让开发者能在五分钟内完成一次扫描、看到明确退出码，并在 CI 中复用同一策略。
@@ -48,22 +50,26 @@ npm run test:mvp
 agentwarden-cli
 ```
 
-首次发布必须先把新包名写入 npm registry，Trusted Publisher 只能在包创建后配置。推荐使用短期 `NPM_TOKEN` 完成引导，由 GitHub Actions 生成 provenance：
+`agentwarden-cli@0.3.2` 首次发布已经完成。验证 registry 状态：
 
 ```bash
-gh variable set NPM_PUBLISH_ENABLED --repo juangh123/AgentWarden --body true
-gh secret set NPM_TOKEN --repo juangh123/AgentWarden
-gh run rerun <release-run-id> --repo juangh123/AgentWarden
+npm view agentwarden-cli@0.3.2 version dist.integrity
+npx --yes agentwarden-cli --version
 ```
 
-`NPM_TOKEN` 应使用只对 `agentwarden-cli` 有写权限的 granular token。需要重跑时，在 `gh run list --workflow release.yml` 中找到对应 tag 的 Release run，再执行 `gh run rerun <run-id> --repo juangh123/AgentWarden`。
+首次 bootstrap 版本没有 provenance。现在通过 npm 的官方 `trust` 命令创建
+GitHub Actions Trusted Publisher：
 
-首次发布成功后，切换到 Trusted Publisher：
+```bash
+npm trust github agentwarden-cli \
+  --file release.yml \
+  --repository juangh123/AgentWarden \
+  --allow-publish \
+  --dry-run --json
+```
 
-1. 在 npm 打开已创建的 `agentwarden-cli` 包设置。
-2. 配置 Trusted Publisher：GitHub owner `juangh123`，repository `AgentWarden`，workflow `release.yml`。
-3. 保留 GitHub Actions `id-token: write` 和仓库变量 `NPM_PUBLISH_ENABLED=true`。
-4. 删除 `NPM_TOKEN`，后续版本推送完整 tag 即可由 OIDC 发布。
+去掉 `--dry-run` 并完成安全密钥验证后，后续版本推送完整 tag 即可由 OIDC
+发布，不再需要 `NPM_TOKEN`。
 
 本地检查登录状态：
 
