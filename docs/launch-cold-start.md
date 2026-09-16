@@ -1,9 +1,11 @@
 # AgentWarden 冷启动执行清单
 
-> 状态更新：`v0.3.2` GitHub Release 与 npm 首发均已完成，GitHub Action 和
-> `npx agentwarden-cli` 都可用。npm 账号已启用 2FA，Trusted Publisher 已
-> 绑定 `juangh123/AgentWarden` 的 `release.yml`，后续 tag 可通过 GitHub
-> OIDC 自动发布 provenance。
+> 状态更新（2026-09-16）：`v0.3.2` GitHub Release 与 npm 首发均已完成，
+> GitHub Action 和 `npx agentwarden-cli@0.3.2` 都可用。本地发布门禁已复核：
+> TypeScript 检查、107 项单测、113 项端到端检查、安装包烟测和 19 项 MVP
+> 验收全部通过；在干净目录首次运行和恶意样例退出码 `1` 也已验证。npm
+> 账号已启用 2FA，Trusted Publisher 已绑定 `juangh123/AgentWarden` 的
+> `release.yml`，后续 tag 可通过 GitHub OIDC 自动发布 provenance。
 >
 > 如需绕过 npm，仍可从 GitHub 固定提交安装：
 > `npm install --global "github:juangh123/AgentWarden#<commit-sha>"`。安装过程中会执行 `prepare` 构建 `dist/`，因此 `warden` / `agentwarden` 等命令可直接使用。
@@ -55,7 +57,7 @@ agentwarden-cli
 
 ```bash
 npm view agentwarden-cli@0.3.2 version dist.integrity
-npx --yes agentwarden-cli --version
+npx --yes agentwarden-cli@0.3.2 --version
 ```
 
 首次 bootstrap 版本没有 provenance。GitHub Actions Trusted Publisher 已
@@ -108,13 +110,17 @@ gh repo edit juangh123/AgentWarden \
   --add-topic github-actions
 ```
 
-建议同时完成：
+以下仓库侧设置已经完成：
 
-- 启用 GitHub Discussions，承接用法问题而不污染 Issue
-- 启用 Private vulnerability reporting
-- 保护 `main`：要求 CI 通过，禁止 force push
-- 创建当前版本的 GitHub Release，并把对应的 `docs/release-notes-v0.3.x.md` 作为正文基础
-- 确认 Action 在 Marketplace 元数据可见后发布为 Release
+- GitHub Discussions 已启用，用于承接用法问题
+- Private vulnerability reporting 已启用
+- `main` 已保护：8 项 CI 检查必须通过，禁止 force push 和删除
+- Dependabot security updates 与 secret scanning push protection 已启用
+- `v0.3.2` GitHub Release 已创建，并附带 tarball 与 `SHA256SUMS`
+
+当前仍需在 GitHub Web UI 完成 Action Marketplace 发布确认。`action.yml`
+元数据、品牌信息和版本 Release 已就绪，Marketplace 页面在发布确认前会返回
+404。
 
 ## 首发内容
 
@@ -176,7 +182,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 指标 | 说明 |
 | :--- | :--- |
 | npm weekly downloads | 是否形成自然安装 |
-| First-run success rate | `npx --yes agentwarden-cli --version` 与首次扫描成功率 |
+| First-run success rate | `npx --yes agentwarden-cli@0.3.2 --version` 与首次扫描成功率 |
 | Time to first blocked finding | 从打开 README 到得到退出码 `1` 的时间 |
 | Action adoption | 引用 Action 的公开仓库数 |
 | Issue conversion | 用法、误报和规则请求分别有多少 |
