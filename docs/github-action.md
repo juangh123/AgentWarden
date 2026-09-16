@@ -4,7 +4,9 @@ AgentWarden Action 在 CI 中扫描 Skill、Tool 和 MCP 配置，把结果写�
 
 ## 安装方式
 
-GitHub Marketplace 发布后可直接从 Marketplace 添加。仓库内也可以显式引用：
+已发布到
+[GitHub Marketplace](https://github.com/marketplace/actions/agentwarden-security-gate)，
+可直接从 Marketplace 添加；仓库内也可以显式引用：
 
 ```yaml
 - uses: juangh123/AgentWarden@v0.3.2
