@@ -28,7 +28,7 @@ Action 直接从固定版本中运行 `src/cli.ts`，不执行 `npm install`，�
 在仓库根目录执行：
 
 ```bash
-npx agentwarden-cli init
+npx --yes agentwarden-cli@0.3.2 init
 ```
 
 该命令会生成：
