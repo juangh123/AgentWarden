@@ -178,7 +178,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | Discord | `agentwarden_cli` | 已注册 | 只加入 2 至 3 个 MCP、AI Agent 或 DevSecOps 社区；先参与讨论，不群发私信或立即贴链接 |
 | Hacker News | `agentwarden` | 已注册，about 已完善 | 2026-09-17 20:55（UTC+8）后准备 `Show HN`；正文和评论由维护者本人撰写 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
-| 掘金 | 待注册 | 未注册，当前中文渠道优先项 | 由维护者本人完成手机或微信注册；先设置身份和简介，观察相关社区后再发布中文长帖 |
+| 掘金 | [`juangh123`](https://juejin.cn/user/252246275414937) | 已注册，GitHub 已验证，昵称和简介待完善 | 完善身份资料并审核[掘金长帖草稿](launch-juejin.md)后发布 |
 | V2EX | 待注册 | 注册页匿名请求返回 `403` | 在浏览器人工确认注册资格和邀请要求；在账号可用前暂缓 |
 | 即刻 | 待注册 | 未注册，优先级低于掘金 | 掘金账号可用后再推进，按移动端社区习惯参与 |
 
