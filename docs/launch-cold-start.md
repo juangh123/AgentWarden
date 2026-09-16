@@ -193,6 +193,19 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 
 North-star 指标不是 star 数，而是“成功执行扫描并接入第二次运行”的开发者数量。
 
+### 2026-09-16 基线
+
+| 指标 | 当前值 |
+| :--- | :--- |
+| Marketplace 状态 | 已发布，`Security` 分类 |
+| GitHub 首发公告 | Discussion #21，1 条评论 |
+| Stars / Watchers / Forks | 0 / 0 / 0 |
+| Open Issues | 0 |
+| GitHub Release 资产下载 | 0 |
+| npm downloads | registry 尚未返回下载统计 |
+
+该快照用于后续周度对比，不把短期互动量作为核心成功指标。
+
 ## 发布后 14 天
 
 - 48 小时内修复安装失败、版本输出和 README 路径问题
