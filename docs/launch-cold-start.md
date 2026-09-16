@@ -177,11 +177,20 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | DEV | `agentwarden` | 已注册，简介、网站和 GitHub 链接已填写 | 完成邮箱验证或 onboarding，主页可访问后再准备首帖 |
 | Discord | `agentwarden_cli` | 已注册 | 只加入 2 至 3 个 MCP、AI Agent 或 DevSecOps 社区；先参与讨论，不群发私信或立即贴链接 |
 | Hacker News | `agentwarden` | 已注册，等待完善 about | 静置 24 至 48 小时；后续 `Show HN` 正文和评论由维护者本人撰写 |
-| Reddit | 待注册 | 未注册 | 优先尝试 `agentwarden`，不可用则使用 `agentwarden_cli`；观察规则并养号至少 7 天 |
+| Reddit | `u/Basic_Support_9438` | 已注册，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
 | V2EX / 掘金 / 即刻 | 待注册 | 未注册 | 英文渠道验证后再推进，按各站规则单独准备内容 |
 
 不要把同一帖文在多个社区同时投放。公开帖子、评论、私信和主动邀请在提交前
 都需要维护者本人确认；不请求点赞、评论或转发。
+
+### 已发布渠道记录
+
+| 日期 | 渠道 | 内容 | 状态 |
+| :--- | :--- | :--- | :--- |
+| 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
+
+不要因为 Reddit 用户名与产品名不一致而创建重复账号。优先在现有账号的个人简介、
+头像和后续正常参与中建立身份连续性。
 
 ## 目标社区
 
