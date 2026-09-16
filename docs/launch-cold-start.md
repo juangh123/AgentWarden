@@ -178,7 +178,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | Discord | `agentwarden_cli` | 已注册 | 只加入 2 至 3 个 MCP、AI Agent 或 DevSecOps 社区；先参与讨论，不群发私信或立即贴链接 |
 | Hacker News | `agentwarden` | 已注册，about 已完善 | 2026-09-17 20:55（UTC+8）后准备 `Show HN`；正文和评论由维护者本人撰写 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
-| 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册，昵称、简介、网站和 GitHub 验证均已完成 | 审核[掘金长帖草稿](launch-juejin.md)和[封面](assets/juejin-cover.png)后由维护者本人发布 |
+| 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
 | V2EX | 待注册 | 注册页匿名请求返回 `403` | 在浏览器人工确认注册资格和邀请要求；在账号可用前暂缓 |
 | 即刻 | 待注册 | 未注册，优先级低于掘金 | 掘金账号可用后再推进，按移动端社区习惯参与 |
 
@@ -192,6 +192,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 日期 | 渠道 | 内容 | 状态 |
 | :--- | :--- | :--- | :--- |
 | 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
+| 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；初始阅读 1，点赞、收藏、评论均为 0 |
 
 不要因为 Reddit 用户名与产品名不一致而创建重复账号。优先在现有账号的个人简介、
 头像和后续正常参与中建立身份连续性。
