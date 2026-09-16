@@ -177,7 +177,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | DEV | `agentwarden` | 已注册，简介、网站和 GitHub 链接已填写 | 完成邮箱验证或 onboarding，主页可访问后再准备首帖 |
 | Discord | `agentwarden_cli` | 已注册 | 只加入 2 至 3 个 MCP、AI Agent 或 DevSecOps 社区；先参与讨论，不群发私信或立即贴链接 |
 | Hacker News | `agentwarden` | 已注册，等待完善 about | 静置 24 至 48 小时；后续 `Show HN` 正文和评论由维护者本人撰写 |
-| Reddit | `u/Basic_Support_9438` | 已注册，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
+| Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
 | V2EX / 掘金 / 即刻 | 待注册 | 未注册 | 英文渠道验证后再推进，按各站规则单独准备内容 |
 
 不要把同一帖文在多个社区同时投放。公开帖子、评论、私信和主动邀请在提交前
