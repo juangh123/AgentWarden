@@ -20,6 +20,8 @@ versioning.
 - Published the first npm bootstrap release as `agentwarden-cli@0.3.2` and
   configured the GitHub Actions Trusted Publisher for subsequent tagged
   releases.
+- Published the GitHub Action as `AgentWarden Security Gate` on GitHub
+  Marketplace under the `Security` category.
 
 ## [0.3.2] - 2026-09-14
 

@@ -1,11 +1,13 @@
 # AgentWarden 冷启动执行清单
 
 > 状态更新（2026-09-16）：`v0.3.2` GitHub Release 与 npm 首发均已完成，
-> GitHub Action 和 `npx agentwarden-cli@0.3.2` 都可用。本地发布门禁已复核：
-> TypeScript 检查、107 项单测、113 项端到端检查、安装包烟测和 19 项 MVP
-> 验收全部通过；在干净目录首次运行和恶意样例退出码 `1` 也已验证。npm
-> 账号已启用 2FA，Trusted Publisher 已绑定 `juangh123/AgentWarden` 的
-> `release.yml`，后续 tag 可通过 GitHub OIDC 自动发布 provenance。
+> GitHub Action 已发布到
+> [GitHub Marketplace](https://github.com/marketplace/actions/agentwarden-security-gate)，
+> `npx agentwarden-cli@0.3.2` 也可用。本地发布门禁已复核：TypeScript 检查、
+> 107 项单测、113 项端到端检查、安装包烟测和 19 项 MVP 验收全部通过；
+> 在干净目录首次运行和恶意样例退出码 `1` 也已验证。npm 账号已启用 2FA，
+> Trusted Publisher 已绑定 `juangh123/AgentWarden` 的 `release.yml`，后续
+> tag 可通过 GitHub OIDC 自动发布 provenance。
 >
 > 如需绕过 npm，仍可从 GitHub 固定提交安装：
 > `npm install --global "github:juangh123/AgentWarden#<commit-sha>"`。安装过程中会执行 `prepare` 构建 `dist/`，因此 `warden` / `agentwarden` 等命令可直接使用。
@@ -117,10 +119,10 @@ gh repo edit juangh123/AgentWarden \
 - `main` 已保护：8 项 CI 检查必须通过，禁止 force push 和删除
 - Dependabot security updates 与 secret scanning push protection 已启用
 - `v0.3.2` GitHub Release 已创建，并附带 tarball 与 `SHA256SUMS`
+- GitHub Action 已发布为 `AgentWarden Security Gate`，主分类为 `Security`
 
-当前仍需在 GitHub Web UI 完成 Action Marketplace 发布确认。`action.yml`
-元数据、品牌信息和版本 Release 已就绪，Marketplace 页面在发布确认前会返回
-404。
+仓库侧冷启动已无阻塞。接下来是首发内容分发、收集真实工作流反馈，并按周记录
+首批指标。
 
 ## 首发内容
 
@@ -204,7 +206,8 @@ North-star 指标不是 star 数，而是“成功执行扫描并接入第二次
 仓库无法代替账号侧操作：
 
 - npm 账号登录或 npm Trusted Publisher 配置
-- GitHub Discussions、branch protection 和 Marketplace 发布确认
+- GitHub Discussions、branch protection 和 Marketplace 后续版本维护
 - 社区帖子发布与评论维护
 
-在这些外部步骤完成前，仓库、Release workflow、发布文稿和验证入口都可以保持就绪。
+仓库内的 Release workflow、发布文稿和验证入口已保持就绪；上述账号侧维护与
+社区分发仍需维护者持续参与。

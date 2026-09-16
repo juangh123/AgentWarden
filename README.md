@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/agentwarden-cli.svg)](https://www.npmjs.com/package/agentwarden-cli)
 [![node](https://img.shields.io/node/v/agentwarden-cli.svg)](https://www.npmjs.com/package/agentwarden-cli)
 [![license](https://img.shields.io/github/license/juangh123/AgentWarden.svg)](LICENSE)
-[![GitHub Action](https://img.shields.io/badge/GitHub%20Action-AgentWarden-blue.svg)](docs/github-action.md)
+[![GitHub Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-AgentWarden-blue.svg)](https://github.com/marketplace/actions/agentwarden-security-gate)
 
 > **Scan, verify, lock, and gate AI agent skills before they reach an agent.**
 
@@ -75,6 +75,9 @@ npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md  # exits 1
 
 ### GitHub Action
 
+可直接从 [GitHub Marketplace](https://github.com/marketplace/actions/agentwarden-security-gate)
+安装，也可以在工作流中显式引用：
+
 ```yaml
 - uses: actions/checkout@v7
 - uses: juangh123/AgentWarden@v0.3.2
@@ -84,7 +87,7 @@ npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md  # exits 1
     config: .agentwarden/policy.json
 ```
 
-完整示例与 SARIF 上传见 [GitHub Action 指南](docs/github-action.md)。
+完整示例、Marketplace 入口与 SARIF 上传见 [GitHub Action 指南](docs/github-action.md)。
 Action 直接从版本标签运行仓库源码，不需要先发布 npm 包。
 
 ---
