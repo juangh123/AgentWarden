@@ -175,7 +175,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 渠道 | 公开账号 | 当前状态 | 下一门槛 |
 | :--- | :--- | :--- | :--- |
 | DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料；2026-09-19 发布英文长帖，公开主页现有 1 篇文章 | 监控阅读、收藏、评论和转发；收到技术问题时由维护者本人回复 |
-| Discord | `agentwarden_cli` | 2026-09-20 已加入 MCP Contributor Discord 并完成规则确认；已加入 Model Context Protocol 社区，等待 MEE6 人机验证；OpenAI 验证受地区限制不可用 | 完成 MEE6 验证后阅读剩余频道规则；只参与讨论，不群发私信或立即贴链接 |
+| Discord | `agentwarden_cli` | 2026-09-20 已加入 MCP Contributor Discord 并完成规则确认；已加入 Model Context Protocol 社区并通过 MEE6 验证；OpenAI 验证受地区限制不可用 | MCP Contributor 只由维护者本人参与，不发送 AI 生成内容；Model Context Protocol `showcase` 草稿已准备，发布前等待维护者最终确认 |
 | Hacker News | `agentwarden` | 已注册，about 已完善；HN 当前临时限制 `Show HN` | 停止尝试提交，转为阅读和参与相关讨论；等限制解除后再按[事实清单](launch-hacker-news.md)准备 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
 | 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
@@ -188,7 +188,11 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | :--- | :--- | :--- | :--- |
 | 1 | OpenAI 官方社区 | https://discord.gg/openai | 已在服务器列表中，但账号验证返回 `unsupported_country_region_territory`，当前不可参与 |
 | 2 | MCP Contributor Discord | https://discord.gg/6CSzBmMkjX | 已加入并完成 onboarding。只参与 Security IG、Skills over MCP 或工具链讨论；服务器禁止 AI 生成消息和产品营销 |
-| 3 | Model Context Protocol 社区 | https://discord.com/invite/model-context-protocol-1312302100125843476 | 已加入，等待维护者本人完成 MEE6 人机验证；验证通过后再阅读规则和频道主题 |
+| 3 | Model Context Protocol 社区 | https://discord.com/invite/model-context-protocol-1312302100125843476 | 已加入并通过 MEE6 验证；`showcase` 允许展示 MCP 相关项目，规则为“一个项目一个主题”；AgentWarden 草稿已准备，使用 `Security`、`CLI` 标签，尚未发布 |
+
+`showcase` 当前可用标签为 `Server`、`Client`、`Security`、`WebMCP`、`CLI`、
+`Library`、`Experiment`。发布前检查标题、正文、标签和链接，但不把草稿状态
+记为已发布；只有维护者本人明确确认后才能点击“发帖”。
 
 不要把同一帖文在多个社区同时投放。公开帖子、评论、私信和主动邀请在提交前
 都需要维护者本人确认；不请求点赞、评论或转发。
