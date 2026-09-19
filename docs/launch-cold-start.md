@@ -174,7 +174,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 
 | 渠道 | 公开账号 | 当前状态 | 下一门槛 |
 | :--- | :--- | :--- | :--- |
-| DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料，公开主页已可访问，尚无文章 | 审核 [DEV 英文长帖](launch-dev.md)和[英文封面](assets/dev-cover.png)后由维护者发布 |
+| DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料；2026-09-19 发布英文长帖，公开主页现有 1 篇文章 | 监控阅读、收藏、评论和转发；收到技术问题时由维护者本人回复 |
 | Discord | `agentwarden_cli` | 已注册 | 只加入 2 至 3 个 MCP、AI Agent 或 DevSecOps 社区；先参与讨论，不群发私信或立即贴链接 |
 | Hacker News | `agentwarden` | 已注册，about 已完善；HN 当前临时限制 `Show HN` | 停止尝试提交，转为阅读和参与相关讨论；等限制解除后再按[事实清单](launch-hacker-news.md)准备 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
@@ -193,6 +193,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | :--- | :--- | :--- | :--- |
 | 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；9 月 19 日为阅读 12、点赞 1、收藏 1、评论 0 |
+| 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
 
 ### 开源目录收录 PR
 
@@ -255,7 +256,7 @@ North-star 指标不是 star 数，而是“成功执行扫描并接入第二次
 | Open Issues | 0 |
 | GitHub Release 资产下载 | 0 |
 | npm weekly downloads | 13（2026-09-12 至 2026-09-18） |
-| DEV 主页 | 公开可访问；0 篇文章 |
+| DEV 主页 | 公开可访问；1 篇文章 |
 | Reddit `r/mcp` | 公开可见；RSS 显示 0 条评论 |
 | 掘金文章 | 阅读 12 / 点赞 1 / 收藏 1 / 评论 0 |
 | Hacker News | 0 submissions / 0 comments；站点临时限制 `Show HN`，暂停提交 |
