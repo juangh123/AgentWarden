@@ -174,9 +174,9 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 
 | 渠道 | 公开账号 | 当前状态 | 下一门槛 |
 | :--- | :--- | :--- | :--- |
-| DEV | `agentwarden` | 已注册，简介、网站和 GitHub 链接已填写 | 完成邮箱验证或 onboarding，主页可访问后再准备首帖 |
+| DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料，公开主页已可访问，尚无文章 | 在 HN 首发之后准备 DEV 英文技术文章，由维护者本人复核并发布 |
 | Discord | `agentwarden_cli` | 已注册 | 只加入 2 至 3 个 MCP、AI Agent 或 DevSecOps 社区；先参与讨论，不群发私信或立即贴链接 |
-| Hacker News | `agentwarden` | 已注册，about 已完善 | 2026-09-17 20:55（UTC+8）后准备 `Show HN`；正文和评论由维护者本人撰写 |
+| Hacker News | `agentwarden` | 已注册，about 已完善，静置期已结束 | 按[事实清单](launch-hacker-news.md)由维护者本人撰写并发布 `Show HN`；不直接粘贴生成文本 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
 | 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
 | V2EX | 待注册 | 注册页匿名请求返回 `403` | 在浏览器人工确认注册资格和邀请要求；在账号可用前暂缓 |
@@ -192,7 +192,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 日期 | 渠道 | 内容 | 状态 |
 | :--- | :--- | :--- | :--- |
 | 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
-| 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；初始阅读 1，点赞、收藏、评论均为 0 |
+| 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；9 月 19 日为阅读 12、点赞 1、收藏 1、评论 0 |
 
 不要因为 Reddit 用户名与产品名不一致而创建重复账号。优先在现有账号的个人简介、
 头像和后续正常参与中建立身份连续性。
@@ -235,6 +235,23 @@ North-star 指标不是 star 数，而是“成功执行扫描并接入第二次
 | npm downloads | registry 尚未返回下载统计 |
 
 该快照用于后续周度对比，不把短期互动量作为核心成功指标。
+
+### 2026-09-19 快照
+
+| 指标 | 当前值 |
+| :--- | :--- |
+| Stars / Watchers / Forks | 0 / 0 / 0 |
+| Open Issues | 0 |
+| GitHub Release 资产下载 | 0 |
+| npm weekly downloads | 13（2026-09-12 至 2026-09-18） |
+| DEV 主页 | 公开可访问；0 篇文章 |
+| Reddit `r/mcp` | 公开可见；RSS 显示 0 条评论 |
+| 掘金文章 | 阅读 12 / 点赞 1 / 收藏 1 / 评论 0 |
+| Hacker News | 0 submissions / 0 comments；静置期已结束 |
+
+第一周的主要信号是 npm 出现自然安装，以及掘金至少产生一次点赞和一次收藏。
+GitHub Star、Fork 和 Release 下载仍未形成，下一阶段应继续争取可复现的
+workflow 反馈，而不是追求一次性流量。
 
 ## 发布后 14 天
 
