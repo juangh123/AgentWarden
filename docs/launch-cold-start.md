@@ -194,6 +194,17 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；9 月 19 日为阅读 12、点赞 1、收藏 1、评论 0 |
 
+### 开源目录收录 PR
+
+| 日期 | 目录 | 收录项 | 状态 |
+| :--- | :--- | :--- | :--- |
+| 2026-09-19 | [Awesome MCP Security](https://github.com/Puliczek/awesome-mcp-security) | [Tools and code](https://github.com/Puliczek/awesome-mcp-security/pull/334) | PR #334 开放；提交内容可合并，等待维护者审核 |
+| 2026-09-19 | [Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools) | [Testing Tools](https://github.com/punkpeye/awesome-mcp-devtools/pull/338) | PR #338 开放；提交内容可合并，等待维护者确认分类和收录 |
+| 2026-09-19 | [Awesome Agent Skills Security](https://github.com/LLMSecurity/awesome-agent-skills-security) | [Tools & Frameworks](https://github.com/LLMSecurity/awesome-agent-skills-security/pull/67) | PR #67 开放；提交内容可合并，满足近六个月有提交的工具收录条件 |
+
+每条收录只提交一次，不催审、不要求点赞或转发。维护者提出格式、分类或事实修正时，
+优先在原 PR 中处理；PR 合并后再按目录影响力评估是否需要补充发布记录。
+
 不要因为 Reddit 用户名与产品名不一致而创建重复账号。优先在现有账号的个人简介、
 头像和后续正常参与中建立身份连续性。
 
