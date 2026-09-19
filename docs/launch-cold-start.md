@@ -175,12 +175,20 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 渠道 | 公开账号 | 当前状态 | 下一门槛 |
 | :--- | :--- | :--- | :--- |
 | DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料；2026-09-19 发布英文长帖，公开主页现有 1 篇文章 | 监控阅读、收藏、评论和转发；收到技术问题时由维护者本人回复 |
-| Discord | `agentwarden_cli` | 已注册 | 只加入 2 至 3 个 MCP、AI Agent 或 DevSecOps 社区；先参与讨论，不群发私信或立即贴链接 |
+| Discord | `agentwarden_cli` | 已注册；2026-09-20 筛选出 3 个候选社区，浏览器登录后才能加入 | 先加入 2 个最相关的社区并完成服务器验证；参与讨论，不群发私信或立即贴链接 |
 | Hacker News | `agentwarden` | 已注册，about 已完善；HN 当前临时限制 `Show HN` | 停止尝试提交，转为阅读和参与相关讨论；等限制解除后再按[事实清单](launch-hacker-news.md)准备 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
 | 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
 | V2EX | 待注册 | 注册页匿名请求返回 `403` | 在浏览器人工确认注册资格和邀请要求；在账号可用前暂缓 |
 | 即刻 | 待注册 | 未注册，优先级低于掘金 | 掘金账号可用后再推进，按移动端社区习惯参与 |
+
+### Discord 目标社区
+
+| 优先级 | 社区 | 入口 | 参与边界 |
+| :--- | :--- | :--- | :--- |
+| 1 | OpenAI 官方社区 | https://discord.gg/openai | 面向 ChatGPT、Codex 和 OpenAI 开发者；先阅读频道规则，在 Agent、Codex 或工具讨论中提供具体帮助，规则允许后再提项目 |
+| 2 | MCP Contributor Discord | https://discord.gg/6CSzBmMkjX | MCP 官方贡献者服务器；只参与 Security IG、Skills over MCP 或工具链讨论。官方明确不以一般支持为目标，并反对产品营销 |
+| 3 | Model Context Protocol 社区 | https://discord.com/invite/model-context-protocol-1312302100125843476 | 非官方 MCP 生态社区，成员约 1.4 万；登录后先核对服务器规则、频道主题和管理员身份，再决定是否保留 |
 
 不要把同一帖文在多个社区同时投放。公开帖子、评论、私信和主动邀请在提交前
 都需要维护者本人确认；不请求点赞、评论或转发。
