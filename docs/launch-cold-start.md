@@ -175,7 +175,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 渠道 | 公开账号 | 当前状态 | 下一门槛 |
 | :--- | :--- | :--- | :--- |
 | DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料；2026-09-19 发布英文长帖，公开主页现有 1 篇文章 | 监控阅读、收藏、评论和转发；收到技术问题时由维护者本人回复 |
-| Discord | `agentwarden_cli` | 2026-09-20 已加入 MCP Contributor Discord 并完成规则确认；已加入 Model Context Protocol 社区并通过 MEE6 验证；OpenAI 验证受地区限制不可用 | MCP Contributor 只由维护者本人参与，不发送 AI 生成内容；Model Context Protocol `showcase` 草稿已准备，发布前等待维护者最终确认 |
+| Discord | `agentwarden_cli` | 2026-09-20 已加入 MCP Contributor Discord 并完成规则确认；已加入 Model Context Protocol 社区并通过 MEE6 验证；已在 `showcase` 发布项目主题；OpenAI 验证受地区限制不可用 | MCP Contributor 只由维护者本人参与，不发送 AI 生成内容；监控 `showcase` 回复，不重复发帖 |
 | Hacker News | `agentwarden` | 已注册，about 已完善；HN 当前临时限制 `Show HN` | 停止尝试提交，转为阅读和参与相关讨论；等限制解除后再按[事实清单](launch-hacker-news.md)准备 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
 | 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
@@ -188,11 +188,11 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | :--- | :--- | :--- | :--- |
 | 1 | OpenAI 官方社区 | https://discord.gg/openai | 已在服务器列表中，但账号验证返回 `unsupported_country_region_territory`，当前不可参与 |
 | 2 | MCP Contributor Discord | https://discord.gg/6CSzBmMkjX | 已加入并完成 onboarding。只参与 Security IG、Skills over MCP 或工具链讨论；服务器禁止 AI 生成消息和产品营销 |
-| 3 | Model Context Protocol 社区 | https://discord.com/invite/model-context-protocol-1312302100125843476 | 已加入并通过 MEE6 验证；`showcase` 允许展示 MCP 相关项目，规则为“一个项目一个主题”；AgentWarden 草稿已准备，使用 `Security`、`CLI` 标签，尚未发布 |
+| 3 | Model Context Protocol 社区 | https://discord.com/invite/model-context-protocol-1312302100125843476 | 已加入并通过 MEE6 验证；2026-09-20 在 `showcase` 发布 [AgentWarden](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072)，使用 `Security`、`CLI` 标签，当前 0 条消息 |
 
 `showcase` 当前可用标签为 `Server`、`Client`、`Security`、`WebMCP`、`CLI`、
-`Library`、`Experiment`。发布前检查标题、正文、标签和链接，但不把草稿状态
-记为已发布；只有维护者本人明确确认后才能点击“发帖”。
+`Library`、`Experiment`。本次发布使用 `Security` 和 `CLI`。每个项目只保留
+一个主题；后续补充分享时更新原主题，不重复发帖。
 
 不要把同一帖文在多个社区同时投放。公开帖子、评论、私信和主动邀请在提交前
 都需要维护者本人确认；不请求点赞、评论或转发。
@@ -206,6 +206,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；9 月 19 日为阅读 12、点赞 1、收藏 1、评论 0 |
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
+| 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；等待真实评论和反馈 |
 
 ### 开源目录收录 PR
 
