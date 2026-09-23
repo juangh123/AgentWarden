@@ -5,3 +5,4 @@ coverage/
 .skillguard/
 .agentwarden/
 npm-debug.log*
+/.playwright-cli/
