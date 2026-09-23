@@ -1,7 +1,7 @@
 {
   "name": "agentwarden-cli",
   "version": "0.3.2",
-  "description": "Zero-dependency Security Warden, Supply-Chain Linter & Integrity Manager for AI Agent Skills",
+  "description": "Zero-dependency static security gate, integrity lock and provenance SBOM for AI Agent Skills and MCP configurations",
   "author": "juangh123",
   "homepage": "https://github.com/juangh123/AgentWarden#readme",
   "repository": {
@@ -30,11 +30,14 @@
   "license": "MIT",
   "keywords": [
     "ai-agent",
+    "agent-skills",
     "skills",
     "mcp",
     "mcp-security",
     "security",
     "ai-security",
+    "llm-security",
+    "ai-agent-security",
     "supply-chain-security",
     "audit",
     "prompt-injection",
@@ -42,7 +45,10 @@
     "cli",
     "supply-chain",
     "sbom",
-    "cyclonedx"
+    "cyclonedx",
+    "claude-code",
+    "codex",
+    "cursor"
   ],
   "publishConfig": {
     "access": "public",
