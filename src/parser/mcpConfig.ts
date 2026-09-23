@@ -55,7 +55,7 @@ export function extractMcpServersObject(value: unknown): McpServersObject | unde
     ['devcontainer', devContainerMcp?.servers],
   ];
 
-  const merged: McpServersObject = {};
+  const merged: McpServersObject = Object.create(null);
   let foundServerMap = false;
   for (const [scope, candidate] of candidates) {
     if (!isPlainObject(candidate)) continue;

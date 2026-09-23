@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { extractMcpServersObject, isMcpConfigFilename } from '../parser/mcpConfig.ts';
+import { hasMcpServersContainer, isMcpConfigFilename } from '../parser/mcpConfig.ts';
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown']);
 
@@ -82,19 +82,19 @@ function isIncluded(filePath: string, cwd: string, options: DiscoveryOptions): b
   return matchesAnyGlob(filePath, cwd, include);
 }
 
-function containsMcpServers(content: string): boolean {
+function declaresMcpServers(content: string): boolean {
   if (!/"(?:mcpServers|servers|mcp|context_servers|customizations)"\s*:/.test(content)) return false;
 
   try {
-    return extractMcpServersObject(JSON.parse(content)) !== undefined;
+    return hasMcpServersContainer(JSON.parse(content));
   } catch {
-    return false;
+    return true;
   }
 }
 
 function isMcpJsonCandidate(filePath: string, content: string): boolean {
   if (isMcpConfigFilename(filePath)) return true;
-  return containsMcpServers(content);
+  return declaresMcpServers(content);
 }
 
 /** Return whether a file is a supported Markdown skill or MCP JSON configuration. */

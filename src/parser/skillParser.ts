@@ -16,6 +16,27 @@ function looksLikeMcpJson(content: string, virtualPath: string): boolean {
   }
 }
 
+function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function toStringRecord(value: unknown): Record<string, string> | undefined {
+  const record = toObjectRecord(value);
+  if (!record) return undefined;
+
+  const output: Record<string, string> = {};
+  for (const [key, child] of Object.entries(record)) {
+    Object.defineProperty(output, key, {
+      value: String(child),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return output;
+}
+
 function parseMcpJson(raw: string, defaultName: string): ParsedSkill {
   let parsed: any;
   try {
@@ -45,12 +66,20 @@ function parseMcpJson(raw: string, defaultName: string): ParsedSkill {
     const command = typeof srv?.command === 'string' ? srv.command : '';
     const args = Array.isArray(srv?.args) ? srv.args.map((a: any) => String(a)) : [];
     const env = (srv?.env && typeof srv.env === 'object') ? srv.env : {};
+    const type = typeof srv?.type === 'string' ? srv.type : undefined;
+    const url = typeof srv?.url === 'string' ? srv.url : undefined;
+    const headers = toStringRecord(srv?.headers);
+    const oauth = toObjectRecord(srv?.oauth);
 
     mcpServers.push({
       name: serverName,
       command,
       args,
       env,
+      ...(type ? { type } : {}),
+      ...(url ? { url } : {}),
+      ...(headers ? { headers } : {}),
+      ...(oauth ? { oauth } : {}),
     });
 
     const snippet = [

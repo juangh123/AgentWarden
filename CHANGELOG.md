@@ -8,6 +8,8 @@ versioning.
 
 ### Added
 
+- Added `SEC-MCP-004` to flag insecure remote MCP endpoints, and expanded
+  `SEC-MCP-002` to cover hardcoded credentials in remote server headers.
 - Expanded MCP configuration discovery to recognize common Cursor, VS Code,
   Copilot, Windsurf, Cline, Roo Code, Continue, Zed, Gemini, Qwen, and Dev
   Container locations, including `mcp.servers`, `context_servers`, and
@@ -19,6 +21,12 @@ versioning.
 
 ### Changed
 
+- Hardened MCP parsing and detection against reserved server names, absolute
+  command paths, scoped or tagged packages, malformed discovered configs, and
+  remote transport fields.
+- Made atomic replacement restore the previous file if a Windows replacement
+  fails, corrected supply-chain finding line numbers, and aligned SARIF schema
+  and artifact URI encoding with the specification.
 - CI and the release workflow now enforce the MVP packaging gate. Releases
   publish the exact tarball that passed verification and attach the tarball and
   checksum to the GitHub Release.

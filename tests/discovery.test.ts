@@ -198,6 +198,29 @@ describe('skill and MCP discovery', () => {
     }
   });
 
+  it('fails closed when discovery finds a declared but malformed MCP map', () => {
+    const root = tempDir();
+    try {
+      writeFile(root, '.claude.json', JSON.stringify({ mcpServers: [] }));
+      writeFile(root, '.gemini/settings.json', JSON.stringify({ mcpServers: null }));
+      writeFile(root, 'configs/broken.json', '{"mcpServers": {');
+
+      const results = scanSkillPaths(root);
+
+      assert.deepEqual(
+        results.map((result) => path.relative(root, result.filePath).replace(/\\/g, '/')),
+        ['.claude.json', '.gemini/settings.json', 'configs/broken.json'],
+      );
+      assert.ok(results.every((result) => result.parsedSkill.kind === 'mcp'));
+      assert.ok(results.every((result) => result.parsedSkill.parseError));
+      assert.ok(results.every((result) =>
+        result.findings.some((finding) => finding.ruleId === 'SEC-MCP-003')));
+      assert.ok(results.every((result) => !result.passed));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('applies include and exclude globs to directory discovery and SDK scans', () => {
     const root = tempDir();
     try {

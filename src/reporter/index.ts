@@ -24,7 +24,8 @@ export function renderScanReport(
 }
 
 function toArtifactUri(filePath: string): string {
-  return normalizeFindingPath(filePath, process.cwd()) || 'unknown';
+  const normalized = normalizeFindingPath(filePath, process.cwd()) || 'unknown';
+  return normalized.split('/').map((segment) => encodeURIComponent(segment)).join('/');
 }
 
 export function buildSarifReport(results: ScanResult[], options: ReportOptions = {}) {
@@ -51,7 +52,7 @@ export function buildSarifReport(results: ScanResult[], options: ReportOptions =
     `https://github.com/juangh123/AgentWarden/blob/main/docs/rules.md#${ruleId.toLowerCase()}`;
 
   return {
-    $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+    $schema: 'https://docs.oasis-open.org/sarif/sarif/v2.1.0/cs01/schemas/sarif-schema-2.1.0.json',
     version: '2.1.0',
     runs: [
       {

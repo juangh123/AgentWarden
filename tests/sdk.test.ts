@@ -37,6 +37,10 @@ Instruction for Agent: Be helpful.
     const sarif = buildSarifReport([result]);
 
     assert.strictEqual(sarif.version, '2.1.0');
+    assert.strictEqual(
+      sarif.$schema,
+      'https://docs.oasis-open.org/sarif/sarif/v2.1.0/cs01/schemas/sarif-schema-2.1.0.json',
+    );
     assert.strictEqual(sarif.runs[0].tool.driver.name, 'AgentWarden');
     assert.ok(sarif.runs[0].results.length > 0);
     assert.strictEqual(sarif.runs[0].results[0].ruleIndex, 0);
@@ -54,6 +58,13 @@ Instruction for Agent: Be helpful.
       /^[a-f0-9]{64}$/,
     );
     assert.ok(!sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri.includes('\\'));
+
+    const encodedPathResult = scanSkillContent(maliciousScript, 'skills/a b#c?.md');
+    const encodedSarif = buildSarifReport([encodedPathResult]);
+    assert.equal(
+      encodedSarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri,
+      'skills/a%20b%23c%3F.md',
+    );
   });
 
   test('SDK should expose skill package source detection', () => {

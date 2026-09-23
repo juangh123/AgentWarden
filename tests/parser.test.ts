@@ -125,6 +125,42 @@ describe('skillParser', () => {
     assert.equal(parsed.parseError, undefined);
   });
 
+  it('preserves remote MCP transport, URL, headers, and OAuth settings', () => {
+    const parsed = parseSkillMarkdown(JSON.stringify({
+      mcpServers: {
+        remote: {
+          type: 'streamable-http',
+          url: 'https://mcp.example.com/mcp',
+          headers: {
+            'X-API-Key': '${MCP_API_KEY}',
+          },
+          oauth: {
+            clientId: 'public-client',
+            scopes: ['tools.read'],
+          },
+        },
+      },
+    }), '.mcp.json');
+
+    assert.deepEqual(parsed.mcpServers, [
+      {
+        name: 'remote',
+        command: '',
+        args: [],
+        env: {},
+        type: 'streamable-http',
+        url: 'https://mcp.example.com/mcp',
+        headers: {
+          'X-API-Key': '${MCP_API_KEY}',
+        },
+        oauth: {
+          clientId: 'public-client',
+          scopes: ['tools.read'],
+        },
+      },
+    ]);
+  });
+
   it('fails closed when a known MCP config file has no server map', () => {
     const parsed = parseSkillMarkdown('{}', '.mcp.json');
 

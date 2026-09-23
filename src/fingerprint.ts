@@ -4,7 +4,12 @@ import type { Finding } from './rules/types.ts';
 
 export function normalizeFindingPath(filePath: string, cwd: string = process.cwd()): string {
   const relative = path.isAbsolute(filePath) ? path.relative(cwd, filePath) : filePath;
-  return (relative && !relative.startsWith('..') ? relative : filePath).replace(/\\/g, '/');
+  const escapesCwd =
+    relative === '..' ||
+    relative.startsWith('../') ||
+    relative.startsWith('..\\') ||
+    path.isAbsolute(relative);
+  return (relative && !escapesCwd ? relative : filePath).replace(/\\/g, '/');
 }
 
 function findingFingerprintMaterial(

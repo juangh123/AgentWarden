@@ -38,6 +38,104 @@ describe('Phase 2: MCP & Supply Chain Security Rules', () => {
     assert.ok(envFinding, 'Expected SEC-MCP-002 finding for leaking secrets in env');
   });
 
+  test('should not lose MCP servers named __proto__', () => {
+    const result = scanSkillContent(
+      '{"mcpServers":{"__proto__":{"command":"npx","args":["evil-unpinned"]}}}',
+      '.mcp.json',
+    );
+
+    assert.equal(result.parsedSkill.mcpServers?.length, 1);
+    assert.ok(result.findings.some((finding) => finding.ruleId === 'SEC-MCP-001'));
+    assert.equal(result.passed, false);
+  });
+
+  test('should detect dangerous MCP commands referenced by absolute path', () => {
+    const commands = [
+      ['/bin/bash', ['-c', 'id']],
+      ['/usr/bin/curl', ['https://example.com']],
+      ['C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ['-Command', 'id']],
+    ];
+
+    for (const [command, args] of commands) {
+      const result = scanSkillContent(JSON.stringify({
+        mcpServers: {
+          absolutePathRunner: { command, args },
+        },
+      }), '.mcp.json');
+
+      assert.ok(
+        result.findings.some((finding) => finding.ruleId === 'SEC-MCP-001'),
+        `Expected SEC-MCP-001 for ${command}`,
+      );
+    }
+  });
+
+  test('should distinguish exact package pins from scoped packages and tags', () => {
+    const unpinned = [
+      ['npx', ['@scope/pkg']],
+      ['npx', ['-y', '@scope/pkg']],
+      ['npx', ['pkg@latest']],
+      ['bunx', ['pkg@next']],
+      ['uvx', ['@scope/pkg']],
+    ];
+    const pinned = [
+      ['npx', ['@scope/pkg@1.2.3']],
+      ['npx', ['pkg@1.2.3']],
+      ['bunx', ['pkg@1.2.3-beta.1']],
+      ['uvx', ['pkg==1.2.3']],
+      ['npx', ['--package', 'pkg@1.2.3']],
+    ];
+
+    for (const [command, args] of unpinned) {
+      const result = scanSkillContent(JSON.stringify({
+        mcpServers: { runner: { command, args } },
+      }), '.mcp.json');
+      assert.ok(
+        result.findings.some((finding) => finding.ruleId === 'SEC-MCP-001'),
+        `Expected unpinned package finding for ${command} ${args.join(' ')}`,
+      );
+    }
+
+    for (const [command, args] of pinned) {
+      const result = scanSkillContent(JSON.stringify({
+        mcpServers: { runner: { command, args } },
+      }), '.mcp.json');
+      assert.ok(
+        !result.findings.some((finding) => finding.ruleId === 'SEC-MCP-001'),
+        `Did not expect SEC-MCP-001 for ${command} ${args.join(' ')}`,
+      );
+    }
+  });
+
+  test('should scan remote MCP URLs and hardcoded authorization headers', () => {
+    const result = scanSkillContent(JSON.stringify({
+      mcpServers: {
+        remote: {
+          type: 'streamable-http',
+          url: 'http://mcp.example.com/mcp',
+          headers: {
+            Authorization: 'Bearer hardcoded-secret-value',
+          },
+          oauth: {
+            clientId: 'hardcoded-client',
+          },
+        },
+      },
+    }), '.mcp.json');
+
+    assert.equal(result.parsedSkill.mcpServers?.[0].type, 'streamable-http');
+    assert.equal(result.parsedSkill.mcpServers?.[0].url, 'http://mcp.example.com/mcp');
+    assert.equal(
+      result.parsedSkill.mcpServers?.[0].headers?.Authorization,
+      'Bearer hardcoded-secret-value',
+    );
+    assert.deepEqual(result.parsedSkill.mcpServers?.[0].oauth, {
+      clientId: 'hardcoded-client',
+    });
+    assert.ok(result.findings.some((finding) => finding.ruleId === 'SEC-MCP-002'));
+    assert.ok(result.findings.some((finding) => finding.ruleId === 'SEC-MCP-004'));
+  });
+
   test('should scan Zed context_servers entries through the MCP rules', () => {
     const result = scanSkillContent(JSON.stringify({
       context_servers: {
