@@ -27,7 +27,7 @@ export const supplyChainRules: Rule[] = [
                 category: 'destructive_command',
                 severity: 'high',
                 description: `Piping remote web content directly to interpreter without hash verification: "${line.trim()}"`,
-                line: block.startLine + idx,
+                line: block.startLine + 1 + idx,
                 snippet: line.trim(),
                 suggestion: 'Download, inspect, and verify SHA-256 before executing remote scripts.',
               });
@@ -64,7 +64,7 @@ export const supplyChainRules: Rule[] = [
                 category: 'exfiltration',
                 severity: 'medium',
                 description: `Potential typosquatting URL detected: "${line.trim()}"`,
-                line: block.startLine + idx,
+                line: block.startLine + 1 + idx,
                 snippet: line.trim(),
                 suggestion: 'Replace with official endpoints (github.com, raw.githubusercontent.com, registry.npmjs.org).',
               });

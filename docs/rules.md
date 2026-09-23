@@ -1,6 +1,6 @@
 # Security Rule Catalog
 
-AgentWarden ships 17 static analysis rules across credential access, destructive
+AgentWarden ships 18 static analysis rules across credential access, destructive
 commands, prompt injection, data exfiltration, MCP configuration, and supply
 chain risk. Use `agentwarden rules --json` for the effective severity after
 policy overrides.
@@ -22,6 +22,7 @@ policy overrides.
 | `SEC-MCP-003` | MCP misconfiguration | High |
 | `SEC-MCP-001` | MCP misconfiguration | Critical |
 | `SEC-MCP-002` | MCP misconfiguration | High |
+| `SEC-MCP-004` | MCP misconfiguration | High |
 | `SEC-SUPPLY-001` | Supply chain | High |
 | `SEC-SUPPLY-002` | Supply chain | Medium |
 
@@ -167,12 +168,23 @@ and integrity source.
 
 ## SEC-MCP-002
 
-**MCP Server Hardcoded Plaintext Secrets in Environment**
+**MCP Server Hardcoded Plaintext Secrets**
 
-Detects credentials committed directly inside an MCP server `env` object.
+Detects credentials committed directly inside an MCP server `env` or `headers`
+object.
 
 **Remediation:** Keep secret values out of repository configuration and inject
-them through the runtime environment.
+them through the runtime environment or a secret manager.
+
+## SEC-MCP-004
+
+**Insecure Remote MCP Endpoint**
+
+Detects remote MCP servers that use HTTP, malformed URLs, or credentials
+embedded directly in the endpoint URL.
+
+**Remediation:** Use a valid HTTPS endpoint and keep credentials in runtime
+environment variables or a secret manager.
 
 ## SEC-SUPPLY-001
 

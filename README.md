@@ -521,8 +521,9 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 | `SEC-EXFIL-001` | 网络安全 | CRITICAL | 异常数据外带或反弹连接尝试 |
 | `SEC-EXFIL-002` | 网络安全 | HIGH | 数据收集端点（webhook.site 等）或本地文件上传外带 |
 | `SEC-MCP-001` | MCP 配置 | CRITICAL | MCP Server 使用原始 shell、下载器或未固定版本包运行 |
-| `SEC-MCP-002` | MCP 配置 | HIGH | MCP 配置在 `env` 中硬编码明文密钥 |
+| `SEC-MCP-002` | MCP 配置 | HIGH | MCP 配置在 `env` 或 `headers` 中硬编码明文密钥 |
 | `SEC-MCP-003` | MCP 配置 | HIGH | MCP JSON 无法解析或缺少有效 Server 映射 |
+| `SEC-MCP-004` | MCP 配置 | HIGH | 远程 MCP 使用 HTTP、无效 URL 或 URL 内嵌凭据 |
 | `SEC-SUPPLY-001` | 供应链 | HIGH | 未校验哈希便下载并执行远程脚本 |
 | `SEC-SUPPLY-002` | 供应链 | MEDIUM | 指向仿冒官方仓库或下载源的相似域名 |
 
