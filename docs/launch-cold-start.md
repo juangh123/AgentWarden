@@ -317,6 +317,12 @@ workflow 反馈，而不是追求一次性流量。
    - **跟进剩余 2 个 Awesome PR**：持续关注 `awesome-mcp-security` #334 与 `awesome-mcp-devtools` #338 的合并动态。
    - **真实工作流接入案例**：针对实际场景（如 Claude Code / Cursor / Codex Skill 工具链或本地 MCP 网关）产出最小验证示例，推动首个外部仓库接入 GitHub Action 门禁。
 
+同日完成首轮产品迭代，回应最常见的“配置格式是否覆盖”问题：
+
+- PR #44 增加 Cursor、VS Code、Copilot、Windsurf、Cline、Roo Code、Continue、Zed、Gemini、Qwen 和 Dev Container 的常见 MCP 配置位置，并支持 `mcp.servers`、`context_servers`、`customizations.vscode.mcp.servers`。
+- PR #45 增加 Claude Code `~/.claude.json` 的用户级 `mcpServers` 与项目级 `projects.*.mcpServers` 扫描，并对同名 Server 保留独立条目。
+- 两项改动均只扩展静态 JSON 发现与解析边界，不改变“不执行目标 Skill 或 MCP Server”的能力边界。
+
 ## 发布后 14 天
 
 - 48 小时内修复安装失败、版本输出和 README 路径问题
