@@ -323,6 +323,14 @@ workflow 反馈，而不是追求一次性流量。
 - PR #45 增加 Claude Code `~/.claude.json` 的用户级 `mcpServers` 与项目级 `projects.*.mcpServers` 扫描，并对同名 Server 保留独立条目。
 - 两项改动均只扩展静态 JSON 发现与解析边界，不改变“不执行目标 Skill 或 MCP Server”的能力边界。
 
+同日继续完成第二轮扫描与发布链路加固：
+
+- PR #46 修正 `--profile` 帮助文本与 profile 默认值说明，并增加 smoke 回归，避免文档与 CLI 行为再次漂移。
+- PR #47 修复 MCP Server 名为 `__proto__` 时被解析器丢弃、绝对路径 shell/downloader 绕过、scoped 包与 `@latest` 被误判为已固定版本，以及畸形 `.claude.json` 在目录扫描中 fail-open 的问题。
+- PR #47 新增 `SEC-MCP-004`，检查远程 MCP 的 HTTP、无效 URL 和 URL 内嵌凭据；`SEC-MCP-002` 同时覆盖 `headers` 中的明文秘密。
+- PR #47 还修复 Windows 原子替换失败时可能丢失旧文件、供应链规则行号偏移、SARIF schema 失效和 artifact URI 未编码的问题。
+- 上述修复通过 124 项单元测试、114/114 端到端烟测、包安装烟测、19/19 MVP 打包验收，以及 Linux、Windows、macOS 三平台 CI。
+
 ## 发布后 14 天
 
 - 48 小时内修复安装失败、版本输出和 README 路径问题
