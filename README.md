@@ -116,6 +116,23 @@ Action 直接从版本标签运行仓库源码，不需要先发布 npm 包。
 - 🧩 **规则治理**：查看完整规则目录，并按规则覆盖有效严重级别，无需修改源码或直接关闭规则。
 - **一键接入**：`init` 生成可自动发现的策略文件和 GitHub Actions SARIF 门禁，无需手工拼接工作流。
 
+## 🧭 适用边界与相邻方案
+
+AgentWarden 是**静态门禁**，定位在“资产进入 Agent 之前”的那一步。它和以下方案解决的是不同问题，通常需要组合使用：
+
+| 相邻方案 | 它解决的问题 | AgentWarden 的位置 |
+| :--- | :--- | :--- |
+| 运行时沙箱 / 容器隔离（gVisor、容器、系统级 seatbelt 等） | 限制进程在运行时可访问的文件、网络与系统调用 | 不执行目标内容，只做静态读取；无法阻止运行时的越权行为 |
+| 运行时 MCP 代理 / 策略防火墙 | 在工具调用发生时按策略拦截或改写请求 | 不介入运行时流量，拦截点在提交与安装阶段 |
+| 依赖与包扫描（SCA、`npm audit` 等） | 识别 npm / PyPI 等生态依赖中的已知漏洞 | Skill 与 MCP 配置通常不在这些工具的覆盖范围内，两者可以同时接入 CI |
+| LLM 评审或人工 Review | 理解语义意图、判断业务合理性 | 输出确定性规则命中与退出码，适合作为必须通过的自动化门禁 |
+
+明确做不到的事：
+
+- 不执行、不模拟目标 Skill 或 MCP Server，因此无法发现只在运行时才出现的恶意行为。
+- 不承诺覆盖全部攻击面：静态规则会漏报新手法，也会对合法内容产生误报。
+- 不替代最小权限、网络出口限制、隔离运行、代码审查与人工判断。
+
 ## 📖 命令用法
 
 ```bash
@@ -803,6 +820,7 @@ Action 的 `fail-on` 和 `min-score` 默认留空并使用 `profile`；显式设
 - 使用问题、集成经验和 MCP / Skill 格式反馈：前往 [GitHub Discussions](https://github.com/juangh123/AgentWarden/discussions)。
 - 可复现缺陷和误报：使用 [Issue 模板](https://github.com/juangh123/AgentWarden/issues/new/choose)。
 - 安全漏洞：不要公开提交，按 [SECURITY.md](SECURITY.md) 使用私密安全公告。
+- 社区收录：已收录于 [Awesome Agent Skills Security](https://github.com/LLMSecurity/awesome-agent-skills-security) 的 Tools & Frameworks 分类。
 
 最有价值的反馈是可以复现的真实 workflow，包括安装失败、误报、规则绕过、MCP 配置格式缺口和 CI 接入问题。
 
