@@ -179,7 +179,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | Hacker News | `agentwarden` | 已注册，about 已完善；2026-09-23 确认 `Show HN` 限制已解除 | 建议维护者选择能够持续跟进的时段（推荐工作日 20:00 至 22:00 UTC+8）按[事实清单](launch-hacker-news.md)亲自撰写并提交，预留 2 至 3 小时互动 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
 | 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖；2026-09-23 增至 20 阅读、1 点赞、1 收藏 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
-| V2EX | 待注册 | 注册页匿名请求返回 `403` | 在浏览器人工确认注册资格和邀请要求；在账号可用前暂缓 |
+| V2EX | 待发布 | 已就绪[分享创造草稿](launch-v2ex.md)与技术事实清单 | 维护者在浏览器登录可用账号后，按规范在 `create` 节点发布并亲自跟进回复 |
 | 即刻 | 待注册 | 未注册，优先级低于掘金 | 掘金账号可用后再推进，按移动端社区习惯参与 |
 
 ### Discord 目标社区
@@ -215,6 +215,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 2026-09-19 | [Awesome MCP Security](https://github.com/Puliczek/awesome-mcp-security) | [Tools and code](https://github.com/Puliczek/awesome-mcp-security/pull/334) | PR #334 开放；提交内容可合并，等待维护者审核 |
 | 2026-09-19 | [Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools) | [Testing Tools](https://github.com/punkpeye/awesome-mcp-devtools/pull/338) | PR #338 开放；提交内容可合并，等待维护者确认分类和收录 |
 | 2026-09-19 | [Awesome Agent Skills Security](https://github.com/LLMSecurity/awesome-agent-skills-security) | [Tools & Frameworks](https://github.com/LLMSecurity/awesome-agent-skills-security/pull/67) | PR #67 已于 2026-09-20 合并；项目已正式收录至 Tools & Frameworks 分类 |
+| 2026-09-23 | [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [🔒 安全与分析](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) | PR #603 开放；中文核心 MCP 资源精选，分类与表格规范已对齐，等待审核 |
 
 每条收录只提交一次，不催审、不要求点赞或转发。维护者提出格式、分类或事实修正时，
 优先在原 PR 中处理；PR 合并后再按目录影响力评估是否需要补充发布记录。

@@ -12,10 +12,18 @@
 - 主链接：https://github.com/juangh123/AgentWarden
 - 展示对象：仓库本身，不要链接掘金、Reddit 或短帖
 - 建议标题方向：
-  - `Show HN: AgentWarden - static security gate for AI agent skills and MCP configs`
-  - `Show HN: AgentWarden - scan and lock AI agent skills before execution`
+  - `Show HN: AgentWarden – Scan and lock AI agent skills before execution`
+  - `Show HN: AgentWarden – Static security gate and integrity lock for AI skills and MCP configs`
 - 标题必须由维护者重新确认；不要使用“revolutionary”“fully secure”或
   “guaranteed protection”等营销表述。
+
+## 推荐提交方式（HN 经典模式）
+
+1. 在 `news.ycombinator.com/submit` 提交链接：
+   - **title**: `Show HN: AgentWarden – Scan and lock AI agent skills before execution`
+   - **url**: `https://github.com/juangh123/AgentWarden`
+2. 提交后立即进入该 item 页面，在评论区发布首条技术自述（First Comment），
+   说明做这个工具的背景、技术实现、直接复现命令和寻找的反馈类型。
 
 ## 可以验证的事实
 
@@ -40,6 +48,46 @@ npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
 
 预期结果：命中高风险规则并返回退出码 `1`。正文只描述维护者亲自复现的结果。
 
+## 建议首条评论（维护者自述参考）
+
+> 维护者发布时应通读并根据个人口吻做微调，保持谦逊、技术直白、不使用营销辞藻：
+
+```text
+Hi HN, I built AgentWarden after noticing a gap in how AI agent skills and MCP configs are managed.
+
+Today, an agent skill is usually distributed as a Markdown file copied into a repo or referenced by URL. But to a coding agent (like Claude Code, Codex, or Cursor), that file is effectively executable code: it can instruct the agent to inspect ~/.ssh or environment variables, execute destructive shell commands, send data to untrusted endpoints, or configure MCP servers with unpinned commands.
+
+Unlike npm, cargo, or pip dependencies, skills rarely get:
+1. A lockfile recording exact byte hashes (SHA-256)
+2. Cryptographic publisher provenance verification (Ed25519)
+3. A static CI gate returning exit code 1 to block PRs before merge
+
+AgentWarden is a zero-runtime-dependency Node.js CLI (built on native Node 22.6+ features) designed to act as an early gate before an agent executes these files:
+- Scans Markdown skills and MCP configurations for sensitive paths, destructive commands, prompt injection, data exfiltration, and raw shell execution in MCP definitions.
+- Pins reviewed assets in `skills.lock` with SHA-256 and exports CycloneDX 1.5 SBOMs.
+- Supports detached Ed25519 signatures for verified publisher workflows.
+- Emits redacted SARIF for GitHub Code Scanning and runs as a GitHub Action.
+
+You can test the exit codes from an empty directory:
+
+  curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/safe-skill.md
+  npx --yes agentwarden-cli@0.3.2 scan safe-skill.md
+  # exits 0
+
+  curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
+  npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
+  # exits 1
+
+It is strictly a static gate, not a runtime sandbox or policy engine. It can and will produce false positives and misses. I'm especially interested in feedback on:
+- Real-world MCP configuration formats that fail discovery or parsing
+- Rule bypasses and realistic false positives
+- How your team currently reviews or isolates third-party skills and MCP servers
+
+Repo: https://github.com/juangh123/AgentWarden
+npm: https://www.npmjs.com/package/agentwarden-cli
+Marketplace: https://github.com/marketplace/actions/agentwarden-security-gate
+```
+
 ## 必须主动说明的边界
 
 - 它是静态门禁，不是沙箱、杀毒软件或运行时策略引擎。
@@ -49,7 +97,7 @@ npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
 
 ## 发布时机
 
-- 在 HN 解除 `Show HN` 限制前，不执行本文件中的发布步骤。
+- `Show HN` 限制已解除（2026-09-23 确认），可在下述时间条件下发布。
 - 维护者必须能在发布后 2 至 3 小时持续查看并亲自回复。
 - 若今天无法持续参与，改为次日或下个工作日的 `20:00` 至 `22:00`（UTC+8），
   以覆盖美国东部上午时段。
