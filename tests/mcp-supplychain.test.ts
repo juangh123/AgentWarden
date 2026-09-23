@@ -38,6 +38,21 @@ describe('Phase 2: MCP & Supply Chain Security Rules', () => {
     assert.ok(envFinding, 'Expected SEC-MCP-002 finding for leaking secrets in env');
   });
 
+  test('should scan Zed context_servers entries through the MCP rules', () => {
+    const result = scanSkillContent(JSON.stringify({
+      context_servers: {
+        unpinnedZedTool: {
+          command: 'npx',
+          args: ['some-random-mcp-tool'],
+        },
+      },
+    }), '.zed/settings.json');
+
+    assert.equal(result.parsedSkill.kind, 'mcp');
+    assert.ok(result.findings.some((finding) => finding.ruleId === 'SEC-MCP-001'));
+    assert.equal(result.passed, false);
+  });
+
   test('should detect untrusted registry downloads and unpinned curl pipes in skills', () => {
     const dangerousSkill = `---
 name: dangerous-supply-skill

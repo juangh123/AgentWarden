@@ -28,6 +28,18 @@ describe('skill and MCP discovery', () => {
       writeFile(root, '.mcp.json', JSON.stringify({ mcpServers: {} }));
       writeFile(root, '.cursor/mcp.json', JSON.stringify({ mcpServers: {} }));
       writeFile(root, '.vscode/mcp.json', JSON.stringify({ servers: {} }));
+      writeFile(root, '.copilot/mcp-config.json', JSON.stringify({ mcpServers: {} }));
+      writeFile(root, '.codeium/windsurf/mcp_config.json', JSON.stringify({ mcpServers: {} }));
+      writeFile(root, '.roo/mcp.json', JSON.stringify({ mcpServers: {} }));
+      writeFile(root, '.cline/mcp.json', JSON.stringify({ mcpServers: {} }));
+      writeFile(root, '.continue/mcpServers/local.json', JSON.stringify({ mcpServers: {} }));
+      writeFile(root, '.zed/settings.json', JSON.stringify({ context_servers: {} }));
+      writeFile(root, '.gemini/settings.json', JSON.stringify({ mcpServers: {} }));
+      writeFile(
+        root,
+        '.devcontainer/devcontainer.json',
+        JSON.stringify({ customizations: { vscode: { mcp: { servers: {} } } } }),
+      );
       writeFile(root, 'configs/tool.json', JSON.stringify({ name: 'not-an-mcp-config' }));
       writeFile(root, 'package.json', JSON.stringify({ scripts: { test: 'node test.js' } }));
       writeFile(root, '.private/config.json', JSON.stringify({ mcpServers: {} }));
@@ -37,7 +49,20 @@ describe('skill and MCP discovery', () => {
         .map((file) => path.relative(root, file).replace(/\\/g, '/'))
         .sort();
 
-      assert.deepEqual(files, ['.cursor/mcp.json', '.mcp.json', '.vscode/mcp.json', 'SKILL.md']);
+      assert.deepEqual(files, [
+        '.cline/mcp.json',
+        '.codeium/windsurf/mcp_config.json',
+        '.continue/mcpServers/local.json',
+        '.copilot/mcp-config.json',
+        '.cursor/mcp.json',
+        '.devcontainer/devcontainer.json',
+        '.gemini/settings.json',
+        '.mcp.json',
+        '.roo/mcp.json',
+        '.vscode/mcp.json',
+        '.zed/settings.json',
+        'SKILL.md',
+      ]);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -64,6 +89,54 @@ describe('skill and MCP discovery', () => {
       assert.equal(results[0].parsedSkill.kind, 'mcp');
       assert.ok(results[0].findings.some((finding) => finding.ruleId === 'SEC-MCP-001'));
       assert.equal(results[0].passed, false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('scans Zed and Dev Container MCP entries discovered from client configs', () => {
+    const root = tempDir();
+    try {
+      writeFile(
+        root,
+        '.zed/settings.json',
+        JSON.stringify({
+          context_servers: {
+            unsafeZedServer: {
+              command: 'npx',
+              args: ['unpinned-zed-tool'],
+            },
+          },
+        }),
+      );
+      writeFile(
+        root,
+        '.devcontainer/devcontainer.json',
+        JSON.stringify({
+          customizations: {
+            vscode: {
+              mcp: {
+                servers: {
+                  unsafeDevContainerServer: {
+                    command: 'npx',
+                    args: ['unpinned-devcontainer-tool'],
+                  },
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      const results = scanSkillPaths(root);
+
+      assert.deepEqual(
+        results.map((result) => path.relative(root, result.filePath).replace(/\\/g, '/')),
+        ['.devcontainer/devcontainer.json', '.zed/settings.json'],
+      );
+      assert.ok(results.every((result) => result.parsedSkill.kind === 'mcp'));
+      assert.ok(results.every((result) => result.findings.some((finding) => finding.ruleId === 'SEC-MCP-001')));
+      assert.ok(results.every((result) => !result.passed));
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

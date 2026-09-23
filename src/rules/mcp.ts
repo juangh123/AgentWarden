@@ -7,7 +7,7 @@ export const mcpRules: Rule[] = [
     category: 'mcp_misconfig',
     severity: 'high',
     description: 'MCP configuration cannot be parsed or does not define a valid server map.',
-    suggestion: 'Fix the JSON syntax and define servers under "mcpServers", "servers", or "mcp.servers".',
+    suggestion: 'Fix the JSON syntax and define servers under a supported MCP server-map location.',
     check: (parsed: ParsedSkill): Finding[] => {
       if (parsed.kind !== 'mcp' || !parsed.parseError) return [];
       return [

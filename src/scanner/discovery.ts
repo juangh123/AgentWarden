@@ -1,17 +1,25 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { extractMcpServersObject, isMcpConfigFilename } from '../parser/mcpConfig.ts';
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown']);
 
-const MCP_CONFIG_FILENAMES = new Set([
-  '.mcp.json',
-  'mcp.json',
-  'mcp-servers.json',
-  'mcp_servers.json',
-  'claude_desktop_config.json',
+const ALLOWED_HIDDEN_DIRECTORIES = new Set([
+  '.claude',
+  '.cline',
+  '.codeium',
+  '.codex',
+  '.continue',
+  '.copilot',
+  '.cursor',
+  '.devcontainer',
+  '.gemini',
+  '.qwen',
+  '.roo',
+  '.vscode',
+  '.windsurf',
+  '.zed',
 ]);
-
-const ALLOWED_HIDDEN_DIRECTORIES = new Set(['.claude', '.codex', '.cursor', '.vscode']);
 
 const SKIPPED_DIRECTORIES = new Set([
   '.git',
@@ -75,31 +83,17 @@ function isIncluded(filePath: string, cwd: string, options: DiscoveryOptions): b
 }
 
 function containsMcpServers(content: string): boolean {
-  if (!/"(?:mcpServers|servers|mcp)"\s*:/.test(content)) return false;
+  if (!/"(?:mcpServers|servers|mcp|context_servers|customizations)"\s*:/.test(content)) return false;
 
   try {
-    const parsed = JSON.parse(content) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-
-    const mcp = parsed.mcp;
-    const nestedServers =
-      mcp && typeof mcp === 'object' && !Array.isArray(mcp)
-        ? (mcp as Record<string, unknown>).servers
-        : undefined;
-
-    return [parsed.mcpServers, parsed.servers, nestedServers].some(
-      (servers) => servers !== undefined && servers !== null && typeof servers === 'object' && !Array.isArray(servers),
-    );
+    return extractMcpServersObject(JSON.parse(content)) !== undefined;
   } catch {
     return false;
   }
 }
 
 function isMcpJsonCandidate(filePath: string, content: string): boolean {
-  const filename = path.basename(filePath).toLowerCase();
-  if (MCP_CONFIG_FILENAMES.has(filename) || /(^|[-_.])mcp([-_.]|$).*\.json$/i.test(filename)) {
-    return true;
-  }
+  if (isMcpConfigFilename(filePath)) return true;
   return containsMcpServers(content);
 }
 

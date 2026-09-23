@@ -57,4 +57,58 @@ describe('skillParser', () => {
     assert.equal(parsed.mcpServers?.[0].name, 'weather');
     assert.equal(parsed.parseError, undefined);
   });
+
+  it('supports Zed context_servers configurations', () => {
+    const parsed = parseSkillMarkdown(JSON.stringify({
+      context_servers: {
+        local: {
+          command: 'node',
+          args: ['server.js'],
+        },
+      },
+    }), '.zed/settings.json');
+
+    assert.equal(parsed.kind, 'mcp');
+    assert.equal(parsed.mcpServers?.length, 1);
+    assert.equal(parsed.mcpServers?.[0].name, 'local');
+    assert.equal(parsed.parseError, undefined);
+  });
+
+  it('supports VS Code Dev Container MCP configurations', () => {
+    const parsed = parseSkillMarkdown(JSON.stringify({
+      customizations: {
+        vscode: {
+          mcp: {
+            servers: {
+              playwright: {
+                command: 'npx',
+                args: ['-y', '@microsoft/mcp-server-playwright'],
+              },
+            },
+          },
+        },
+      },
+    }), '.devcontainer/devcontainer.json');
+
+    assert.equal(parsed.kind, 'mcp');
+    assert.equal(parsed.mcpServers?.length, 1);
+    assert.equal(parsed.mcpServers?.[0].name, 'playwright');
+    assert.equal(parsed.parseError, undefined);
+  });
+
+  it('fails closed when a known MCP config file has no server map', () => {
+    const parsed = parseSkillMarkdown('{}', '.mcp.json');
+
+    assert.equal(parsed.kind, 'mcp');
+    assert.ok(parsed.parseError);
+    assert.equal(parsed.mcpServers?.length, 0);
+  });
+
+  it('treats an invalid declared server map as malformed MCP JSON', () => {
+    const parsed = parseSkillMarkdown('{"servers":[]}', 'settings.json');
+
+    assert.equal(parsed.kind, 'mcp');
+    assert.ok(parsed.parseError);
+    assert.equal(parsed.mcpServers?.length, 0);
+  });
 });

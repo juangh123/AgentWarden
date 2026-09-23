@@ -152,7 +152,7 @@ Detects invalid JSON and server files that do not define a supported MCP server
 map.
 
 **Remediation:** Fix JSON syntax and define servers under `mcpServers`, `servers`,
-or `mcp.servers`.
+`mcp.servers`, `context_servers`, or `customizations.vscode.mcp.servers`.
 
 ## SEC-MCP-001
 
