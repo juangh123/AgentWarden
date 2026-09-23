@@ -176,9 +176,9 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | :--- | :--- | :--- | :--- |
 | DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料；2026-09-19 发布英文长帖，公开主页现有 1 篇文章 | 监控阅读、收藏、评论和转发；收到技术问题时由维护者本人回复 |
 | Discord | `agentwarden_cli` | 2026-09-20 已加入 MCP Contributor Discord 并完成规则确认；已加入 Model Context Protocol 社区并通过 MEE6 验证；已在 `showcase` 发布项目主题；OpenAI 验证受地区限制不可用 | MCP Contributor 只由维护者本人参与，不发送 AI 生成内容；监控 `showcase` 回复，不重复发帖 |
-| Hacker News | `agentwarden` | 已注册，about 已完善；HN 当前临时限制 `Show HN` | 停止尝试提交，转为阅读和参与相关讨论；等限制解除后再按[事实清单](launch-hacker-news.md)准备 |
+| Hacker News | `agentwarden` | 已注册，about 已完善；2026-09-23 确认 `Show HN` 限制已解除 | 建议维护者选择能够持续跟进的时段（推荐工作日 20:00 至 22:00 UTC+8）按[事实清单](launch-hacker-news.md)亲自撰写并提交，预留 2 至 3 小时互动 |
 | Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
-| 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
+| 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖；2026-09-23 增至 20 阅读、1 点赞、1 收藏 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
 | V2EX | 待注册 | 注册页匿名请求返回 `403` | 在浏览器人工确认注册资格和邀请要求；在账号可用前暂缓 |
 | 即刻 | 待注册 | 未注册，优先级低于掘金 | 掘金账号可用后再推进，按移动端社区习惯参与 |
 
@@ -204,7 +204,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 日期 | 渠道 | 内容 | 状态 |
 | :--- | :--- | :--- | :--- |
 | 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
-| 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；9 月 19 日为阅读 12、点赞 1、收藏 1、评论 0 |
+| 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；2026-09-23 为阅读 20、点赞 1、收藏 1、评论 0 |
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
 | 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；等待真实评论和反馈 |
 
@@ -214,7 +214,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | :--- | :--- | :--- | :--- |
 | 2026-09-19 | [Awesome MCP Security](https://github.com/Puliczek/awesome-mcp-security) | [Tools and code](https://github.com/Puliczek/awesome-mcp-security/pull/334) | PR #334 开放；提交内容可合并，等待维护者审核 |
 | 2026-09-19 | [Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools) | [Testing Tools](https://github.com/punkpeye/awesome-mcp-devtools/pull/338) | PR #338 开放；提交内容可合并，等待维护者确认分类和收录 |
-| 2026-09-19 | [Awesome Agent Skills Security](https://github.com/LLMSecurity/awesome-agent-skills-security) | [Tools & Frameworks](https://github.com/LLMSecurity/awesome-agent-skills-security/pull/67) | PR #67 开放；提交内容可合并，满足近六个月有提交的工具收录条件 |
+| 2026-09-19 | [Awesome Agent Skills Security](https://github.com/LLMSecurity/awesome-agent-skills-security) | [Tools & Frameworks](https://github.com/LLMSecurity/awesome-agent-skills-security/pull/67) | PR #67 已于 2026-09-20 合并；项目已正式收录至 Tools & Frameworks 分类 |
 
 每条收录只提交一次，不催审、不要求点赞或转发。维护者提出格式、分类或事实修正时，
 优先在原 PR 中处理；PR 合并后再按目录影响力评估是否需要补充发布记录。
@@ -277,6 +277,31 @@ North-star 指标不是 star 数，而是“成功执行扫描并接入第二次
 第一周的主要信号是 npm 出现自然安装，以及掘金至少产生一次点赞和一次收藏。
 GitHub Star、Fork 和 Release 下载仍未形成，下一阶段应继续争取可复现的
 workflow 反馈，而不是追求一次性流量。
+
+### 2026-09-23 首周快照（Day 7）
+
+| 指标 | 当前值 |
+| :--- | :--- |
+| Stars / Watchers / Forks | 0 / 0 / 0 |
+| Open Issues | 0 |
+| GitHub Release 资产下载 | 0 |
+| npm weekly downloads | 22（较 9-19 快照增加 9 次，增幅 69%；日均均有自然下载） |
+| Awesome 权威目录收录 | 1/3 已正式合并收录（Awesome Agent Skills Security PR #67） |
+| DEV 文章 | 公开可访问；1 篇文章，4 个标签（ai, security, opensource, devops） |
+| Reddit `r/mcp` | 公开可见；RSS 显示 0 条评论 |
+| 掘金文章 | 阅读 20 / 点赞 1 / 收藏 1 / 评论 0（阅读量较 9-19 增加 67%） |
+| Discord 社区 | 2 个核心社区（MCP Contributor, Model Context Protocol）；`showcase` 专帖已发布 |
+| Hacker News | 0 submissions / 0 comments；`Show HN` 限制已解除，建议准备发布 |
+
+发布满 7 天（完整首周）核心进展分析：
+
+1. **自然安装持续验证有效性**：npm 周下载由首周初的 11 次稳步提升至 22 次，表明已有开发者通过 `npx agentwarden-cli` 尝试运行或引入本地测试链。
+2. **权威开源目录取得首个实质收录**：成功合并进 `Awesome Agent Skills Security`（PR #67，分类为 `Tools & Frameworks`），形成了首个被外部安全组织与生态背书的固定索引链接。
+3. **多平台分发基础已搭建完成**：中英文渠道（Reddit、掘金、DEV、Discord）均已完成首发落地与信息铺垫，形成了统一的脱敏扫描、退出码与 CI 门禁心智。
+4. **下一阶段核心突破点**：
+   - **Hacker News `Show HN`**：HN 限制解除且当前 Agent/MCP 工具安全讨论热烈，维护者在晚间亲自发布 `Show HN` 是激发海外深度技术开发者试用与 Star 转化的最高杠杆动作。
+   - **跟进剩余 2 个 Awesome PR**：持续关注 `awesome-mcp-security` #334 与 `awesome-mcp-devtools` #338 的合并动态。
+   - **真实工作流接入案例**：针对实际场景（如 Claude Code / Cursor / Codex Skill 工具链或本地 MCP 网关）产出最小验证示例，推动首个外部仓库接入 GitHub Action 门禁。
 
 ## 发布后 14 天
 
