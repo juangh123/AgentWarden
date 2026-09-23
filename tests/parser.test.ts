@@ -96,6 +96,35 @@ describe('skillParser', () => {
     assert.equal(parsed.parseError, undefined);
   });
 
+  it('supports Claude Code user and project scoped MCP configurations', () => {
+    const parsed = parseSkillMarkdown(JSON.stringify({
+      mcpServers: {
+        shared: {
+          command: 'node',
+          args: ['shared.js'],
+        },
+      },
+      projects: {
+        '/work/project-a': {
+          mcpServers: {
+            projectTool: {
+              command: 'node',
+              args: ['project.js'],
+            },
+          },
+        },
+      },
+    }), '.claude.json');
+
+    assert.equal(parsed.kind, 'mcp');
+    assert.equal(parsed.mcpServers?.length, 2);
+    assert.deepEqual(
+      parsed.mcpServers?.map((server) => server.name).sort(),
+      ['projectTool', 'shared'],
+    );
+    assert.equal(parsed.parseError, undefined);
+  });
+
   it('fails closed when a known MCP config file has no server map', () => {
     const parsed = parseSkillMarkdown('{}', '.mcp.json');
 

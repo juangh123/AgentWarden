@@ -11,7 +11,8 @@ versioning.
 - Expanded MCP configuration discovery to recognize common Cursor, VS Code,
   Copilot, Windsurf, Cline, Roo Code, Continue, Zed, Gemini, Qwen, and Dev
   Container locations, including `mcp.servers`, `context_servers`, and
-  `customizations.vscode.mcp.servers` container shapes.
+  `customizations.vscode.mcp.servers` container shapes, plus Claude Code user
+  and project scopes in `~/.claude.json`.
 - Added `npm run test:mvp` to package the release tarball, write
   `release/SHA256SUMS`, install the artifact into a clean consumer, and verify
   the full user-facing CLI lifecycle through the installed package.

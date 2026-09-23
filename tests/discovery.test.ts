@@ -37,6 +37,11 @@ describe('skill and MCP discovery', () => {
       writeFile(root, '.gemini/settings.json', JSON.stringify({ mcpServers: {} }));
       writeFile(
         root,
+        '.claude.json',
+        JSON.stringify({ projects: { '/work/project-a': { mcpServers: {} } } }),
+      );
+      writeFile(
+        root,
         '.devcontainer/devcontainer.json',
         JSON.stringify({ customizations: { vscode: { mcp: { servers: {} } } } }),
       );
@@ -50,6 +55,7 @@ describe('skill and MCP discovery', () => {
         .sort();
 
       assert.deepEqual(files, [
+        '.claude.json',
         '.cline/mcp.json',
         '.codeium/windsurf/mcp_config.json',
         '.continue/mcpServers/local.json',
@@ -137,6 +143,40 @@ describe('skill and MCP discovery', () => {
       assert.ok(results.every((result) => result.parsedSkill.kind === 'mcp'));
       assert.ok(results.every((result) => result.findings.some((finding) => finding.ruleId === 'SEC-MCP-001')));
       assert.ok(results.every((result) => !result.passed));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('scans Claude Code project-scoped MCP entries from .claude.json', () => {
+    const root = tempDir();
+    try {
+      writeFile(
+        root,
+        '.claude.json',
+        JSON.stringify({
+          projects: {
+            '/work/project-a': {
+              mcpServers: {
+                unsafeClaudeCodeServer: {
+                  command: 'npx',
+                  args: ['unpinned-claude-code-tool'],
+                },
+              },
+            },
+          },
+        }),
+      );
+      writeFile(root, 'other/.claude.json', JSON.stringify({ projects: {} }));
+
+      const results = scanSkillPaths(root);
+
+      assert.deepEqual(
+        results.map((result) => path.relative(root, result.filePath).replace(/\\/g, '/')),
+        ['.claude.json'],
+      );
+      assert.equal(results[0].parsedSkill.kind, 'mcp');
+      assert.ok(results[0].findings.some((finding) => finding.ruleId === 'SEC-MCP-001'));
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
