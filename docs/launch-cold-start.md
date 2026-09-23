@@ -40,6 +40,10 @@ npm run test:mvp
 `npm run test:mvp` 会生成并校验 `release/agentwarden-cli-<version>.tgz` 与
 `release/SHA256SUMS`，再把 tarball 安装到干净目录并验证完整命令链。确认产物：
 
+> 验证已发布包时，必须在仓库目录之外的干净目录执行 `npx`。在包自身的仓库里
+> 运行时，`npx` 会把请求解析到本地同名同版本包，出现
+> `'agentwarden-cli' is not recognized` 之类与发布无关的假失败。
+
 - 包名为 `agentwarden-cli`
 - 版本与 `package.json` 一致
 - 包含 `dist`、`README.md`、`LICENSE`
@@ -293,6 +297,15 @@ workflow 反馈，而不是追求一次性流量。
 | 掘金文章 | 阅读 20 / 点赞 1 / 收藏 1 / 评论 0（阅读量较 9-19 增加 67%） |
 | Discord 社区 | 2 个核心社区（MCP Contributor, Model Context Protocol）；`showcase` 专帖已发布 |
 | Hacker News | 0 submissions / 0 comments；`Show HN` 限制已解除，建议准备发布 |
+
+同日复核的首发链路（Windows，干净临时目录）：
+
+| 检查项 | 结果 |
+| :--- | :--- |
+| `npx --yes agentwarden-cli@0.3.2 --version` | 输出 `agentwarden v0.3.2`，退出码 `0` |
+| `npx --yes agentwarden-cli@0.3.2 scan safe-skill.md` | 退出码 `0` |
+| `npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md` | 命中 5 条 CRITICAL，安全分 `0/100`，退出码 `1` |
+| 示例链接 | `raw.githubusercontent.com/.../v0.3.2/examples/*.md` 均可下载 |
 
 发布满 7 天（完整首周）核心进展分析：
 
