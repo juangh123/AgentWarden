@@ -526,7 +526,7 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 | `SEC-SUPPLY-001` | 供应链 | HIGH | 未校验哈希便下载并执行远程脚本 |
 | `SEC-SUPPLY-002` | 供应链 | MEDIUM | 指向仿冒官方仓库或下载源的相似域名 |
 
-目录扫描会跳过 `node_modules`、`dist`、`.git` 等构建/版本目录；除已列入白名单的 `.cursor`、`.vscode`、`.claude`、`.codex` 外，不会深入隐藏目录。`include` / `exclude` 只作用于目录发现，显式传入的文件无论扩展名或路径过滤规则如何都会被扫描。
+目录扫描会跳过 `node_modules`、`dist`、`.git` 等构建/版本目录；对已列入白名单的客户端目录（包括 `.cursor`、`.vscode`、`.claude`、`.codex`、`.cline`、`.roo`、`.continue`、`.zed`、`.copilot`、`.codeium`、`.devcontainer`）不会跳过，其余隐藏目录不会深入。MCP JSON 支持 `mcpServers`、`servers`、`mcp.servers`、`context_servers` 以及 Dev Container 的 `customizations.vscode.mcp.servers` 结构。`include` / `exclude` 只作用于目录发现，显式传入的文件无论扩展名或路径过滤规则如何都会被扫描。
 
 `audit` 同时执行两层检查：锁文件 SHA-256 完整性，以及按当前配置重新扫描后的安全策略。即使用 `install --force` 锁定了高风险技能，只要内容未改但策略检查失败，`audit` 仍会返回退出码 `1`。
 
