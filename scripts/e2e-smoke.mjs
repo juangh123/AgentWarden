@@ -834,6 +834,13 @@ r = run(['-C', tmp, 'rules', '--json']);
 const rulesJson = JSON.parse(r.stdout);
 check('rules catalog lists security rules', r.status === 0 && rulesJson.count >= 10, `status=${r.status}`);
 
+const help = run(['help']);
+check(
+  'help documents scan and init profile defaults',
+  help.status === 0 && help.stdout.includes('scan default: legacy; init default: balanced'),
+  `status=${help.status}`,
+);
+
 r = run(['-C', tmp, 'rules', '--json', '--severity-override', 'SEC-CRED-001=medium']);
 const overriddenRules = JSON.parse(r.stdout).rules.find((rule) => rule.id === 'SEC-CRED-001');
 check(

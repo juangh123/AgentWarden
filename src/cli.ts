@@ -383,7 +383,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--format <type>')}        Report format: pretty (default), json, sarif
   ${chalk.yellow('--json')}                 Shorthand for --format json
   ${chalk.yellow('--sarif')}                Shorthand for --format sarif
-  ${chalk.yellow('--profile <name>')}       Policy preset: legacy|balanced|strict (default: legacy)
+  ${chalk.yellow('--profile <name>')}       Policy preset: legacy|balanced|strict (scan default: legacy; init default: balanced)
   ${chalk.yellow('--config <file>')}        Load an explicit JSON configuration file
   ${chalk.yellow('--fail-on <sev>')}        Fail threshold: critical|high|medium|low|info (default: high)
   ${chalk.yellow('--min-score <n>')}        Minimum safety score 0-100 (default: 60)
