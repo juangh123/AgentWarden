@@ -12,8 +12,8 @@
 
   <rect x="62" y="148" width="996" height="120" rx="10" fill="#231728" stroke="#ff5d73" stroke-width="2"/>
   <text x="86" y="183" fill="#ff7b8c" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19" font-weight="700">[BLOCKED] 5 findings  score 0/100</text>
-  <text x="86" y="216" fill="#ffd9df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">CRITICAL  secret access and credential exfiltration</text>
-  <text x="86" y="244" fill="#ffd9df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">HIGH      prompt injection, unsafe command, network upload</text>
+  <text x="86" y="216" fill="#ffd9df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">CRITICAL  credential file access, secret environment variable</text>
+  <text x="86" y="244" fill="#ffd9df" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">CRITICAL  prompt injection, data exfiltration (x2)</text>
 
   <text x="62" y="308" fill="#76e4f7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19">$ agentwarden verify .agentwarden/skills/weather</text>
   <text x="62" y="336" fill="#76e4f7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19">$ agentwarden sbom --output agentwarden.cdx.json</text>
