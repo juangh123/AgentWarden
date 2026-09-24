@@ -10,6 +10,8 @@ versioning.
 
 - Added a complete downstream GitHub Action integration example and CI smoke
   coverage that scans it with the same strict policy it uses in its workflow.
+- CI now verifies the integration example through both the local Action source
+  and the published `juangh123/AgentWarden@v0.3.3` tag.
 
 ### Changed
 
