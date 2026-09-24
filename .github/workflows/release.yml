@@ -79,7 +79,7 @@ jobs:
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           TARBALL="release/agentwarden-cli-${PACKAGE_VERSION}.tgz"
           test -f "${TARBALL}"
-          npm publish "${TARBALL}" --access public --provenance --ignore-scripts
+          npm publish "./${TARBALL}" --access public --provenance --ignore-scripts
       - name: Create GitHub Release
         shell: bash
         env:

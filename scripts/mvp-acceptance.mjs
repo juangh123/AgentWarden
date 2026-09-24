@@ -159,6 +159,17 @@ try {
     .digest('hex');
   check('SHA256SUMS matches the packed tarball', reread === digest, digest.slice(0, 16));
 
+  const publishTarget = `./${path.relative(root, tarball).replace(/\\/g, '/')}`;
+  const publishDryRun = runNpm(
+    ['publish', publishTarget, '--dry-run', '--access', 'public', '--ignore-scripts'],
+    root,
+  );
+  check(
+    'verified tarball is a valid npm publish target',
+    publishDryRun.status === 0,
+    publishDryRun.stderr || publishDryRun.stdout,
+  );
+
   // 3. Install the artifact into a clean project.
   fs.writeFileSync(
     path.join(consumer, 'package.json'),
