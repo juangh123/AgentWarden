@@ -1,11 +1,12 @@
 # AgentWarden 冷启动执行清单
 
-> 状态更新（2026-09-16）：`v0.3.2` GitHub Release 与 npm 首发均已完成，
+> 状态更新（2026-09-24）：`v0.3.3` GitHub Release 与 npm 发布均已完成，
 > GitHub Action 已发布到
 > [GitHub Marketplace](https://github.com/marketplace/actions/agentwarden-security-gate)，
-> `npx agentwarden-cli@0.3.2` 也可用。本地发布门禁已复核：TypeScript 检查、
-> 107 项单测、113 项端到端检查、安装包烟测和 19 项 MVP 验收全部通过；
-> 在干净目录首次运行和恶意样例退出码 `1` 也已验证。npm 账号已启用 2FA，
+> `npx agentwarden-cli@0.3.3` 也可用。本地发布门禁已复核：TypeScript 检查、
+> 124 项单测、114 项端到端检查、安装包烟测和 20 项 MVP 验收全部通过；
+> 在仓库外干净目录验证版本号、安全样例退出码 `0`、恶意样例退出码 `1`，
+> GitHub Release tarball 的 SHA-256 与 `SHA256SUMS` 一致。npm 账号已启用 2FA，
 > Trusted Publisher 已绑定 `juangh123/AgentWarden` 的 `release.yml`，后续
 > tag 可通过 GitHub OIDC 自动发布 provenance。
 >
@@ -122,7 +123,7 @@ gh repo edit juangh123/AgentWarden \
 - Private vulnerability reporting 已启用
 - `main` 已保护：8 项 CI 检查必须通过，禁止 force push 和删除
 - Dependabot security updates 与 secret scanning push protection 已启用
-- `v0.3.2` GitHub Release 已创建，并附带 tarball 与 `SHA256SUMS`
+- `v0.3.3` GitHub Release 已创建，并附带 tarball 与 `SHA256SUMS`
 - GitHub Action 已发布为 `AgentWarden Security Gate`，主分类为 `Security`
 
 仓库侧冷启动已无阻塞。接下来是首发内容分发、收集真实工作流反馈，并按周记录
@@ -347,7 +348,7 @@ workflow 反馈，而不是追求一次性流量。
 | 掘金文章 | 沿用 2026-09-23 可核验值：阅读 20 / 点赞 1 / 收藏 1 / 评论 0 |
 | Hacker News | 0 submissions / 0 comments；账号自 2026-09-23 起已具备 `Show HN` 发布条件 |
 
-2026-09-24 复核的发布链路（Windows，仓库外临时目录）：
+2026-09-24 发布前复核的发布链路（Windows，仓库外临时目录）：
 
 | 检查项 | 结果 |
 | :--- | :--- |
@@ -366,6 +367,21 @@ Day 8 没有出现需要紧急发布补丁的新安装失败或安全反馈。�
 19:20（UTC+8）已进入 HN 建议发布窗口；若维护者能预留 2 至 3 小时亲自跟进，
 应优先完成 `Show HN`，否则顺延到下一个可持续参与的晚间时段。仓库侧下一步优先
 补一个真实工作流接入案例，而不是在缺少反馈时扩大版本范围。
+
+### 2026-09-24 v0.3.3 发布验收
+
+| 检查项 | 结果 |
+| :--- | :--- |
+| `main` CI | `09db93b` 全部通过（[run 35994066389](https://github.com/juangh123/AgentWarden/actions/runs/35994066389)） |
+| Release workflow | verify 与 publish 均成功（[run 35994099639](https://github.com/juangh123/AgentWarden/actions/runs/35994099639)） |
+| npm registry | `latest = 0.3.3`，[GitHub Release](https://github.com/juangh123/AgentWarden/releases/tag/v0.3.3) 已公开发布 |
+| npm integrity | `sha512-Gdu28L6uWkonYJaFsmMXx1XpAh4+Pe1LxDw8SpSyguDO7UOoc7iW4GZO6n9K90/ieunhPFG/g5RjQBVuuDofbA==` |
+| npm provenance | [SLSA provenance](https://registry.npmjs.org/-/npm/v1/attestations/agentwarden-cli@0.3.3) 已生成并通过 OIDC 签名 |
+| 仓库外 `npx --version` | `agentwarden v0.3.3`，退出码 `0` |
+| 安全样例扫描 | 安全分 `100/100`，退出码 `0` |
+| 恶意样例扫描 | 命中 5 条 CRITICAL，安全分 `0/100`，退出码 `1` |
+| Release tarball | 大小 85,756 bytes，SHA-256 `f1349c07dec659d3891d75c6198cd8c01082821edc5880e97acf495cb9e2aabf` |
+| `SHA256SUMS` | 与下载后的 Release tarball SHA-256 一致，校验通过 |
 
 ## 发布后 14 天
 
