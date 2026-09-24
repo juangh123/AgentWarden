@@ -15,8 +15,9 @@ npx --yes agentwarden-cli@0.3.3 scan . \
   --json
 ```
 
-The command exits `0` with a `100/100` score. The repository CI also runs this
-directory through the local Action, so the example cannot drift into an
+The command exits `0` with a `100/100` score. The repository CI runs this
+directory through both the local Action source and the published
+`juangh123/AgentWarden@v0.3.3` tag, so the example cannot drift into an
 unverified configuration.
 
 For a downstream repository, copy the workflow and policy files, then replace

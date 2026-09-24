@@ -56,6 +56,14 @@ jobs:
           profile: strict
           config: 'examples/github-action-project/.agentwarden/policy.json'
           sarif: 'integration-example.sarif'
+      - name: Run published Action against integration example
+        uses: juangh123/AgentWarden@v0.3.3
+        with:
+          node-version: '22'
+          path: 'examples/github-action-project'
+          profile: strict
+          config: 'examples/github-action-project/.agentwarden/policy.json'
+          sarif: 'published-integration-example.sarif'
 
   package-smoke:
     strategy:
