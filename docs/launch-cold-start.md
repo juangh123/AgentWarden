@@ -59,15 +59,15 @@ npm run test:mvp
 agentwarden-cli
 ```
 
-`agentwarden-cli@0.3.2` 首次发布已经完成。验证 registry 状态：
+`agentwarden-cli@0.3.3` 是当前版本。发布完成后验证 registry 状态：
 
 ```bash
-npm view agentwarden-cli@0.3.2 version dist.integrity
-npx --yes agentwarden-cli@0.3.2 --version
+npm view agentwarden-cli@0.3.3 version dist.integrity
+npx --yes agentwarden-cli@0.3.3 --version
 ```
 
-首次 bootstrap 版本没有 provenance。GitHub Actions Trusted Publisher 已
-通过 npm 官方 `trust` 命令完成配置：
+最初的 bootstrap 版本 `0.3.2` 没有 provenance。GitHub Actions Trusted
+Publisher 已通过 npm 官方 `trust` 命令完成配置：
 
 - workflow：`release.yml`
 - repository：`juangh123/AgentWarden`
@@ -88,8 +88,8 @@ Release workflow 在 tag 推送后执行：
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.3.2 -m "AgentWarden v0.3.2"
-git push origin v0.3.2
+git tag -a v0.3.3 -m "AgentWarden v0.3.3"
+git push origin v0.3.3
 ```
 
 workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 tarball，
@@ -97,7 +97,7 @@ workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 ta
 发布后确认：
 
 ```bash
-gh release view v0.3.2 --repo juangh123/AgentWarden
+gh release view v0.3.3 --repo juangh123/AgentWarden
 npm view agentwarden-cli version dist.integrity
 ```
 
@@ -133,15 +133,15 @@ gh repo edit juangh123/AgentWarden \
 ### 英文短帖
 
 ```text
-AgentWarden v0.3.2 is available as agentwarden-cli.
+AgentWarden v0.3.3 is available as agentwarden-cli.
 
 It scans AI Agent Skills and MCP configurations before execution, locks reviewed
 assets with SHA-256, verifies Ed25519 publisher provenance, emits redacted SARIF,
 and exports CycloneDX SBOMs.
 
 Try an intentionally unsafe example:
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
-npx agentwarden-cli@0.3.2 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
+npx agentwarden-cli@0.3.3 scan malicious-skill.md
 
 It is a static gate, not a sandbox or a guarantee. Feedback and bypass reports
 are welcome.
@@ -150,14 +150,14 @@ are welcome.
 ### 中文短帖
 
 ```text
-AgentWarden v0.3.2 已发布，npm 包名为 agentwarden-cli。
+AgentWarden v0.3.3 已发布，npm 包名为 agentwarden-cli。
 
 它可在 Agent Skill / MCP 配置进入运行时前执行静态扫描，用 skills.lock 锁定
 SHA-256 完整性，验证 Ed25519 发布者来源，并输出脱敏 SARIF 与 CycloneDX SBOM。
 
 一条命令验证阻断行为：
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
-npx agentwarden-cli@0.3.2 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
+npx agentwarden-cli@0.3.3 scan malicious-skill.md
 
 它是静态安全门禁，不是沙箱，也不承诺“零风险”。欢迎提交绕过案例和真实工作流反馈。
 ```
@@ -244,7 +244,7 @@ npx agentwarden-cli@0.3.2 scan malicious-skill.md
 | 指标 | 说明 |
 | :--- | :--- |
 | npm weekly downloads | 是否形成自然安装 |
-| First-run success rate | `npx --yes agentwarden-cli@0.3.2 --version` 与首次扫描成功率 |
+| First-run success rate | `npx --yes agentwarden-cli@0.3.3 --version` 与首次扫描成功率 |
 | Time to first blocked finding | 从打开 README 到得到退出码 `1` 的时间 |
 | Action adoption | 引用 Action 的公开仓库数 |
 | Issue conversion | 用法、误报和规则请求分别有多少 |

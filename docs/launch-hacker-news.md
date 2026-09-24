@@ -34,16 +34,16 @@
 - 远程安装可要求发布者提供的 SHA-256，并支持 Ed25519 分离签名。
 - 报告支持脱敏 JSON、SARIF 2.1.0 和 CycloneDX 1.5 SBOM。
 - GitHub Action 可用于 full、changed-file 和 baseline 扫描。
-- 当前版本为 `agentwarden-cli@0.3.2`，GitHub Action 固定引用
-  `juangh123/AgentWarden@v0.3.2`。
+- 当前版本为 `agentwarden-cli@0.3.3`，GitHub Action 固定引用
+  `juangh123/AgentWarden@v0.3.3`。
 
 ## 直接演示
 
 维护者在本地运行并确认输出后再决定是否写进正文：
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.3 scan malicious-skill.md
 ```
 
 预期结果：命中高风险规则并返回退出码 `1`。正文只描述维护者亲自复现的结果。
@@ -70,12 +70,12 @@ AgentWarden is a zero-runtime-dependency Node.js CLI (built on native Node 22.6+
 
 You can test the exit codes from an empty directory:
 
-  curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/safe-skill.md
-  npx --yes agentwarden-cli@0.3.2 scan safe-skill.md
+  curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/safe-skill.md
+  npx --yes agentwarden-cli@0.3.3 scan safe-skill.md
   # exits 0
 
-  curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
-  npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
+  curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
+  npx --yes agentwarden-cli@0.3.3 scan malicious-skill.md
   # exits 1
 
 It is strictly a static gate, not a runtime sandbox or policy engine. It can and will produce false positives and misses. I'm especially interested in feedback on:

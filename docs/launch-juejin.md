@@ -32,11 +32,11 @@ npm 临时运行：
 mkdir agentwarden-demo
 cd agentwarden-demo
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/safe-skill.md
-npx --yes agentwarden-cli@0.3.2 scan safe-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/safe-skill.md
+npx --yes agentwarden-cli@0.3.3 scan safe-skill.md
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.3 scan malicious-skill.md
 ```
 
 安全样例返回退出码 `0`。恶意样例会命中凭证读取、危险命令、提示词注入或数据
@@ -45,7 +45,7 @@ npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
 Windows PowerShell 用户可以把 `curl` 换成 `curl.exe`。查看最后一次退出码：
 
 ```powershell
-npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
+npx --yes agentwarden-cli@0.3.3 scan malicious-skill.md
 $LASTEXITCODE
 ```
 
@@ -73,7 +73,7 @@ AgentWarden 会自动发现 Markdown Skill 和常见 MCP 配置，也支持通�
 `include` / `exclude` 限定扫描范围：
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 scan . \
+npx --yes agentwarden-cli@0.3.3 scan . \
   --profile strict \
   --include "skills/**" \
   --exclude "skills/vendor/**"
@@ -90,10 +90,10 @@ AgentWarden 用 `skills.lock` 记录已审核内容的 SHA-256、文件清单、
 发布者来源信息。可以把它理解为 Skill 版本的 lockfile：
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 install ./skills/weather.md
-npx --yes agentwarden-cli@0.3.2 verify .agentwarden/skills/weather.md
-npx --yes agentwarden-cli@0.3.2 audit
-npx --yes agentwarden-cli@0.3.2 sbom --output agentwarden.cdx.json
+npx --yes agentwarden-cli@0.3.3 install ./skills/weather.md
+npx --yes agentwarden-cli@0.3.3 verify .agentwarden/skills/weather.md
+npx --yes agentwarden-cli@0.3.3 audit
+npx --yes agentwarden-cli@0.3.3 sbom --output agentwarden.cdx.json
 ```
 
 `verify` 检查本地内容是否仍与锁文件一致。`audit` 会同时检查完整性，并按照
@@ -103,7 +103,7 @@ npx --yes agentwarden-cli@0.3.2 sbom --output agentwarden.cdx.json
 远程安装必须提供发布者给出的 SHA-256：
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 install \
+npx --yes agentwarden-cli@0.3.3 install \
   https://publisher.example/skills/weather.md \
   --sha256 <64-char-sha256>
 ```
@@ -115,7 +115,7 @@ npx --yes agentwarden-cli@0.3.2 install \
 分离签名：
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 install \
+npx --yes agentwarden-cli@0.3.3 install \
   https://publisher.example/skills/weather.md \
   --sha256 <64-char-sha256> \
   --signature https://publisher.example/skills/weather.md.sig \
@@ -129,7 +129,7 @@ SHA-256 解决内容完整性，Ed25519 解决发布者身份，两者不能互�
 对于已有仓库，可以先生成策略文件和 GitHub Actions 工作流：
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 init --profile strict
+npx --yes agentwarden-cli@0.3.3 init --profile strict
 ```
 
 也可以直接使用 GitHub Marketplace 中的 Action：
@@ -142,7 +142,7 @@ permissions:
 steps:
   - uses: actions/checkout@v7
 
-  - uses: juangh123/AgentWarden@v0.3.2
+  - uses: juangh123/AgentWarden@v0.3.3
     with:
       path: skills/
       profile: strict

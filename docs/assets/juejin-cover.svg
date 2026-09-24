@@ -36,7 +36,7 @@
       <text x="513" y="29" fill="#ffc08f" font-size="18" font-weight="700" text-anchor="middle">Ed25519 来源</text>
     </g>
 
-    <text x="72" y="514" fill="#f4f7f8" font-size="22" font-weight="700">npx agentwarden-cli@0.3.2 scan</text>
+    <text x="72" y="514" fill="#f4f7f8" font-size="22" font-weight="700">npx agentwarden-cli@0.3.3 scan</text>
     <text x="72" y="552" fill="#7e9aa4" font-size="18">GitHub Actions · SARIF · CycloneDX 1.5 SBOM</text>
     <text x="72" y="620" fill="#5f7b85" font-size="16">github.com/juangh123/AgentWarden</text>
   </g>
