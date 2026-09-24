@@ -21,7 +21,7 @@
 - 支持 Ed25519 分离签名验证发布者来源。
 - 报告支持脱敏 JSON、SARIF 2.1.0 和 CycloneDX 1.5 SBOM。
 - GitHub Action 支持 full、changed-file 和 baseline 扫描。
-- 当前版本为 `agentwarden-cli@0.3.2`，Action 固定引用 `juangh123/AgentWarden@v0.3.2`。
+- 当前版本为 `agentwarden-cli@0.3.3`，Action 固定引用 `juangh123/AgentWarden@v0.3.3`。
 
 ## 标题方向
 
@@ -35,11 +35,11 @@
 ```bash
 mkdir agentwarden-demo && cd agentwarden-demo
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/safe-skill.md
-npx --yes agentwarden-cli@0.3.2 scan safe-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/safe-skill.md
+npx --yes agentwarden-cli@0.3.3 scan safe-skill.md
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.3 scan malicious-skill.md
 ```
 
 安全样例返回 `0`，恶意样例返回 `1`。Windows 上把 `curl` 换成 `curl.exe`，

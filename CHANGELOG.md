@@ -6,6 +6,8 @@ versioning.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-24
+
 ### Added
 
 - Added `SEC-MCP-004` to flag insecure remote MCP endpoints, and expanded
@@ -30,11 +32,6 @@ versioning.
 - CI and the release workflow now enforce the MVP packaging gate. Releases
   publish the exact tarball that passed verification and attach the tarball and
   checksum to the GitHub Release.
-- Published the first npm bootstrap release as `agentwarden-cli@0.3.2` and
-  configured the GitHub Actions Trusted Publisher for subsequent tagged
-  releases.
-- Published the GitHub Action as `AgentWarden Security Gate` on GitHub
-  Marketplace under the `Security` category.
 
 ## [0.3.2] - 2026-09-14
 
@@ -109,7 +106,8 @@ versioning.
 - Publisher policy can require signatures and reject revoked keys.
 - Package publishing excludes the repository `skills.lock`.
 
-[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.3
 [0.3.2]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.2
 [0.3.1]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.1
 [0.3.0]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.0

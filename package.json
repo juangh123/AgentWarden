@@ -1,6 +1,6 @@
 {
   "name": "agentwarden-cli",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Zero-dependency static security gate, integrity lock and provenance SBOM for AI Agent Skills and MCP configurations",
   "author": "juangh123",
   "homepage": "https://github.com/juangh123/AgentWarden#readme",

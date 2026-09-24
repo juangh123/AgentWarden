@@ -8,7 +8,7 @@
   <circle cx="106" cy="57" r="7" fill="#4ecdc4"/>
   <text x="146" y="63" fill="#8ea0c3" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16">AgentWarden security gate</text>
 
-  <text x="62" y="122" fill="#76e4f7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19">$ npx --yes agentwarden-cli@0.3.2 scan examples/malicious-skill.md</text>
+  <text x="62" y="122" fill="#76e4f7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19">$ npx --yes agentwarden-cli@0.3.3 scan examples/malicious-skill.md</text>
 
   <rect x="62" y="148" width="996" height="120" rx="10" fill="#231728" stroke="#ff5d73" stroke-width="2"/>
   <text x="86" y="183" fill="#ff7b8c" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="19" font-weight="700">[BLOCKED] 5 findings  score 0/100</text>

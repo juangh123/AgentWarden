@@ -35,11 +35,11 @@ You can run the published CLI without installing it globally:
 mkdir agentwarden-demo
 cd agentwarden-demo
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/safe-skill.md
-npx --yes agentwarden-cli@0.3.2 scan safe-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/safe-skill.md
+npx --yes agentwarden-cli@0.3.3 scan safe-skill.md
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.2/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.2 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.3 scan malicious-skill.md
 ```
 
 The safe sample exits with code `0`. The intentionally unsafe sample matches
@@ -71,7 +71,7 @@ Directory scans discover Markdown skills and common MCP configuration formats.
 You can narrow the scope with include and exclude globs:
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 scan . \
+npx --yes agentwarden-cli@0.3.3 scan . \
   --profile strict \
   --include "skills/**" \
   --exclude "skills/vendor/**"
@@ -90,10 +90,10 @@ digest, package manifest, remote source, and publisher provenance. It is similar
 in spirit to a package lockfile:
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 install ./skills/weather.md
-npx --yes agentwarden-cli@0.3.2 verify .agentwarden/skills/weather.md
-npx --yes agentwarden-cli@0.3.2 audit
-npx --yes agentwarden-cli@0.3.2 sbom --output agentwarden.cdx.json
+npx --yes agentwarden-cli@0.3.3 install ./skills/weather.md
+npx --yes agentwarden-cli@0.3.3 verify .agentwarden/skills/weather.md
+npx --yes agentwarden-cli@0.3.3 audit
+npx --yes agentwarden-cli@0.3.3 sbom --output agentwarden.cdx.json
 ```
 
 `verify` checks the installed content against the lockfile. `audit` checks
@@ -103,7 +103,7 @@ a CycloneDX 1.5 document.
 Remote installation requires a publisher-provided SHA-256:
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 install \
+npx --yes agentwarden-cli@0.3.3 install \
   https://publisher.example/skills/weather.md \
   --sha256 <64-char-sha256>
 ```
@@ -114,7 +114,7 @@ command exits non-zero and does not silently record the artifact.
 For publisher provenance, the CLI also supports a detached Ed25519 signature:
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 install \
+npx --yes agentwarden-cli@0.3.3 install \
   https://publisher.example/skills/weather.md \
   --sha256 <64-char-sha256> \
   --signature https://publisher.example/skills/weather.md.sig \
@@ -129,7 +129,7 @@ published them. They solve different problems.
 To generate a policy file and a GitHub Actions workflow:
 
 ```bash
-npx --yes agentwarden-cli@0.3.2 init --profile strict
+npx --yes agentwarden-cli@0.3.3 init --profile strict
 ```
 
 The Action is also available from GitHub Marketplace:
@@ -142,7 +142,7 @@ permissions:
 steps:
   - uses: actions/checkout@v7
 
-  - uses: juangh123/AgentWarden@v0.3.2
+  - uses: juangh123/AgentWarden@v0.3.3
     with:
       path: skills/
       profile: strict
