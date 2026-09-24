@@ -78,6 +78,10 @@ jobs:
 
 Action 以扫描退出码作为门禁：有阻断级发现时返回 `1`，参数或配置错误时返回 `2`。
 
+完整的下游仓库结构可参考
+[`examples/github-action-project`](../examples/github-action-project/README.md)；
+其中的策略和工作流由 CI 通过本地 Action 实际执行。
+
 ## SARIF 与 Code Scanning
 
 Action 默认把 SARIF 写入 `agentwarden-results.sarif`。若要上传到 GitHub Security Tab：

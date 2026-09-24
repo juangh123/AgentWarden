@@ -4,5 +4,7 @@ dist/
 coverage/
 .skillguard/
 .agentwarden/
+!examples/github-action-project/.agentwarden/
+!examples/github-action-project/.agentwarden/policy.json
 npm-debug.log*
 /.playwright-cli/

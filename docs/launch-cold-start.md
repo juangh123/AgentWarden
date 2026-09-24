@@ -4,7 +4,7 @@
 > GitHub Action 已发布到
 > [GitHub Marketplace](https://github.com/marketplace/actions/agentwarden-security-gate)，
 > `npx agentwarden-cli@0.3.3` 也可用。本地发布门禁已复核：TypeScript 检查、
-> 124 项单测、114 项端到端检查、安装包烟测和 20 项 MVP 验收全部通过；
+> 124 项单测、115 项端到端检查、安装包烟测和 20 项 MVP 验收全部通过；
 > 在仓库外干净目录验证版本号、安全样例退出码 `0`、恶意样例退出码 `1`，
 > GitHub Release tarball 的 SHA-256 与 `SHA256SUMS` 一致。npm 账号已启用 2FA，
 > Trusted Publisher 已绑定 `juangh123/AgentWarden` 的 `release.yml`，后续
@@ -316,7 +316,8 @@ workflow 反馈，而不是追求一次性流量。
 4. **下一阶段核心突破点**：
    - **Hacker News `Show HN`**：HN 限制解除且当前 Agent/MCP 工具安全讨论热烈，维护者在晚间亲自发布 `Show HN` 是激发海外深度技术开发者试用与 Star 转化的最高杠杆动作。
    - **跟进剩余 2 个 Awesome PR**：持续关注 `awesome-mcp-security` #334 与 `awesome-mcp-devtools` #338 的合并动态。
-   - **真实工作流接入案例**：针对实际场景（如 Claude Code / Cursor / Codex Skill 工具链或本地 MCP 网关）产出最小验证示例，推动首个外部仓库接入 GitHub Action 门禁。
+   - **真实工作流接入案例**：已补充可复制的最小下游示例
+     `examples/github-action-project`，并由 CI 通过本地 Action 实际执行；下一步推动首个外部仓库接入。
 
 同日完成首轮产品迭代，回应最常见的“配置格式是否覆盖”问题：
 

@@ -88,6 +88,8 @@ npx --yes agentwarden-cli@0.3.3 scan malicious-skill.md  # exits 1
 ```
 
 完整示例、Marketplace 入口与 SARIF 上传见 [GitHub Action 指南](docs/github-action.md)。
+可直接复制的下游仓库结构见
+[GitHub Action 接入示例](examples/github-action-project/README.md)。
 Action 直接从版本标签运行仓库源码，不需要先发布 npm 包。
 
 ---
@@ -638,7 +640,7 @@ scripts/
   git-install-smoke.mjs git 依赖安装与 prepare 构建验证
 tests/                 单元测试（node:test，免框架）
 fixtures/              安全 / 恶意 / 混淆 / 硬编码密钥样本
-examples/              可直接运行的策略、Skill 与 GitHub Action 示例
+examples/              策略、Skill 与完整 GitHub Action 接入示例
 ```
 
 构建产物为真实编译的 CommonJS-free ESM JavaScript，`dist/cli.js` 直接可执行；源代码使用 Node 原生 TypeScript 支持，测试无需额外运行时。
