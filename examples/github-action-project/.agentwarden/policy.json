@@ -1,0 +1,12 @@
+{
+  "profile": "strict",
+  "failOn": "medium",
+  "minScore": 90,
+  "include": [
+    "**/skills/**"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/vendor/**"
+  ]
+}

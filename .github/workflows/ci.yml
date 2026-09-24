@@ -48,6 +48,14 @@ jobs:
           baseline-status: 'true'
           baseline-fail-on-unmatched: 'true'
           changed: 'true'
+      - name: Run Action against integration example
+        uses: ./
+        with:
+          node-version: '22'
+          path: 'examples/github-action-project'
+          profile: strict
+          config: 'examples/github-action-project/.agentwarden/policy.json'
+          sarif: 'integration-example.sarif'
 
   package-smoke:
     strategy:

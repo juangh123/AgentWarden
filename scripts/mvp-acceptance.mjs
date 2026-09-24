@@ -2,7 +2,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 // MVP packaging gate: pack the published artifact, checksum it, install it into
@@ -62,6 +62,77 @@ function runNpm(args, cwd) {
   };
 }
 
+async function startMockRegistry() {
+  const registrySource = `
+    const http = require('node:http');
+    const server = http.createServer((request, response) => {
+      response.writeHead(404, { 'content-type': 'application/json' });
+      response.end('{"error":"not_found"}');
+    });
+    server.listen(0, '127.0.0.1', () => {
+      console.log(JSON.stringify({ port: server.address().port }));
+    });
+    process.on('SIGTERM', () => server.close(() => process.exit(0)));
+  `;
+  const child = spawn(process.execPath, ['-e', registrySource], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  let stderr = '';
+
+  try {
+    const port = await new Promise((resolve, reject) => {
+      let settled = false;
+      let stdout = '';
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`Mock registry did not start: ${stderr || stdout}`));
+      }, 5000);
+
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+      });
+      child.on('exit', (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error(`Mock registry exited early (${code}): ${stderr || stdout}`));
+      });
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk;
+        const newline = stdout.indexOf('\n');
+        if (newline === -1 || settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          resolve(JSON.parse(stdout.slice(0, newline)).port);
+        } catch (error) {
+          reject(new Error(`Invalid mock registry handshake: ${stdout}`, { cause: error }));
+        }
+      });
+    });
+
+    const npmrc = path.join(temp, 'mock-registry.npmrc');
+    fs.writeFileSync(
+      npmrc,
+      `registry=http://127.0.0.1:${port}\n//127.0.0.1:${port}/:_authToken=test\n`,
+      'utf8',
+    );
+    return {
+      npmrc,
+      close() {
+        if (child.exitCode === null && child.signalCode === null) child.kill();
+      },
+    };
+  } catch (error) {
+    child.kill();
+    throw error;
+  }
+}
+
 function parseJson(output, label) {
   const text = output.trim();
   try {
@@ -108,6 +179,7 @@ function write(file, content) {
   return target;
 }
 
+let mockRegistry = null;
 try {
   fs.rmSync(releaseDirectory, { recursive: true, force: true });
   fs.mkdirSync(releaseDirectory, { recursive: true });
@@ -160,15 +232,30 @@ try {
   check('SHA256SUMS matches the packed tarball', reread === digest, digest.slice(0, 16));
 
   const publishTarget = `./${path.relative(root, tarball).replace(/\\/g, '/')}`;
-  const publishDryRun = runNpm(
-    ['publish', publishTarget, '--dry-run', '--access', 'public', '--ignore-scripts'],
-    root,
-  );
-  check(
-    'verified tarball is a valid npm publish target',
-    publishDryRun.status === 0,
-    publishDryRun.stderr || publishDryRun.stdout,
-  );
+  mockRegistry = await startMockRegistry();
+  try {
+    const publishDryRun = runNpm(
+      [
+        'publish',
+        publishTarget,
+        '--dry-run',
+        '--access',
+        'public',
+        '--ignore-scripts',
+        '--userconfig',
+        mockRegistry.npmrc,
+      ],
+      root,
+    );
+    check(
+      'verified tarball is a valid npm publish target',
+      publishDryRun.status === 0,
+      publishDryRun.stderr || publishDryRun.stdout,
+    );
+  } finally {
+    mockRegistry.close();
+    mockRegistry = null;
+  }
 
   // 3. Install the artifact into a clean project.
   fs.writeFileSync(
@@ -308,5 +395,6 @@ try {
     process.exitCode = 1;
   }
 } finally {
+  if (mockRegistry) mockRegistry.close();
   fs.rmSync(temp, { recursive: true, force: true });
 }

@@ -849,6 +849,26 @@ check(
   `status=${r.status}`,
 );
 
+const actionIntegrationExample = path.join(root, 'examples', 'github-action-project');
+r = run([
+  '-C',
+  actionIntegrationExample,
+  'scan',
+  '.',
+  '--config',
+  '.agentwarden/policy.json',
+  '--json',
+]);
+const actionIntegrationScan = JSON.parse(r.stdout);
+check(
+  'GitHub Action integration example passes its strict policy',
+  r.status === 0 &&
+    actionIntegrationScan.passed === true &&
+    actionIntegrationScan.score === 100 &&
+    actionIntegrationScan.parsedSkill?.name === 'release-notes-reviewer',
+  `status=${r.status}`,
+);
+
 const initProjectDir = path.join(tmp, 'init-project');
 fs.mkdirSync(initProjectDir, { recursive: true });
 
