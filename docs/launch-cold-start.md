@@ -4,7 +4,7 @@
 > GitHub Action 已发布到
 > [GitHub Marketplace](https://github.com/marketplace/actions/agentwarden-security-gate)，
 > `npx agentwarden-cli@0.3.3` 也可用。本地发布门禁已复核：TypeScript 检查、
-> 124 项单测、115 项端到端检查、安装包烟测和 20 项 MVP 验收全部通过；
+> 128 项单测、121 项端到端检查、安装包烟测和 20 项 MVP 验收全部通过；
 > 在仓库外干净目录验证版本号、安全样例退出码 `0`、恶意样例退出码 `1`，
 > GitHub Release tarball 的 SHA-256 与 `SHA256SUMS` 一致。npm 账号已启用 2FA，
 > Trusted Publisher 已绑定 `juangh123/AgentWarden` 的 `release.yml`，后续
@@ -259,7 +259,7 @@ North-star 指标不是 star 数，而是“成功执行扫描并接入第二次
 | 指标 | 当前值 |
 | :--- | :--- |
 | Marketplace 状态 | 已发布，`Security` 分类 |
-| GitHub 首发公告 | Discussion #21，1 条评论 |
+| GitHub 首发公告 | Discussion #21（Day 9 为 2 条评论） |
 | Stars / Watchers / Forks | 0 / 0 / 0 |
 | Open Issues | 0 |
 | GitHub Release 资产下载 | 0 |
@@ -383,6 +383,40 @@ Day 8 没有出现需要紧急发布补丁的新安装失败或安全反馈。�
 | 恶意样例扫描 | 命中 5 条 CRITICAL，安全分 `0/100`，退出码 `1` |
 | Release tarball | 大小 85,756 bytes，SHA-256 `f1349c07dec659d3891d75c6198cd8c01082821edc5880e97acf495cb9e2aabf` |
 | `SHA256SUMS` | 与下载后的 Release tarball SHA-256 一致，校验通过 |
+
+### 2026-09-25 Day 9 快照与评论巡检
+
+| 指标 | 当前值 |
+| :--- | :--- |
+| Stars / Watchers / Forks | 0 / 0 / 0 |
+| 本仓库 Open Issues / Open PRs | 0 / 0 |
+| GitHub Release 资产下载 | 2（v0.3.3 tarball 与 SHA256SUMS 各 1 次，较 Day 8 首次出现） |
+| GitHub 仓库流量 | 近 14 天 27 次浏览 / 22 个独立访客；另 1,432 次 clone / 227 个独立 cloner |
+| npm weekly downloads | 22（2026-09-15 至 2026-09-21，与 Day 7/8 相同） |
+| npm 日粒度下载 | 2026-09-22 至 2026-09-25 仍记为 0，统计窗口尚未完整结算 |
+| Awesome 权威目录收录 | 1/4 已合并；`awesome-mcp-security` #334、`awesome-mcp-devtools` #338、`Awesome-MCP-ZH` #603 仍待审核且无新评论 |
+| GitHub Discussion #21 | 新增 1 条外部评论（2026-09-25），合计 2 条 |
+| DEV 文章 | 0 个公开反应 / 0 条评论 |
+| Reddit `r/mcp` | RSS 显示 0 条评论 |
+| 掘金文章 | 公开页未返回可解析计数，沿用 2026-09-23 可核验值：阅读 20 / 点赞 1 / 收藏 1 / 评论 0 |
+| Hacker News | 0 submissions / 0 comments；账号仍具备 `Show HN` 发布条件 |
+
+本日最重要的评论来自 GitHub Discussion #21。外部开发者 `imMamdouhaboammar`
+指出：Action 从工作区读取策略文件，因此 PR 可以在同一提交里加入凭证读取 Skill，
+并同时通过 `ignoreRules` 或降低 `failOn` 放宽策略；仅靠 `changed: true` 时，
+纯策略变更 PR 甚至没有可扫描的 Skill 文件。
+
+该问题已复现并修复，而不是仅作说明：
+
+- 新增 `agentwarden policy guard <base-ref>`：读取基线 ref 上已批准策略（含 `extends` 继承链），
+  与工作区策略的有效值比较；任何差异返回退出码 `1`。
+- Action 新增可选输入 `policy-guard` 与 `policy-guard-base`，默认关闭；启用后先执行策略守护，
+  再执行基线状态检查、增量扫描与 SARIF 输出。
+- 下游示例加入 `CODEOWNERS` 占位条目，把 `.agentwarden/` 与 `.github/workflows/` 交给安全审查者。
+- 回归覆盖两种绕过：同一 PR 同时提交恶意 Skill 与策略放宽；纯策略变更且无 Skill 文件变化。
+
+同日验证：TypeScript 检查通过，128/128 单元测试通过，121/121 端到端检查通过。
+Day 9 的唯一高优先级工程缺口仍来自真实社区反馈，说明评论巡检已经产生实际安全收益。
 
 ## 发布后 14 天
 

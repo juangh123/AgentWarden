@@ -8,6 +8,10 @@ versioning.
 
 ### Added
 
+- Added `agentwarden policy guard <base-ref>` and the GitHub Action
+  `policy-guard` input. They fail when a pull request weakens the effective
+  policy that was approved on the base branch, closing the gap where an unsafe
+  Skill and a matching rule exclusion could land in the same commit.
 - Added a complete downstream GitHub Action integration example and CI smoke
   coverage that scans it with the same strict policy it uses in its workflow.
 - CI now verifies the integration example through both the local Action source

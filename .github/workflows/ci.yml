@@ -38,6 +38,8 @@ jobs:
           baseline-status: 'true'
           baseline-fail-on-unmatched: 'true'
           changed: 'true'
+          policy-guard: 'true'
+          policy-guard-base: ${{ github.event.pull_request.base.sha || 'origin/main' }}
       - name: Run Action on Node 24
         uses: ./
         with:

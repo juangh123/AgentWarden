@@ -204,6 +204,7 @@ agentwarden policy --profile strict --include "skills/**" --json
 agentwarden policy --config .agentwarden/policy.json --json
 agentwarden policy diff legacy strict
 agentwarden policy diff current .agentwarden/policy.json --fail-on-diff --json
+agentwarden policy guard origin/main --config .agentwarden/policy.json
 agentwarden scan . --config .agentwarden/policy.json
 
 # 生成或应用已接受发现的基线
@@ -238,6 +239,7 @@ agentwarden --version
 | `--changed` | 仅扫描相对自动检测 Git 基线发生变化的 Skill/MCP 文件 |
 | `--changed-from <ref>` | 仅扫描相对指定 Git ref 或提交 SHA 发生变化的文件 |
 | `--fail-on-diff` | `policy diff` 检测到差异时返回退出码 `1` |
+| `agentwarden policy guard <ref>` | 当前策略与指定 Git ref 上已批准策略的有效值不一致时返回退出码 `1`；用于阻止 PR 与恶意 Skill 一并放宽策略 |
 | `--baseline <file>` | 仅抑制基线中精确匹配的既有发现 |
 | `--output <file>` | `baseline` / SBOM 输出路径，或本地/远程 Skill 包的目标目录 |
 | `--sha256 <digest>` | 远程安装必填；校验原始下载字节的 SHA-256，支持 `sha256:` 前缀 |
@@ -805,6 +807,8 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
     baseline-expiring-within: '14'
     baseline-fail-on-expiring: 'true'
     baseline-fail-on-unmatched: 'true'
+    policy-guard: 'true'
+    policy-guard-base: ${{ github.event.pull_request.base.sha }}
     ignore-rules: |
       SEC-INJ-002
     severity-overrides: |
@@ -813,6 +817,8 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
 ```
 
 Action 的 `fail-on` 和 `min-score` 默认留空并使用 `profile`；显式设置时会覆盖档位默认值。`config` 可加载仓库中的策略文件，`include`、`exclude`、`ignore-rules` 和 `severity-overrides` 使用换行分隔。启用 `changed` / `changed-from` 前必须让 checkout 获取足够历史；PR 中推荐 `fetch-depth: 0`，或把 `github.event.pull_request.base.sha` 传给 `changed-from`。
+
+设置 `policy-guard: 'true'` 后，Action 会先把工作区策略与该 PR 基线提交上的已批准策略做有效值对比；任何策略改动都会先失败，需要人工修改基线分支策略后重新放行。该检查默认关闭，避免影响已有工作流。
 
 设置 `baseline-status: 'true'` 后，Action 会先按全量配置范围执行基线状态检查，再运行增量扫描与 SARIF 输出；该选项要求同时提供 `baseline`。`baseline-expiring-within` 定义临近到期的提醒窗口（默认 `30` 天），`baseline-fail-on-expiring` 和 `baseline-fail-on-unmatched` 可分别让临近到期或未匹配条目阻断工作流。基线已过期时始终返回失败，避免过期豁免在 CI 中继续生效。
 

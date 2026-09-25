@@ -69,7 +69,7 @@ export const DEFAULT_CONFIG: Readonly<SkillGuardConfig> = {
 
 const VALID_FAIL_ON: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 const VALID_PROFILES: PolicyProfileName[] = ['legacy', 'balanced', 'strict'];
-const CONFIG_FILE_NAMES = [
+export const CONFIG_FILE_NAMES = [
   path.join('.agentwarden', 'policy.json'),
   '.wardenrc.json',
   '.wardenrc',
@@ -153,9 +153,8 @@ function cleanPublisherPolicy(value: unknown): Required<PublisherPolicy> {
   };
 }
 
-function parseConfigFile(filePath: string): Partial<SkillGuardConfig> {
+export function parseConfigContent(filePath: string, raw: string): Partial<SkillGuardConfig> {
   try {
-    const raw = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('config root must be a JSON object');
@@ -165,6 +164,10 @@ function parseConfigFile(filePath: string): Partial<SkillGuardConfig> {
     const detail = error instanceof Error ? error.message : String(error);
     throw new ConfigError(`Invalid config file "${filePath}": ${detail}`);
   }
+}
+
+function parseConfigFile(filePath: string): Partial<SkillGuardConfig> {
+  return parseConfigContent(filePath, fs.readFileSync(filePath, 'utf8'));
 }
 
 function cleanExtends(value: unknown, source: string): string[] {
@@ -242,36 +245,64 @@ function mergeRawConfigs(
   return merged;
 }
 
-interface RawConfigTree {
+export interface RawConfigTree {
   config: Partial<SkillGuardConfig>;
   sources: string[];
 }
 
-function readConfigTree(filePath: string, stack: string[] = []): RawConfigTree {
+export interface ConfigTreeReader {
+  /** Return raw configuration text, or undefined when the path does not exist. */
+  read(filePath: string): string | undefined;
+  /** Return a stable identity used to detect circular `extends` chains. */
+  identity(filePath: string): string;
+}
+
+const filesystemConfigReader: ConfigTreeReader = {
+  read(filePath: string): string | undefined {
+    if (!fs.existsSync(filePath)) return undefined;
+    if (!fs.statSync(filePath).isFile()) {
+      throw new ConfigError(`Config path is not a file: ${filePath}`);
+    }
+    return fs.readFileSync(filePath, 'utf8');
+  },
+  identity(filePath: string): string {
+    return fs.realpathSync(filePath);
+  },
+};
+
+/**
+ * Load a config inheritance tree through an injected reader. The reader makes
+ * the same parser usable for files in the working tree and for blobs read from
+ * a Git ref.
+ */
+export function readConfigTreeFrom(
+  filePath: string,
+  reader: ConfigTreeReader,
+  stack: string[] = [],
+): RawConfigTree {
   const source = path.resolve(filePath);
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(source);
-  } catch {
+  const raw = reader.read(source);
+  if (raw === undefined) {
     throw new ConfigError(`Config file not found: ${source}`);
   }
-  if (!stat.isFile()) {
-    throw new ConfigError(`Config path is not a file: ${source}`);
-  }
 
-  const identity = fs.realpathSync(source);
+  const identity = reader.identity(source);
   if (stack.includes(identity)) {
     throw new ConfigError(`Circular config extends chain: ${[...stack, identity].join(' -> ')}`);
   }
 
-  const parsed = parseConfigFile(source);
+  const parsed = parseConfigContent(source, raw);
   const parentPaths = cleanExtends(parsed.extends, source);
   const nextStack = [...stack, identity];
   let merged: Partial<SkillGuardConfig> = {};
   const sources: string[] = [];
 
   for (const parentPath of parentPaths) {
-    const parent = readConfigTree(path.resolve(path.dirname(source), parentPath), nextStack);
+    const parent = readConfigTreeFrom(
+      path.resolve(path.dirname(source), parentPath),
+      reader,
+      nextStack,
+    );
     merged = mergeRawConfigs(merged, parent.config);
     sources.push(...parent.sources);
   }
@@ -284,6 +315,10 @@ function readConfigTree(filePath: string, stack: string[] = []): RawConfigTree {
     config: merged,
     sources: [...new Set(sources)],
   };
+}
+
+function readConfigTree(filePath: string, stack: string[] = []): RawConfigTree {
+  return readConfigTreeFrom(filePath, filesystemConfigReader, stack);
 }
 
 /** Validate and clamp a raw (possibly partial) config into a safe, usable shape. */

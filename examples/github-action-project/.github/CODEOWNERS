@@ -1,0 +1,3 @@
+# Replace @juangh123 with your security reviewers before using this example.
+.agentwarden/ @juangh123
+.github/workflows/ @juangh123
