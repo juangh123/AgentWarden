@@ -16,6 +16,9 @@ versioning.
   additions, removals, expiry changes, and entry metadata changes. Review-only
   baseline updates therefore need the same separate approval path as policy
   changes.
+- The Action now passes every policy-affecting workflow input into the policy
+  guard, so `ignore-rules`, severity thresholds, scan scope, severity
+  overrides, and baseline inputs cannot silently weaken the approved policy.
 - Added a complete downstream GitHub Action integration example and CI smoke
   coverage that scans it with the same strict policy it uses in its workflow.
 - CI now verifies the integration example through both the local Action source

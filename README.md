@@ -818,7 +818,7 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
 
 Action 的 `fail-on` 和 `min-score` 默认留空并使用 `profile`；显式设置时会覆盖档位默认值。`config` 可加载仓库中的策略文件，`include`、`exclude`、`ignore-rules` 和 `severity-overrides` 使用换行分隔。启用 `changed` / `changed-from` 前必须让 checkout 获取足够历史；PR 中推荐 `fetch-depth: 0`，或把 `github.event.pull_request.base.sha` 传给 `changed-from`。
 
-设置 `policy-guard: 'true'` 后，Action 会先把工作区策略及配置基线与该 PR 基线提交上的已批准版本做有效值对比；任何改动都会先失败，需要人工修改基线分支策略后重新放行。直接调用 Action 时该检查默认关闭，避免影响已有工作流；`agentwarden init` 生成的工作流会在 PR 中默认启用。
+设置 `policy-guard: 'true'` 后，Action 会先把扫描实际使用的有效策略及配置基线与该 PR 基线提交上的已批准版本做对比，包括 `profile`、`fail-on`、`min-score`、`include`、`exclude`、`ignore-rules` 和 `severity-overrides` 等工作流输入；任何改动都会先失败，需要人工修改基线分支策略后重新放行。直接调用 Action 时该检查默认关闭，避免影响已有工作流；`agentwarden init` 生成的工作流会在 PR 中默认启用。
 
 若策略通过 `baseline` 启用了发现基线，守护也会分别审查基线增删、到期时间、审核元数据和条目内容；仅重排条目不会误报。这样功能 PR 无法同时加入风险 Skill 并通过放宽规则或延长豁免来绕过门禁。
 
