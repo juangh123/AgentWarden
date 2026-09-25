@@ -170,7 +170,10 @@ agentwarden policy guard origin/main --config .agentwarden/policy.json
 
 `policy-guard` 直接使用时默认关闭，以保持已有工作流兼容；`agentwarden init`
 生成的新工作流和仓库内的 Action 集成示例会在 `pull_request` 事件中默认开启。
-开启后先运行策略守护，再执行基线状态检查、增量扫描与 SARIF 输出；对比使用规范化后的有效值，因此仅显式写出档位默认值不会误报。策略变更应通过修改基线分支策略并经过审查后生效，而不是在功能 PR 内静默放宽。
+开启后先运行策略守护，再执行基线状态检查、增量扫描与 SARIF 输出。守护会比较扫描实际使用的有效策略，包括 `profile`、`fail-on`、`min-score`、`include`、`exclude`、`ignore-rules`、`severity-overrides` 和 `baseline`，因此工作流输入本身也不能在功能 PR 中静默放宽。对比使用规范化后的有效值，仅显式写出档位默认值不会误报。
+
+若 `config` 使用 `strict` 档位，应同时把 Action 的 `profile` 设为
+`strict`；否则 Action 默认的 `balanced` 输入会覆盖配置，守护会按扫描的真实行为将其视为策略差异。
 
 守护同时覆盖策略里通过 `baseline` 配置的发现基线：PR 若向基线新增条目以压制发现，会在 `baseline.added` 中列出对应指纹并阻断；删除条目、延长到期时间、改写审核元数据或修改条目内容同样会失败。仅调整条目顺序不会误报。基线更新应作为独立变更走审查流程，而不是与功能改动混在同一 PR。
 
