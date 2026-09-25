@@ -45,6 +45,7 @@ jobs:
           path: '.'
           config: 'fixtures/ci-policy.json'
           profile: strict
+          min-score: '95'
           changed: 'true'
           policy-guard: 'true'
           policy-guard-base: ${{ github.event.pull_request.base.sha || 'origin/main' }}
@@ -57,6 +58,7 @@ jobs:
           path: '.'
           config: 'fixtures/ci-policy.json'
           profile: strict
+          min-score: '95'
           ignore-rules: SEC-CRED-001
           policy-guard: 'true'
           policy-guard-base: ${{ github.event.pull_request.base.sha || 'origin/main' }}
