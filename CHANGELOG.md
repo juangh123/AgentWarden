@@ -12,6 +12,10 @@ versioning.
   `policy-guard` input. They fail when a pull request weakens the effective
   policy that was approved on the base branch, closing the gap where an unsafe
   Skill and a matching rule exclusion could land in the same commit.
+- The policy guard also compares configured finding baselines, including
+  additions, removals, expiry changes, and entry metadata changes. Review-only
+  baseline updates therefore need the same separate approval path as policy
+  changes.
 - Added a complete downstream GitHub Action integration example and CI smoke
   coverage that scans it with the same strict policy it uses in its workflow.
 - CI now verifies the integration example through both the local Action source
@@ -19,6 +23,10 @@ versioning.
 
 ### Changed
 
+- Newly initialized workflows and the downstream Action example enable the
+  policy guard for pull requests by default; the direct Action input remains
+  opt-in so existing push and pull-request workflows keep their current
+  behavior.
 - The MVP packaging gate now validates the local publish target against an
   isolated mock registry, keeping the check repeatable after a version is
   already published.

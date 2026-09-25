@@ -77,7 +77,7 @@ inputs:
     required: false
     default: 'false'
   policy-guard:
-    description: 'Fail when the pull request policy differs from the approved policy on the base branch'
+    description: 'Fail when the pull request policy or configured baseline differs from the approved version on the base branch'
     required: false
     default: 'false'
   policy-guard-base:
@@ -185,6 +185,9 @@ runs:
           guard_args=(policy guard "$guard_base" --no-color)
           if [[ -n "$INPUT_CONFIG" ]]; then
             guard_args+=(--config "$INPUT_CONFIG")
+          fi
+          if [[ -n "$INPUT_BASELINE" ]]; then
+            guard_args+=(--baseline "$INPUT_BASELINE")
           fi
           "${CLI[@]}" "${guard_args[@]}"
         fi
