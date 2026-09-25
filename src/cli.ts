@@ -1782,6 +1782,7 @@ function cmdPolicyGuard(
     baseRef,
     approvedPolicy: approved.configPath,
     approvedSources: approved.sources,
+    currentPath: result.current.configPath,
     currentPolicy: current.source ?? null,
     changes: result.diff.changes,
   };
@@ -1792,7 +1793,7 @@ function cmdPolicyGuard(
     console.log(chalk.bold.cyan('\nPolicy Guard\n'));
     console.log(chalk.gray('─'.repeat(78)));
     console.log(`  Approved: ${chalk.white(`${baseRef}:${approved.configPath}`)}`);
-    console.log(`  Current:  ${chalk.white(current.source ?? '(built-in defaults)')}`);
+    console.log(`  Current:  ${chalk.white(result.current.configPath)}`);
     console.log(chalk.gray('─'.repeat(78)));
 
     if (!result.diff.changed) {
