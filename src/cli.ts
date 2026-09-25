@@ -46,6 +46,7 @@ import {
 } from './baseline/index.ts';
 import { allRules } from './rules/index.ts';
 import { diffPolicyConfigs } from './policy/diff.ts';
+import { guardPolicy, loadApprovedPolicy, PolicyGuardError } from './policy/guard.ts';
 import { RemoteSkillError, fetchRemoteSkill } from './source/remote.ts';
 import {
   SkillPackageError,
@@ -373,6 +374,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('rules')}                List active security rules and effective severity
   ${chalk.green('init')}                 Create a policy file and GitHub Actions security gate
   ${chalk.green('policy [diff <from> <to>]')} Show effective policy or compare two policies
+  ${chalk.green('policy guard <base-ref>')} Fail when the current policy differs from a base ref
   ${chalk.green('list')}                 List skills recorded in skills.lock
   ${chalk.green('uninstall <name>')}     Remove a skill entry from skills.lock
   ${chalk.green('baseline [create|status|prune|update] [path...]')} Manage accepted findings
@@ -1730,6 +1732,98 @@ function cmdPolicyDiff(
   }
 }
 
+function cmdPolicyGuard(
+  baseRef: string,
+  options: ParsedArgs['options'],
+  format: ReportFormat,
+): void {
+  if (format === 'sarif') usageError('policy guard supports pretty|json output only');
+  if (options['fail-on-diff'] !== undefined) {
+    usageError('policy guard always fails on policy changes; --fail-on-diff is not supported');
+  }
+
+  const configPath = options.config !== undefined ? String(options.config) : undefined;
+  let approved: ReturnType<typeof loadApprovedPolicy>;
+  try {
+    approved = loadApprovedPolicy({ base: baseRef, configPath });
+  } catch (error) {
+    if (error instanceof PolicyGuardError) {
+      console.error(chalk.red(`Error: ${error.message}`));
+      process.exit(EXIT_USAGE);
+    }
+    throw error;
+  }
+
+  if (configPath !== undefined && !fs.existsSync(path.resolve(configPath))) {
+    if (format === 'json') {
+      console.log(
+        JSON.stringify(
+          {
+            changed: true,
+            baseRef,
+            approvedPolicy: approved.configPath,
+            currentPolicy: null,
+            reason: `Current policy file was removed: ${configPath}`,
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      console.error(chalk.red(`\nPolicy change detected: ${chalk.white(configPath)} was removed.\n`));
+    }
+    process.exit(EXIT_FAIL);
+  }
+
+  const current = buildConfigDetails(options);
+  const result = guardPolicy(approved, current.config, current.source);
+  const report = {
+    changed: result.diff.changed,
+    baseRef,
+    approvedPolicy: approved.configPath,
+    approvedSources: approved.sources,
+    currentPolicy: current.source ?? null,
+    changes: result.diff.changes,
+  };
+
+  if (format === 'json') {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(chalk.bold.cyan('\nPolicy Guard\n'));
+    console.log(chalk.gray('─'.repeat(78)));
+    console.log(`  Approved: ${chalk.white(`${baseRef}:${approved.configPath}`)}`);
+    console.log(`  Current:  ${chalk.white(current.source ?? '(built-in defaults)')}`);
+    console.log(chalk.gray('─'.repeat(78)));
+
+    if (!result.diff.changed) {
+      console.log(chalk.green.bold('\n✓ Policy matches the approved base ref.\n'));
+    } else {
+      for (const change of result.diff.changes) {
+        const field = change.key ? `${change.field}[${change.key}]` : change.field;
+        if (change.kind === 'added') {
+          console.log(
+            `  ${chalk.green('+')} ${field}: ${chalk.gray(formatPolicyDiffValue(change.after))}`,
+          );
+        } else if (change.kind === 'removed') {
+          console.log(
+            `  ${chalk.red('-')} ${field}: ${chalk.gray(formatPolicyDiffValue(change.before))}`,
+          );
+        } else {
+          console.log(
+            `  ${chalk.yellow('~')} ${field}: ` +
+              `${chalk.gray(formatPolicyDiffValue(change.before))} -> ${chalk.white(formatPolicyDiffValue(change.after))}`,
+          );
+        }
+      }
+      console.log(chalk.gray(`\n${result.diff.changes.length} policy change(s) detected.\n`));
+    }
+  }
+
+  if (result.diff.changed) {
+    process.exit(EXIT_FAIL);
+  }
+}
+
 function cmdUninstall(name: string, format: ReportFormat): void {
   const lock = readLockfile();
   const key = findSkillKey(lock, name);
@@ -2137,6 +2231,17 @@ async function main(): Promise<void> {
 
   if (command === 'policy') {
     const subcommand = positionals[1];
+    if (subcommand === 'guard') {
+      const baseRef = positionals[2];
+      if (!baseRef) {
+        usageError('Missing base ref. Usage: agentwarden policy guard <base-ref> [--config <file>]');
+      }
+      if (positionals.length > 3) {
+        usageError('policy guard accepts exactly one base ref');
+      }
+      cmdPolicyGuard(baseRef, options, resolveFormat(options));
+      return;
+    }
     if (subcommand === 'diff') {
       const from = positionals[2];
       const to = positionals[3];

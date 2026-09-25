@@ -76,6 +76,14 @@ inputs:
     description: 'Fail when any configured baseline entry no longer matches current findings'
     required: false
     default: 'false'
+  policy-guard:
+    description: 'Fail when the pull request policy differs from the approved policy on the base branch'
+    required: false
+    default: 'false'
+  policy-guard-base:
+    description: 'Git ref holding the approved policy; defaults to the pull request base ref'
+    required: false
+    default: ''
   sarif:
     description: 'Path to write SARIF output report for GitHub Security Tab'
     required: false
@@ -107,6 +115,8 @@ runs:
         INPUT_BASELINE_EXPIRING_WITHIN: ${{ inputs.baseline-expiring-within }}
         INPUT_BASELINE_FAIL_ON_EXPIRING: ${{ inputs.baseline-fail-on-expiring }}
         INPUT_BASELINE_FAIL_ON_UNMATCHED: ${{ inputs.baseline-fail-on-unmatched }}
+        INPUT_POLICY_GUARD: ${{ inputs.policy-guard }}
+        INPUT_POLICY_GUARD_BASE: ${{ inputs.policy-guard-base }}
         INPUT_SARIF: ${{ inputs.sarif }}
       run: |
         set -euo pipefail
@@ -148,6 +158,7 @@ runs:
         validate_boolean baseline-fail-on-expiring "$INPUT_BASELINE_FAIL_ON_EXPIRING"
         validate_boolean baseline-fail-on-unmatched "$INPUT_BASELINE_FAIL_ON_UNMATCHED"
         validate_boolean changed "$INPUT_CHANGED"
+        validate_boolean policy-guard "$INPUT_POLICY_GUARD"
 
         append_arg --config "$INPUT_CONFIG"
         append_arg --profile "$INPUT_PROFILE"
@@ -158,6 +169,25 @@ runs:
         append_lines --ignore-rule "$INPUT_IGNORE_RULES"
         append_lines --severity-override "$INPUT_SEVERITY_OVERRIDES"
         append_arg --baseline "$INPUT_BASELINE"
+
+        if [[ "$INPUT_POLICY_GUARD" == "true" ]]; then
+          guard_base="$INPUT_POLICY_GUARD_BASE"
+          if [[ -z "$guard_base" && -n "${GITHUB_BASE_REF:-}" ]]; then
+            guard_base="origin/${GITHUB_BASE_REF}"
+            if ! git rev-parse --verify --quiet "${guard_base}^{commit}" >/dev/null 2>&1; then
+              guard_base="${GITHUB_BASE_REF}"
+            fi
+          fi
+          if [[ -z "$guard_base" ]]; then
+            echo "policy-guard requires policy-guard-base or a pull request base ref" >&2
+            exit 2
+          fi
+          guard_args=(policy guard "$guard_base" --no-color)
+          if [[ -n "$INPUT_CONFIG" ]]; then
+            guard_args+=(--config "$INPUT_CONFIG")
+          fi
+          "${CLI[@]}" "${guard_args[@]}"
+        fi
 
         if [[ "$INPUT_BASELINE_STATUS" == "true" ]]; then
           if [[ -z "$INPUT_BASELINE" ]]; then

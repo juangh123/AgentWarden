@@ -145,6 +145,33 @@ steps:
 
 基线只保存稳定指纹和审核元数据，不保存原始敏感片段。`baseline-status` 要求同时提供 `baseline`。过期基线始终失败，不会永久静默豁免。
 
+## 策略防篡改
+
+PR 可能在同一提交里既加入有风险的 Skill，又通过 `ignoreRules` 或降低 `failOn` 来放宽策略。启用策略守护后，Action 会把工作区策略与该 PR 基线提交上的已批准策略做有效值对比，任何差异都会让工作流失败：
+
+```yaml
+- uses: actions/checkout@v7
+  with:
+    fetch-depth: 0
+
+- uses: juangh123/AgentWarden@v0.3.3
+  with:
+    path: .
+    config: .agentwarden/policy.json
+    policy-guard: 'true'
+    policy-guard-base: ${{ github.event.pull_request.base.sha }}
+```
+
+本地等价命令：
+
+```bash
+agentwarden policy guard origin/main --config .agentwarden/policy.json
+```
+
+`policy-guard` 默认关闭。开启后先运行策略守护，再执行基线状态检查、增量扫描与 SARIF 输出；对比使用规范化后的有效值，因此仅显式写出档位默认值不会误报。策略变更应通过修改基线分支策略并经过审查后生效，而不是在功能 PR 内静默放宽。
+
+配合把 `.agentwarden/` 和 `.github/workflows/` 交给 `CODEOWNERS` 审查，可以进一步收紧策略文件的改动权限。
+
 ## 策略与规则覆盖
 
 | 输入 | 作用 |
@@ -156,6 +183,8 @@ steps:
 | `include` / `exclude` | 换行分隔的路径 glob |
 | `ignore-rules` | 换行分隔的规则 ID |
 | `severity-overrides` | 换行分隔的 `RULE_ID=severity`，例如 `SEC-CRED-003=medium` |
+| `policy-guard` | 是否把工作区策略与基线分支已批准策略对比，差异即失败；默认 `false` |
+| `policy-guard-base` | 已批准策略所在的 Git ref；留空时使用 PR 的基线 ref |
 
 推荐把策略文件提交到 `.agentwarden/policy.json`，让本地扫描和 CI 使用同一门禁。
 

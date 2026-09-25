@@ -149,6 +149,14 @@ export {
   type PolicyDiffChange,
   type PolicyDiffKind,
 } from './policy/diff.ts';
+export {
+  PolicyGuardError,
+  guardPolicy,
+  loadApprovedPolicy,
+  type ApprovedPolicy,
+  type ApprovedPolicyOptions,
+  type PolicyGuardResult,
+} from './policy/guard.ts';
 export type {
   Rule,
   Finding,

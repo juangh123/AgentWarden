@@ -5,7 +5,11 @@ Action. It contains:
 
 - `skills/release-notes/SKILL.md`: a reviewed skill with no blocking findings.
 - `.agentwarden/policy.json`: the strict policy used by both local scans and CI.
-- `.github/workflows/agentwarden.yml`: the pull request and main-branch gate.
+- `.github/workflows/agentwarden.yml`: the pull request and main-branch gate,
+  including the optional policy guard that fails when a PR rewrites the
+  approved policy.
+- `.github/CODEOWNERS`: replace the placeholder with the security reviewers who
+  must approve policy and workflow changes.
 
 Run the same policy locally:
 
