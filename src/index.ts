@@ -57,6 +57,7 @@ export {
 export {
   DEFAULT_BASELINE_NAME,
   createBaseline,
+  parseBaselineContent,
   readBaseline,
   writeBaseline,
   applyBaseline,
@@ -151,10 +152,14 @@ export {
 } from './policy/diff.ts';
 export {
   PolicyGuardError,
+  guardBaseline,
   guardPolicy,
   loadApprovedPolicy,
   type ApprovedPolicy,
   type ApprovedPolicyOptions,
+  type BaselineGuardChange,
+  type BaselineGuardChangeKind,
+  type BaselineGuardResult,
   type PolicyGuardResult,
 } from './policy/guard.ts';
 export type {

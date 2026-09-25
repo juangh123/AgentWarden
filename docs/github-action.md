@@ -168,7 +168,11 @@ PR 可能在同一提交里既加入有风险的 Skill，又通过 `ignoreRules`
 agentwarden policy guard origin/main --config .agentwarden/policy.json
 ```
 
-`policy-guard` 默认关闭。开启后先运行策略守护，再执行基线状态检查、增量扫描与 SARIF 输出；对比使用规范化后的有效值，因此仅显式写出档位默认值不会误报。策略变更应通过修改基线分支策略并经过审查后生效，而不是在功能 PR 内静默放宽。
+`policy-guard` 直接使用时默认关闭，以保持已有工作流兼容；`agentwarden init`
+生成的新工作流和仓库内的 Action 集成示例会在 `pull_request` 事件中默认开启。
+开启后先运行策略守护，再执行基线状态检查、增量扫描与 SARIF 输出；对比使用规范化后的有效值，因此仅显式写出档位默认值不会误报。策略变更应通过修改基线分支策略并经过审查后生效，而不是在功能 PR 内静默放宽。
+
+守护同时覆盖策略里通过 `baseline` 配置的发现基线：PR 若向基线新增条目以压制发现，会在 `baseline.added` 中列出对应指纹并阻断；删除条目、延长到期时间、改写审核元数据或修改条目内容同样会失败。仅调整条目顺序不会误报。基线更新应作为独立变更走审查流程，而不是与功能改动混在同一 PR。
 
 配合把 `.agentwarden/` 和 `.github/workflows/` 交给 `CODEOWNERS` 审查，可以进一步收紧策略文件的改动权限。
 
@@ -183,7 +187,7 @@ agentwarden policy guard origin/main --config .agentwarden/policy.json
 | `include` / `exclude` | 换行分隔的路径 glob |
 | `ignore-rules` | 换行分隔的规则 ID |
 | `severity-overrides` | 换行分隔的 `RULE_ID=severity`，例如 `SEC-CRED-003=medium` |
-| `policy-guard` | 是否把工作区策略与基线分支已批准策略对比，差异即失败；默认 `false` |
+| `policy-guard` | 是否把工作区策略及配置基线同基线分支的已批准版本对比，差异即失败；默认 `false` |
 | `policy-guard-base` | 已批准策略所在的 Git ref；留空时使用 PR 的基线 ref |
 
 推荐把策略文件提交到 `.agentwarden/policy.json`，让本地扫描和 CI 使用同一门禁。

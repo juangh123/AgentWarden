@@ -8,6 +8,11 @@ import {
   type ConfigTreeReader,
   type SkillGuardConfig,
 } from '../config/index.ts';
+import {
+  parseBaselineContent,
+  type BaselineEntry,
+  type BaselineSchema,
+} from '../baseline/index.ts';
 import { diffPolicyConfigs, type PolicyDiff } from './diff.ts';
 
 export class PolicyGuardError extends Error {
@@ -29,11 +34,36 @@ export interface ApprovedPolicyOptions {
 export interface ApprovedPolicy {
   repositoryRoot: string;
   baseRef: string;
+  /** Resolved commit SHA of the base ref. */
+  sha: string;
   /** POSIX path of the config file inside the repository. */
   configPath: string;
   config: SkillGuardConfig;
   /** Repository-relative POSIX paths of the whole inheritance chain. */
   sources: string[];
+}
+
+export interface BaselineGuardResult {
+  /** Repository-relative POSIX path of the baseline file. */
+  path: string;
+  /** Entries present on the approved base ref. */
+  approvedEntries: number;
+  /** Entries present in the working tree. */
+  currentEntries: number;
+  added: string[];
+  removed: string[];
+  changes: BaselineGuardChange[];
+  changed: boolean;
+}
+
+export type BaselineGuardChangeKind = 'added' | 'removed' | 'changed';
+
+export interface BaselineGuardChange {
+  field: string;
+  key?: string;
+  kind: BaselineGuardChangeKind;
+  before?: string | number | null | BaselineEntry[];
+  after?: string | number | null | BaselineEntry[];
 }
 
 export interface PolicyGuardResult {
@@ -43,6 +73,7 @@ export interface PolicyGuardResult {
     config: SkillGuardConfig;
   };
   diff: PolicyDiff;
+  baseline?: BaselineGuardResult;
 }
 
 function runGit(cwd: string, args: string[], allowFailure = false): string {
@@ -126,6 +157,162 @@ function readBlob(root: string, ref: string, repoPath: string): string | undefin
   return result.stdout;
 }
 
+function compareBaselineScalar(
+  changes: BaselineGuardChange[],
+  field: string,
+  before: string | number | undefined,
+  after: string | number | undefined,
+): void {
+  const normalizedBefore = before ?? null;
+  const normalizedAfter = after ?? null;
+  if (normalizedBefore !== normalizedAfter) {
+    changes.push({
+      field,
+      kind: 'changed',
+      before: normalizedBefore,
+      after: normalizedAfter,
+    });
+  }
+}
+
+function sortedEntrySnapshots(entries: BaselineEntry[]): BaselineEntry[] {
+  const snapshots = entries.map((entry) => ({
+    fingerprint: entry.fingerprint,
+    ruleId: entry.ruleId,
+    file: entry.file,
+    ...(entry.line !== undefined ? { line: entry.line } : {}),
+    severity: entry.severity,
+    ...(entry.acceptedAt !== undefined ? { acceptedAt: entry.acceptedAt } : {}),
+  }));
+  return snapshots.sort((left, right) =>
+    JSON.stringify(left).localeCompare(JSON.stringify(right)),
+  );
+}
+
+function entriesByFingerprint(baseline: BaselineSchema | undefined): Map<string, BaselineEntry[]> {
+  const entries = new Map<string, BaselineEntry[]>();
+  for (const entry of baseline?.entries ?? []) {
+    const bucket = entries.get(entry.fingerprint) ?? [];
+    bucket.push(entry);
+    entries.set(entry.fingerprint, bucket);
+  }
+  return entries;
+}
+
+/**
+ * Compare accepted-finding baselines by reviewed content. Adding an entry
+ * suppresses a finding, while changing expiry or entry metadata can weaken or
+ * misrepresent that review, so every non-cosmetic change requires a separate
+ * approved update.
+ *
+ * @param baselinePath Repository-relative POSIX path of the approved baseline.
+ */
+export function guardBaseline(
+  root: string,
+  baseSha: string,
+  baselinePath: string,
+  currentBaseline: BaselineSchema | undefined,
+): BaselineGuardResult {
+  const repoPath = toPosix(baselinePath.replace(/^\/+/, ''));
+  const approvedRaw = readBlob(root, baseSha, repoPath);
+  let approved: BaselineSchema | undefined;
+  if (approvedRaw !== undefined) {
+    try {
+      approved = parseBaselineContent(approvedRaw, repoPath);
+    } catch (error) {
+      throw new PolicyGuardError(
+        `Approved baseline "${repoPath}" is invalid: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  const approvedEntries = entriesByFingerprint(approved);
+  const currentEntries = entriesByFingerprint(currentBaseline);
+  const added: string[] = [];
+  const removed: string[] = [];
+  const changes: BaselineGuardChange[] = [];
+
+  compareBaselineScalar(
+    changes,
+    'baselineVersion',
+    approved?.baselineVersion,
+    currentBaseline?.baselineVersion,
+  );
+  compareBaselineScalar(changes, 'createdAt', approved?.createdAt, currentBaseline?.createdAt);
+  compareBaselineScalar(
+    changes,
+    'review.reviewedAt',
+    approved?.review?.reviewedAt,
+    currentBaseline?.review?.reviewedAt,
+  );
+  compareBaselineScalar(
+    changes,
+    'review.owner',
+    approved?.review?.owner,
+    currentBaseline?.review?.owner,
+  );
+  compareBaselineScalar(
+    changes,
+    'review.expiresAt',
+    approved?.review?.expiresAt,
+    currentBaseline?.review?.expiresAt,
+  );
+  compareBaselineScalar(
+    changes,
+    'review.note',
+    approved?.review?.note,
+    currentBaseline?.review?.note,
+  );
+
+  const fingerprints = [...new Set([...approvedEntries.keys(), ...currentEntries.keys()])].sort();
+  for (const fingerprint of fingerprints) {
+    const before = approvedEntries.get(fingerprint);
+    const after = currentEntries.get(fingerprint);
+    if (before === undefined) {
+      added.push(fingerprint);
+      changes.push({
+        field: 'entries',
+        key: fingerprint,
+        kind: 'added',
+        after: sortedEntrySnapshots(after ?? []),
+      });
+      continue;
+    }
+    if (after === undefined) {
+      removed.push(fingerprint);
+      changes.push({
+        field: 'entries',
+        key: fingerprint,
+        kind: 'removed',
+        before: sortedEntrySnapshots(before),
+      });
+      continue;
+    }
+
+    const beforeSnapshot = sortedEntrySnapshots(before);
+    const afterSnapshot = sortedEntrySnapshots(after);
+    if (JSON.stringify(beforeSnapshot) !== JSON.stringify(afterSnapshot)) {
+      changes.push({
+        field: 'entries',
+        key: fingerprint,
+        kind: 'changed',
+        before: beforeSnapshot,
+        after: afterSnapshot,
+      });
+    }
+  }
+
+  return {
+    path: repoPath,
+    approvedEntries: approved?.entries.length ?? 0,
+    currentEntries: currentBaseline?.entries.length ?? 0,
+    added,
+    removed,
+    changes,
+    changed: changes.length > 0,
+  };
+}
+
 function refConfigReader(root: string, sha: string): ConfigTreeReader {
   return {
     read(filePath: string): string | undefined {
@@ -163,6 +350,7 @@ export function loadApprovedPolicy(options: ApprovedPolicyOptions): ApprovedPoli
         configPath,
         config: normalizeConfig(tree.config),
         sources: tree.sources.map((source) => relativeToRoot(root, source)),
+        sha,
       };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -196,6 +384,7 @@ export function guardPolicy(
   approved: ApprovedPolicy,
   currentConfig: SkillGuardConfig,
   currentConfigPath?: string,
+  baseline?: BaselineGuardResult,
 ): PolicyGuardResult {
   const currentPath = currentConfigPath
     ? repositoryRelativePath(approved.repositoryRoot, currentConfigPath)
@@ -207,6 +396,7 @@ export function guardPolicy(
       config: normalizeConfig(currentConfig),
     },
     diff: diffPolicyConfigs(approved.config, currentConfig),
+    ...(baseline ? { baseline } : {}),
   };
 }
 

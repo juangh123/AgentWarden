@@ -104,6 +104,8 @@ export function buildInitWorkflow(actionRef?: string): string {
     '        with:',
     '          path: .',
     `          config: ${INIT_CONFIG_PATH}`,
+    "          policy-guard: ${{ github.event_name == 'pull_request' }}",
+    '          policy-guard-base: ${{ github.event.pull_request.base.sha }}',
     '          sarif: agentwarden.sarif',
     '',
     '      - name: Upload SARIF',

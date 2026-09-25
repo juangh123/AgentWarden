@@ -39,6 +39,7 @@ import {
   DEFAULT_BASELINE_NAME,
   createBaseline,
   inspectBaseline,
+  parseBaselineContent,
   pruneBaseline,
   readBaseline,
   updateBaseline,
@@ -46,7 +47,13 @@ import {
 } from './baseline/index.ts';
 import { allRules } from './rules/index.ts';
 import { diffPolicyConfigs } from './policy/diff.ts';
-import { guardPolicy, loadApprovedPolicy, PolicyGuardError } from './policy/guard.ts';
+import {
+  guardBaseline,
+  guardPolicy,
+  loadApprovedPolicy,
+  PolicyGuardError,
+  type BaselineGuardResult,
+} from './policy/guard.ts';
 import { RemoteSkillError, fetchRemoteSkill } from './source/remote.ts';
 import {
   SkillPackageError,
@@ -1670,6 +1677,29 @@ function formatPolicyDiffValue(value: string | number | boolean | null | undefin
   return String(value);
 }
 
+function repositoryRelativeBaselinePath(root: string, baselinePath: string): string {
+  const absolute = path.resolve(baselinePath);
+  let canonicalAbsolute: string;
+  try {
+    canonicalAbsolute = fs.realpathSync.native(absolute);
+  } catch {
+    canonicalAbsolute = path.join(
+      canonicalCliPath(path.dirname(absolute)),
+      path.basename(absolute),
+    );
+  }
+  const relative = path.relative(canonicalCliPath(root), canonicalAbsolute);
+  if (
+    relative === '' ||
+    relative === '..' ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    usageError(`Policy guard baseline must be inside the repository: ${baselinePath}`);
+  }
+  return relative.split(path.sep).join('/');
+}
+
 function cmdPolicyDiff(
   fromInput: string,
   toInput: string,
@@ -1776,15 +1806,45 @@ function cmdPolicyGuard(
   }
 
   const current = buildConfigDetails(options);
-  const result = guardPolicy(approved, current.config, current.source);
+  let baselineGuard: BaselineGuardResult | undefined;
+  const baselinePath = current.config.baseline;
+  if (baselinePath !== undefined) {
+    const resolvedBaseline = path.resolve(baselinePath);
+    let currentBaseline;
+    if (fs.existsSync(resolvedBaseline)) {
+      try {
+        currentBaseline = parseBaselineContent(
+          fs.readFileSync(resolvedBaseline, 'utf8'),
+          resolvedBaseline,
+        );
+      } catch (error) {
+        console.error(
+          chalk.red(
+            `Error: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+        process.exit(EXIT_USAGE);
+      }
+    }
+    baselineGuard = guardBaseline(
+      approved.repositoryRoot,
+      approved.sha,
+      repositoryRelativeBaselinePath(approved.repositoryRoot, baselinePath),
+      currentBaseline,
+    );
+  }
+
+  const result = guardPolicy(approved, current.config, current.source, baselineGuard);
+  const changed = result.diff.changed || (baselineGuard?.changed ?? false);
   const report = {
-    changed: result.diff.changed,
+    changed,
     baseRef,
     approvedPolicy: approved.configPath,
     approvedSources: approved.sources,
     currentPath: result.current.configPath,
     currentPolicy: current.source ?? null,
     changes: result.diff.changes,
+    ...(baselineGuard ? { baseline: baselineGuard } : {}),
   };
 
   if (format === 'json') {
@@ -1796,7 +1856,7 @@ function cmdPolicyGuard(
     console.log(`  Current:  ${chalk.white(result.current.configPath)}`);
     console.log(chalk.gray('─'.repeat(78)));
 
-    if (!result.diff.changed) {
+    if (!changed) {
       console.log(chalk.green.bold('\n✓ Policy matches the approved base ref.\n'));
     } else {
       for (const change of result.diff.changes) {
@@ -1818,9 +1878,38 @@ function cmdPolicyGuard(
       }
       console.log(chalk.gray(`\n${result.diff.changes.length} policy change(s) detected.\n`));
     }
+
+    if (baselineGuard?.changed) {
+      console.log(
+        chalk.gray(
+          `\nBaseline ${baselineGuard.path}: ${baselineGuard.approvedEntries} approved -> ` +
+            `${baselineGuard.currentEntries} current\n`,
+        ),
+      );
+      for (const fingerprint of baselineGuard.added) {
+        console.log(`  ${chalk.red('+')} accepted finding ${chalk.gray(fingerprint.slice(0, 16))}`);
+      }
+      for (const fingerprint of baselineGuard.removed) {
+        console.log(`  ${chalk.yellow('-')} dropped finding ${chalk.gray(fingerprint.slice(0, 16))}`);
+      }
+      for (const change of baselineGuard.changes) {
+        if (change.field !== 'entries' || change.kind !== 'changed') continue;
+        console.log(
+          `  ${chalk.yellow('~')} revised finding ${chalk.gray((change.key ?? '').slice(0, 16))}`,
+        );
+      }
+      for (const change of baselineGuard.changes) {
+        if (change.field === 'entries') continue;
+        console.log(
+          `  ${chalk.yellow('~')} ${change.field}: ` +
+            `${chalk.gray(String(change.before ?? '(unset)'))} -> ` +
+            `${chalk.white(String(change.after ?? '(unset)'))}`,
+        );
+      }
+    }
   }
 
-  if (result.diff.changed) {
+  if (changed) {
     process.exit(EXIT_FAIL);
   }
 }

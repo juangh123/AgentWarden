@@ -39,6 +39,8 @@ describe('project initialization', () => {
       const workflow = fs.readFileSync(path.join(cwd, INIT_WORKFLOW_PATH), 'utf8');
       assert.match(workflow, /uses: juangh123\/AgentWarden@v\d+\.\d+\.\d+/);
       assert.match(workflow, /config: \.agentwarden\/policy\.json/);
+      assert.match(workflow, /policy-guard: \$\{\{ github\.event_name == 'pull_request' \}\}/);
+      assert.match(workflow, /policy-guard-base: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
       assert.match(workflow, /hashFiles\('agentwarden\.sarif'\)/);
       assert.match(
         buildInitWorkflow('example/warden@0123456789abcdef'),

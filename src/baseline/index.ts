@@ -162,7 +162,8 @@ export function createBaseline(
   };
 }
 
-function parseBaseline(raw: string, baselinePath: string): BaselineSchema {
+/** Parse and validate baseline JSON content. Exported so the same schema checks apply to files read from a Git ref. */
+export function parseBaselineContent(raw: string, baselinePath = DEFAULT_BASELINE_NAME): BaselineSchema {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -237,7 +238,7 @@ export function readBaseline(filePath: string, cwd: string = process.cwd()): Bas
   if (!fs.existsSync(resolvedPath)) {
     throw new Error(`Baseline file not found at ${resolvedPath}`);
   }
-  return parseBaseline(fs.readFileSync(resolvedPath, 'utf8'), resolvedPath);
+  return parseBaselineContent(fs.readFileSync(resolvedPath, 'utf8'), resolvedPath);
 }
 
 export function writeBaseline(
