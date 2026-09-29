@@ -1488,6 +1488,20 @@ check(
   'remote URL query credentials are redacted in the lockfile',
   !queryRedactedLock.includes(remoteQuerySecret),
 );
+const queryLockPath = path.join(tmp, 'skills.lock');
+const legacyQuerySecret = 'LEGACY_QUERY_SECRET_1234567890';
+const legacyQueryLock = JSON.parse(queryRedactedLock);
+legacyQueryLock.skills['remote-safe-weather'].remoteUrl =
+  `${remoteBaseUrl}/remote-safe.md?token=${legacyQuerySecret}`;
+legacyQueryLock.skills['remote-safe-weather'].resolvedUrl =
+  `${remoteBaseUrl}/remote-safe.md?access_token=${legacyQuerySecret}`;
+fs.writeFileSync(queryLockPath, JSON.stringify(legacyQueryLock, null, 2) + '\n', 'utf8');
+r = run(['-C', tmp, 'list', '--json']);
+check(
+  'list redacts sensitive URL metadata from legacy lockfiles',
+  r.status === 0 && !r.stdout.includes(legacyQuerySecret),
+  `status=${r.status}`,
+);
 r = run(['-C', tmp, 'uninstall', 'remote-safe-weather', '--json']);
 check('query-redacted remote entry can be uninstalled', r.status === 0, `status=${r.status}`);
 

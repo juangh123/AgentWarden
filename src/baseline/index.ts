@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { BaselineMetadata, Finding, ScanResult, Severity } from '../rules/types.ts';
 import { createFindingFingerprints, normalizeFindingPath } from '../fingerprint.ts';
 import { calculateScore, passesPolicy } from '../scanner/scoring.ts';
+import { writeFileAtomic } from '../utils/atomicWrite.ts';
 
 export const DEFAULT_BASELINE_NAME = '.agentwarden-baseline.json';
 const VALID_SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -253,7 +254,7 @@ export function writeBaseline(
     ...(baseline.review ? { review: { ...baseline.review } } : {}),
     entries: [...baseline.entries].sort((a, b) => a.fingerprint.localeCompare(b.fingerprint)),
   };
-  fs.writeFileSync(resolvedPath, JSON.stringify(sorted, null, 2) + '\n', 'utf8');
+  writeFileAtomic(resolvedPath, JSON.stringify(sorted, null, 2) + '\n');
   return resolvedPath;
 }
 

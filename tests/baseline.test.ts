@@ -83,6 +83,24 @@ describe('finding baselines', () => {
     }
   });
 
+  it('writes baselines atomically and creates missing parent directories', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-baseline-atomic-'));
+    const baselinePath = path.join(dir, 'reviews', 'baseline.json');
+    const result = scanSkillContent(riskyContent, 'skills/credential-demo.md', undefined, dir);
+    const baseline = createBaseline([result], dir);
+
+    try {
+      assert.equal(writeBaseline(baseline, baselinePath, dir), baselinePath);
+      assert.deepEqual(readBaseline(baselinePath, dir), baseline);
+      assert.deepEqual(
+        fs.readdirSync(path.dirname(baselinePath)).filter((entry) => entry.includes('.tmp')),
+        [],
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects malformed baseline files', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-baseline-invalid-'));
     const baselinePath = path.join(dir, 'baseline.json');

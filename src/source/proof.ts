@@ -12,11 +12,16 @@ import {
   type SignatureVerificationResult,
 } from './signature.ts';
 
-export const SIGNATURE_ATTESTATION_DIR = path.join('.agentwarden', 'attestations');
+export const SIGNATURE_ATTESTATION_DIR = '.agentwarden/attestations';
 export const DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES = 20 * 1024 * 1024;
 
 export interface LockedPublisherPolicyDecision extends PublisherPolicyDecision {
   proofVerified: boolean;
+}
+
+interface SignatureAttestationReadResult {
+  payload?: Buffer;
+  error?: string;
 }
 
 function sha256(value: string | Uint8Array): string {
@@ -67,6 +72,56 @@ export function signatureAttestationPath(payloadSha256: string, cwd = process.cw
   return path.join(cwd, SIGNATURE_ATTESTATION_DIR, `${payloadSha256.toLowerCase()}.bin`);
 }
 
+function readSignatureAttestation(filePath: string): SignatureAttestationReadResult {
+  let descriptor: number | undefined;
+  try {
+    descriptor = fs.openSync(filePath, 'r');
+    const stat = fs.fstatSync(descriptor);
+    if (!stat.isFile()) {
+      return { error: `Signed payload attestation is not a file: ${filePath}` };
+    }
+    if (stat.size > DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES) {
+      return {
+        error: `Signed payload attestation exceeds the ${DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES}-byte limit`,
+      };
+    }
+
+    const payload = Buffer.alloc(stat.size);
+    let offset = 0;
+    while (offset < payload.byteLength) {
+      const read = fs.readSync(
+        descriptor,
+        payload,
+        offset,
+        payload.byteLength - offset,
+        offset,
+      );
+      if (read === 0) {
+        return { error: 'Signed payload attestation changed while it was being read' };
+      }
+      offset += read;
+    }
+
+    const extra = Buffer.alloc(1);
+    if (fs.readSync(descriptor, extra, 0, 1, stat.size) > 0) {
+      return {
+        error: `Signed payload attestation exceeds the ${DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES}-byte limit`,
+      };
+    }
+    return { payload };
+  } catch {
+    return { error: `Signed payload attestation is missing: ${filePath}` };
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        fs.closeSync(descriptor);
+      } catch {
+        // The handle is already closed or the filesystem is shutting down.
+      }
+    }
+  }
+}
+
 /** Persist the exact signed payload in a content-addressed local attestation store. */
 export function createSignatureProof(
   signature: SignatureVerificationResult,
@@ -85,8 +140,13 @@ export function createSignatureProof(
 
   const expected = Buffer.from(payload);
   if (fs.existsSync(target)) {
-    const existing = fs.readFileSync(target);
-    if (sha256(existing) !== payloadSha256 || !existing.equals(expected)) {
+    const existing = readSignatureAttestation(target);
+    if (
+      existing.error ||
+      !existing.payload ||
+      sha256(existing.payload) !== payloadSha256 ||
+      !existing.payload.equals(expected)
+    ) {
       throw new Error(`Signature attestation collision at ${target}`);
     }
   } else {
@@ -99,8 +159,13 @@ export function createSignatureProof(
       fs.renameSync(temporary, target);
     } catch (error) {
       if (!fs.existsSync(target)) throw error;
-      const existing = fs.readFileSync(target);
-      if (sha256(existing) !== payloadSha256 || !existing.equals(expected)) {
+      const existing = readSignatureAttestation(target);
+      if (
+        existing.error ||
+        !existing.payload ||
+        sha256(existing.payload) !== payloadSha256 ||
+        !existing.payload.equals(expected)
+      ) {
         throw new Error(`Signature attestation collision at ${target}`);
       }
     } finally {
@@ -126,7 +191,7 @@ function proofBindsToEntry(
     }
     try {
       const packaged = extractSkillPackage(payload);
-      if (packaged.sha256 !== entry.packageSha256) {
+      if (packaged.sha256 !== entry.packageSha256.toLowerCase()) {
         return 'Signed package content does not match the lockfile package hash';
       }
       if (canonicalPath(packaged.entryPath) !== canonicalPath(entry.packageEntry)) {
@@ -214,21 +279,13 @@ export function evaluateLockedPublisherPolicy(
       error instanceof Error ? error.message : 'Invalid signature payload hash',
     );
   }
-  let payload: Buffer;
-  try {
-    const stat = fs.statSync(attestation);
-    if (!stat.isFile()) {
-      return invalidProof(`Signed payload attestation is not a file: ${attestation}`);
-    }
-    if (stat.size > DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES) {
-      return invalidProof(
-        `Signed payload attestation exceeds the ${DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES}-byte limit`,
-      );
-    }
-    payload = fs.readFileSync(attestation);
-  } catch {
-    return invalidProof(`Signed payload attestation is missing: ${attestation}`);
+  const attestationRead = readSignatureAttestation(attestation);
+  if (attestationRead.error || !attestationRead.payload) {
+    return invalidProof(
+      attestationRead.error ?? `Signed payload attestation is missing: ${attestation}`,
+    );
   }
+  const payload = attestationRead.payload;
   if (sha256(payload) !== proof.payloadSha256.toLowerCase()) {
     return invalidProof('Signed payload attestation hash does not match the lockfile');
   }

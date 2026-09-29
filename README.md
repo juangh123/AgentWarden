@@ -290,7 +290,7 @@ agentwarden --version
 | `downloadSha256` | 原始下载字节的 SHA-256，用于验证传输内容是否与 pin 一致 |
 | `digestVerified` | 本次安装是否执行并通过了摘要校验 |
 
-锁文件中的 `sha256` 仍是本地快照的审计哈希，`verify` / `audit` 使用它检测文件篡改。扫描器会统一换行并将内容按 UTF-8 文本处理；远程安装还会移除 BOM。因此，对包含 CRLF 或 BOM 的响应，`downloadSha256` 不保证与 `sha256` 字符串相同，二者用途不同。锁文件读取会严格校验 v1 版本、字段类型、大小写重复项和相对来源路径；写入前执行同一套校验，并通过同目录临时文件加原子替换落盘，避免留下半写锁文件。新增字段均为可选，现有 v1 `skills.lock` 保持兼容。
+锁文件中的 `sha256` 仍是本地快照的审计哈希，`verify` / `audit` 使用它检测文件篡改。扫描器会统一换行并将内容按 UTF-8 文本处理；远程安装还会移除 BOM。因此，对包含 CRLF 或 BOM 的响应，`downloadSha256` 不保证与 `sha256` 字符串相同，二者用途不同。锁文件读取会严格校验 v1 版本、字段类型、大小写重复项和相对来源路径，并将摘要与包内路径规范化为小写和 POSIX 分隔符；写入前执行同一套校验，并通过同目录临时文件加原子替换落盘，避免留下半写锁文件。新增字段均为可选，现有 v1 `skills.lock` 保持兼容。
 
 ---
 
@@ -573,7 +573,7 @@ agentwarden scan skills/ --baseline .agentwarden-baseline.json
 
 `baseline prune [path...]` 只删除当前扫描中不再匹配的条目，适合代码删除、规则内容变化或扫描范围调整后的清理。`baseline update [path...]` 会执行同一清理，并把当前仍存在的发现重新接纳到基线；已有匹配条目的 `acceptedAt` 会保留，新条目使用本次维护时间。两个命令默认只输出预览，必须显式传入 `--force` 才会写回；`--dry-run` 可用于在强制模式下明确要求预览，两者不能同时使用。变更后的基线会更新 `reviewedAt`，并保留原有责任人、备注和到期时间；可通过 `--owner`、`--expires-in`、`--expires-at` 和 `--note` 在维护时同步更新审核元数据。旧版 v1 基线发生实际维护变更时会升级为 v2。
 
-审核备注会原样写入基线文件，不应包含密钥、Token 或其他敏感数据。扫描和 status 报告只投影 `owner`、`expiresAt`、过期状态及条目元数据，不包含备注正文或原始敏感片段。v2 新建条目会记录 `acceptedAt` 并据此计算 `ageDays`，v1 基线没有接受时间时该字段为空。
+审核备注会原样写入基线文件，不应包含密钥、Token 或其他敏感数据。基线与维护结果使用同目录临时文件和原子替换写入，避免进程异常留下半写 JSON。扫描和 status 报告只投影 `owner`、`expiresAt`、过期状态及条目元数据，不包含备注正文或原始敏感片段。v2 新建条目会记录 `acceptedAt` 并据此计算 `ageDays`，v1 基线没有接受时间时该字段为空。
 
 ### 报告脱敏
 
@@ -583,7 +583,7 @@ agentwarden scan skills/ --baseline .agentwarden-baseline.json
 - `Authorization`、Bearer/Basic Token、URL 内嵌密码、查询参数/片段中的敏感 key/value 和签名下载 URL 会被隐藏。
 - 私钥内容以及没有结束标记的私钥头会被替换。
 - `rawContent`、`promptText` 和代码内容会经过脱敏后再进入 JSON/SARIF。
-- 安装 JSON、`skills.lock` 的远程 URL 元数据和 SBOM 分发来源不会保留敏感查询参数；签名哈希、算法和验证状态仍保留用于审计。
+- 安装 JSON、`skills.lock` 的远程 URL 元数据、`list --json` 和 SBOM 分发来源不会保留敏感查询参数；旧锁文件或手工修改的锁项也会在 `list --json` 输出前重新脱敏。签名哈希、算法和验证状态仍保留用于审计。
 
 仅在受信任的本地调试环境下使用 `--no-redact`。CI 日志、Issue、SARIF 上传和共享终端输出不应关闭脱敏。
 

@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import type { LockedSkill } from '../src/manifest/lockfile.ts';
 import {
   createSignatureProof,
+  DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES,
   evaluateLockedPublisherPolicy,
   signatureAttestationPath,
 } from '../src/source/proof.ts';
@@ -218,5 +219,38 @@ describe('locked publisher provenance', () => {
     assert.equal(decision.passed, false);
     assert.equal(decision.code, 'INVALID_SIGNATURE_PROOF');
     assert.equal(decision.proofVerified, false);
+  });
+
+  it('rejects attestation paths that are not regular files', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-proof-nonfile-'));
+    try {
+      const { entry } = await signedEntry(cwd);
+      const attestation = signatureAttestationPath(entry.signatureProof!.payloadSha256, cwd);
+      fs.rmSync(attestation);
+      fs.mkdirSync(attestation);
+
+      const decision = evaluateLockedPublisherPolicy(entry, { requireSignature: true }, cwd);
+      assert.equal(decision.passed, false);
+      assert.equal(decision.code, 'INVALID_SIGNATURE_PROOF');
+      assert.match(decision.message ?? '', /not a file/);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects attestations larger than the configured limit', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-proof-large-'));
+    try {
+      const { entry } = await signedEntry(cwd);
+      const attestation = signatureAttestationPath(entry.signatureProof!.payloadSha256, cwd);
+      fs.truncateSync(attestation, DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES + 1);
+
+      const decision = evaluateLockedPublisherPolicy(entry, { requireSignature: true }, cwd);
+      assert.equal(decision.passed, false);
+      assert.equal(decision.code, 'INVALID_SIGNATURE_PROOF');
+      assert.match(decision.message ?? '', /exceeds/);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });

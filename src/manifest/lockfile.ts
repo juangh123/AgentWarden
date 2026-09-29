@@ -257,6 +257,43 @@ function validateOptionalSourceMetadata(
   }
 }
 
+function normalizeLockedEntry(entry: Record<string, unknown>): void {
+  entry.sha256 = String(entry.sha256).toLowerCase();
+  entry.source = normalizePath(String(entry.source));
+
+  for (const field of ['downloadSha256', 'signatureKeySha256', 'signatureSha256'] as const) {
+    if (typeof entry[field] === 'string') {
+      entry[field] = entry[field].toLowerCase();
+    }
+  }
+
+  const proof = entry.signatureProof;
+  if (proof && typeof proof === 'object' && !Array.isArray(proof)) {
+    const candidate = proof as Record<string, unknown>;
+    if (typeof candidate.payloadSha256 === 'string') {
+      candidate.payloadSha256 = candidate.payloadSha256.toLowerCase();
+    }
+  }
+
+  if (!Array.isArray(entry.packageFiles)) return;
+  if (typeof entry.packageEntry === 'string') {
+    entry.packageEntry = normalizePath(entry.packageEntry);
+  }
+  if (typeof entry.packageSha256 === 'string') {
+    entry.packageSha256 = entry.packageSha256.toLowerCase();
+  }
+  for (const packageFile of entry.packageFiles) {
+    if (!packageFile || typeof packageFile !== 'object' || Array.isArray(packageFile)) continue;
+    const candidate = packageFile as Record<string, unknown>;
+    if (typeof candidate.path === 'string') {
+      candidate.path = normalizePath(candidate.path);
+    }
+    if (typeof candidate.sha256 === 'string') {
+      candidate.sha256 = candidate.sha256.toLowerCase();
+    }
+  }
+}
+
 function parseLockfile(raw: string, lockPath: string): LockfileSchema {
   let parsed: unknown;
   try {
@@ -325,6 +362,7 @@ function parseLockfile(raw: string, lockPath: string): LockfileSchema {
       throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has missing or invalid fields.`);
     }
     validateOptionalSourceMetadata(entry, name, lockPath);
+    normalizeLockedEntry(entry);
     validatedSkills[name] = entry as unknown as LockedSkill;
   }
 

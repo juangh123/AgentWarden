@@ -210,6 +210,48 @@ describe('lockfile', () => {
     assert.equal(entry.digestVerified, true);
   });
 
+  it('normalizes hash casing and portable paths when reading lockfiles', () => {
+    const dir = tempDir();
+    fs.writeFileSync(
+      path.join(dir, LOCKFILE_NAME),
+      JSON.stringify({
+        lockfileVersion: 1,
+        skills: {
+          demo: {
+            name: 'demo',
+            version: '1.0.0',
+            source: '.agentwarden\\skills\\demo\\SKILL.md',
+            sha256: 'A'.repeat(64),
+            installedAt: new Date().toISOString(),
+            verifiedScore: 100,
+            sourceType: 'remote',
+            remoteUrl: 'https://example.com/demo.tar.gz',
+            resolvedUrl: 'https://cdn.example.com/demo.tar.gz',
+            downloadSha256: 'B'.repeat(64),
+            digestVerified: true,
+            packageFormat: 'tar.gz',
+            packageSha256: 'C'.repeat(64),
+            packageEntry: 'SKILL.md',
+            packageFiles: [
+              { path: 'SKILL.md', sha256: 'D'.repeat(64), size: 10 },
+              { path: 'scripts\\run.sh', sha256: 'E'.repeat(64), size: 20 },
+            ],
+          },
+        },
+      }),
+      'utf8',
+    );
+
+    const entry = readLockfile(dir).skills.demo;
+    assert.equal(entry.source, '.agentwarden/skills/demo/SKILL.md');
+    assert.equal(entry.sha256, 'a'.repeat(64));
+    assert.equal(entry.downloadSha256, 'b'.repeat(64));
+    assert.equal(entry.packageSha256, 'c'.repeat(64));
+    assert.equal(entry.packageFiles?.[0].sha256, 'd'.repeat(64));
+    assert.equal(entry.packageFiles?.[1].path, 'scripts/run.sh');
+    assert.equal(entry.packageFiles?.[1].sha256, 'e'.repeat(64));
+  });
+
   it('rejects malformed or orphaned remote source metadata', () => {
     const dir = tempDir();
     const base = {

@@ -25,6 +25,7 @@ import {
   toRelativePosix,
   resolveFromRoot,
   normalizePath,
+  type LockedSkill,
   type LockfileSchema,
 } from './manifest/lockfile.ts';
 import {
@@ -1444,7 +1445,15 @@ function cmdList(lock: LockfileSchema, format: ReportFormat): void {
   const names = Object.keys(lock.skills).sort();
 
   if (format === 'json') {
-    console.log(JSON.stringify({ count: names.length, skills: names.map((n) => lock.skills[n]) }, null, 2));
+    const skills = names.map((name): LockedSkill => {
+      const entry = lock.skills[name];
+      return {
+        ...entry,
+        ...(entry.remoteUrl ? { remoteUrl: redactText(entry.remoteUrl) } : {}),
+        ...(entry.resolvedUrl ? { resolvedUrl: redactText(entry.resolvedUrl) } : {}),
+      };
+    });
+    console.log(JSON.stringify({ count: skills.length, skills }, null, 2));
     return;
   }
 
