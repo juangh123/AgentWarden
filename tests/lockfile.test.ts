@@ -39,6 +39,90 @@ describe('lockfile', () => {
     assert.equal(readLockfile(dir).skills.Demo, undefined);
   });
 
+  it('case-insensitive upserts replace the previous key instead of creating duplicates', () => {
+    const dir = tempDir();
+    updateLockfileSkill(
+      {
+        name: 'Demo',
+        version: '1.0.0',
+        source: 'demo.md',
+        sha256: 'a'.repeat(64),
+        installedAt: new Date().toISOString(),
+        verifiedScore: 100,
+      },
+      dir,
+    );
+    updateLockfileSkill(
+      {
+        name: 'demo',
+        version: '1.1.0',
+        source: 'demo-v2.md',
+        sha256: 'b'.repeat(64),
+        installedAt: new Date().toISOString(),
+        verifiedScore: 95,
+      },
+      dir,
+    );
+
+    const lock = readLockfile(dir);
+    assert.deepEqual(Object.keys(lock.skills), ['demo']);
+    assert.equal(lock.skills.demo.version, '1.1.0');
+    assert.equal(findSkillKey(lock, 'DEMO'), 'demo');
+  });
+
+  it('validates data before writing and rejects unsafe keys or traversal paths', () => {
+    const dir = tempDir();
+    const base = {
+      version: '1.0.0',
+      source: 'demo.md',
+      sha256: 'a'.repeat(64),
+      installedAt: new Date().toISOString(),
+      verifiedScore: 100,
+    };
+
+    assert.throws(
+      () =>
+        writeLockfile(
+          {
+            lockfileVersion: 1,
+            skills: {
+              Demo: { name: 'Demo', ...base },
+              demo: { name: 'demo', ...base },
+            },
+          },
+          dir,
+        ),
+      /duplicate or empty skill key/,
+    );
+    assert.equal(fs.existsSync(path.join(dir, LOCKFILE_NAME)), false);
+
+    assert.throws(
+      () =>
+        writeLockfile(
+          {
+            lockfileVersion: 1,
+            skills: {
+              demo: { name: 'demo', ...base, source: '../outside.md' },
+            },
+          },
+          dir,
+        ),
+      /missing or invalid fields/,
+    );
+
+    assert.throws(
+      () =>
+        updateLockfileSkill(
+          {
+            name: '__proto__',
+            ...base,
+          },
+          dir,
+        ),
+      /Invalid skill name/,
+    );
+  });
+
   it('rejects malformed lockfiles instead of treating them as empty', () => {
     const dir = tempDir();
     fs.writeFileSync(path.join(dir, LOCKFILE_NAME), '{"skills":', 'utf8');
@@ -55,6 +139,48 @@ describe('lockfile', () => {
     );
 
     assert.throws(() => readLockfile(dir), /entry "demo" has missing or invalid fields/);
+  });
+
+  it('rejects unsupported versions, duplicate keys, and invalid integrity metadata', () => {
+    const dir = tempDir();
+    const base = {
+      name: 'demo',
+      version: '1.0.0',
+      source: 'demo.md',
+      sha256: 'a'.repeat(64),
+      installedAt: new Date().toISOString(),
+      verifiedScore: 100,
+    };
+
+    fs.writeFileSync(
+      path.join(dir, LOCKFILE_NAME),
+      JSON.stringify({ lockfileVersion: 2, skills: { demo: base } }),
+      'utf8',
+    );
+    assert.throws(() => readLockfile(dir), /unsupported lockfileVersion/);
+
+    fs.writeFileSync(
+      path.join(dir, LOCKFILE_NAME),
+      JSON.stringify({
+        lockfileVersion: 1,
+        skills: { Demo: base, demo: { ...base, name: 'demo-two' } },
+      }),
+      'utf8',
+    );
+    assert.throws(() => readLockfile(dir), /duplicate or empty skill key/);
+
+    for (const invalid of [
+      { ...base, sha256: 'not-a-hash' },
+      { ...base, verifiedScore: 101 },
+      { ...base, installedAt: 'not-a-date' },
+    ]) {
+      fs.writeFileSync(
+        path.join(dir, LOCKFILE_NAME),
+        JSON.stringify({ lockfileVersion: 1, skills: { demo: invalid } }),
+        'utf8',
+      );
+      assert.throws(() => readLockfile(dir), /missing or invalid fields/);
+    }
   });
 
   it('preserves valid remote source metadata', () => {
@@ -189,6 +315,12 @@ describe('lockfile', () => {
         signatureVerified: true,
         signatureKeySha256: 'b'.repeat(64),
         signatureSha256: 'c'.repeat(64),
+        signatureProof: {
+          algorithm: 'ed25519',
+          publicKey: Buffer.alloc(44, 1).toString('base64'),
+          signature: Buffer.alloc(64, 2).toString('base64'),
+          payloadSha256: 'd'.repeat(64),
+        },
       },
       dir,
     );
@@ -198,6 +330,8 @@ describe('lockfile', () => {
     assert.equal(entry.signatureVerified, true);
     assert.equal(entry.signatureKeySha256, 'b'.repeat(64));
     assert.equal(entry.signatureSha256, 'c'.repeat(64));
+    assert.equal(entry.signatureProof?.algorithm, 'ed25519');
+    assert.equal(entry.signatureProof?.payloadSha256, 'd'.repeat(64));
   });
 
   it('rejects malformed signature provenance metadata', () => {

@@ -11,10 +11,10 @@ export const credentialRules: Rule[] = [
     suggestion: 'Remove hardcoded access to user credential directories (~/.ssh, ~/.aws, .env).',
     check: (parsed): Finding[] => {
       const sensitivePatterns = [
-        /(~|\$HOME|\/root|\/home\/\w+)\/.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys|known_hosts)/i,
-        /(~|\$HOME|\/root|\/home\/\w+)\/.aws\/(credentials|config)/i,
-        /(~|\$HOME|\/root|\/home\/\w+)\/.gnupg\//i,
-        /(~|\$HOME|\/root|\/home\/\w+)\/.kube\/config/i,
+        /(~|\$HOME|\$\{HOME\}|\/root|\/home\/\w+)["']?\/\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys|known_hosts)/i,
+        /(~|\$HOME|\$\{HOME\}|\/root|\/home\/\w+)["']?\/\.aws\/(credentials|config)/i,
+        /(~|\$HOME|\$\{HOME\}|\/root|\/home\/\w+)["']?\/\.gnupg\//i,
+        /(~|\$HOME|\$\{HOME\}|\/root|\/home\/\w+)["']?\/\.kube\/config/i,
         /(^|[\s/])\.env($|[\s'"])/i,
       ];
       return scanPatterns(parsed, sensitivePatterns, {

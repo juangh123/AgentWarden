@@ -19,6 +19,7 @@ export type SkillPackageErrorCode =
   | 'MISSING_ENTRY'
   | 'AMBIGUOUS_ENTRY'
   | 'INVALID_LAYOUT'
+  | 'DESTINATION_NOT_EMPTY'
   | 'INSTALL_FAILED';
 
 export class SkillPackageError extends Error {
@@ -61,6 +62,11 @@ export interface ExpectedSkillPackage {
   entryPath: string;
   sha256: string;
   manifest: SkillPackageManifestEntry[];
+}
+
+export interface WriteSkillPackageOptions {
+  /** Allow replacement of a non-empty destination directory. Defaults to false. */
+  replaceExisting?: boolean;
 }
 
 export interface SkillPackageInspection {
@@ -513,8 +519,12 @@ export function readSkillPackage(
   return extractSkillPackage(readSkillPackageBytes(filePath, options), options);
 }
 
-/** Atomically install package files into a directory, replacing an existing package only after staging succeeds. */
-export function writeSkillPackage(skillPackage: SkillPackage, destination: string): void {
+/** Atomically install package files into a directory after staging succeeds. */
+export function writeSkillPackage(
+  skillPackage: SkillPackage,
+  destination: string,
+  options: WriteSkillPackageOptions = {},
+): void {
   const resolvedDestination = path.resolve(destination);
   const parent = path.dirname(resolvedDestination);
   const suffix = `${process.pid}.${crypto.randomBytes(6).toString('hex')}`;
@@ -523,6 +533,23 @@ export function writeSkillPackage(skillPackage: SkillPackage, destination: strin
   let movedExisting = false;
 
   fs.mkdirSync(parent, { recursive: true });
+  if (fs.existsSync(resolvedDestination)) {
+    if (!fs.statSync(resolvedDestination).isDirectory()) {
+      throw new SkillPackageError(
+        'INSTALL_FAILED',
+        `Package destination exists and is not a directory: ${resolvedDestination}`,
+      );
+    }
+    if (
+      options.replaceExisting !== true &&
+      fs.readdirSync(resolvedDestination).length > 0
+    ) {
+      throw new SkillPackageError(
+        'DESTINATION_NOT_EMPTY',
+        `Package destination is not empty: ${resolvedDestination}. Use --force to replace it.`,
+      );
+    }
+  }
   fs.mkdirSync(staging, { recursive: false });
 
   try {
@@ -537,12 +564,6 @@ export function writeSkillPackage(skillPackage: SkillPackage, destination: strin
     }
 
     if (fs.existsSync(resolvedDestination)) {
-      if (!fs.statSync(resolvedDestination).isDirectory()) {
-        throw new SkillPackageError(
-          'INSTALL_FAILED',
-          `Package destination exists and is not a directory: ${resolvedDestination}`,
-        );
-      }
       fs.renameSync(resolvedDestination, backup);
       movedExisting = true;
     }

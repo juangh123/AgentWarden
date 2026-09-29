@@ -1464,6 +1464,33 @@ check(
 r = run(['-C', tmp, 'uninstall', 'remote-evil-skill', '--json']);
 check('remote malicious entry can be uninstalled', r.status === 0, `status=${r.status}`);
 
+const remoteQuerySecret = 'QUERY_SECRET_E2E_1234567890';
+r = run([
+  '-C',
+  tmp,
+  'install',
+  `${remoteBaseUrl}/remote-safe.md?api_key=${remoteQuerySecret}`,
+  '--allow-http',
+  '--sha256',
+  remoteSafeDigest,
+  '--json',
+]);
+const queryRedactedInstall = JSON.parse(r.stdout);
+const queryRedactedLock = fs.readFileSync(path.join(tmp, 'skills.lock'), 'utf8');
+check(
+  'remote URL query credentials are redacted in install output',
+  r.status === 0 &&
+    !r.stdout.includes(remoteQuerySecret) &&
+    queryRedactedInstall.source?.resolvedUrl?.includes('api_key=') === true,
+  `status=${r.status}`,
+);
+check(
+  'remote URL query credentials are redacted in the lockfile',
+  !queryRedactedLock.includes(remoteQuerySecret),
+);
+r = run(['-C', tmp, 'uninstall', 'remote-safe-weather', '--json']);
+check('query-redacted remote entry can be uninstalled', r.status === 0, `status=${r.status}`);
+
 r = run([
   '-C',
   tmp,
@@ -1488,7 +1515,8 @@ check(
     remoteInstallJson.source?.resolvedUrl === `${remoteBaseUrl}/remote-safe.md` &&
     remoteInstallJson.source?.downloadSha256 === remoteSafeDigest &&
     remoteInstallJson.source?.signature?.verified === true &&
-    remoteInstallJson.source?.signature?.keySha256 === publisherKeySha256,
+    remoteInstallJson.source?.signature?.keySha256 === publisherKeySha256 &&
+    remoteInstallJson.source?.signature?.signatureSha256?.length === 64,
   `status=${r.status}`,
 );
 check('remote safe skill is stored under the managed directory', fs.existsSync(remoteSafePath));
@@ -1500,7 +1528,24 @@ check(
   'lockfile records verified publisher provenance',
   signedRemoteLockEntry?.signatureAlgorithm === 'ed25519' &&
     signedRemoteLockEntry?.signatureVerified === true &&
-    signedRemoteLockEntry?.signatureKeySha256 === publisherKeySha256,
+    signedRemoteLockEntry?.signatureKeySha256 === publisherKeySha256 &&
+    signedRemoteLockEntry?.signatureProof?.algorithm === 'ed25519' &&
+    signedRemoteLockEntry?.signatureProof?.payloadSha256?.length === 64,
+);
+const attestationPath = signedRemoteLockEntry?.signatureProof?.payloadSha256
+  ? path.join(
+      tmp,
+      '.agentwarden',
+      'attestations',
+      `${signedRemoteLockEntry.signatureProof.payloadSha256}.bin`,
+    )
+  : '';
+check(
+  'signed install creates a content-addressed attestation',
+  Boolean(attestationPath) &&
+    fs.existsSync(attestationPath) &&
+    createHash('sha256').update(fs.readFileSync(attestationPath)).digest('hex') ===
+      signedRemoteLockEntry.signatureProof.payloadSha256,
 );
 
 r = run(['-C', tmp, 'verify', '.agentwarden/skills/remote-safe.md']);
@@ -1553,6 +1598,92 @@ check(
     ) === true,
   `status=${r.status}`,
 );
+
+const signedLockPath = path.join(tmp, 'skills.lock');
+const signedLockRaw = fs.readFileSync(signedLockPath, 'utf8');
+const originalAttestation = fs.readFileSync(attestationPath);
+const legacySignatureLock = JSON.parse(signedLockRaw);
+delete legacySignatureLock.skills['remote-safe-weather'].signatureProof;
+fs.writeFileSync(signedLockPath, JSON.stringify(legacySignatureLock, null, 2) + '\n', 'utf8');
+r = run([
+  '-C',
+  tmp,
+  'verify',
+  '.agentwarden/skills/remote-safe.md',
+  '--config',
+  'trusted-publisher-policy.json',
+]);
+check(
+  'legacy self-reported signatures are rejected by verify',
+  r.status === 1 && r.stderr.includes('Publisher policy blocked'),
+  `status=${r.status}`,
+);
+r = run(['-C', tmp, 'audit', '--config', 'trusted-publisher-policy.json', '--json']);
+check(
+  'legacy self-reported signatures are rejected by audit',
+  r.status === 1 &&
+    JSON.parse(r.stdout).skills['remote-safe-weather']?.publisherPolicyCode ===
+      'SIGNATURE_REQUIRED',
+  `status=${r.status}`,
+);
+fs.writeFileSync(signedLockPath, signedLockRaw, 'utf8');
+
+fs.rmSync(attestationPath);
+r = run(['-C', tmp, 'audit', '--config', 'trusted-publisher-policy.json', '--json']);
+check(
+  'audit fails when a signature attestation is missing',
+  r.status === 1 &&
+    JSON.parse(r.stdout).skills['remote-safe-weather']?.publisherPolicyCode ===
+      'INVALID_SIGNATURE_PROOF',
+  `status=${r.status}`,
+);
+r = run(['-C', tmp, 'sbom', '--config', 'trusted-publisher-policy.json', '--json']);
+const missingAttestationSbom = JSON.parse(r.stdout);
+check(
+  'sbom fails when a signature attestation is missing',
+  r.status === 1 &&
+    missingAttestationSbom.components?.some(
+      (component) =>
+        component.name === 'remote-safe-weather' &&
+        component.properties?.some(
+          (property) =>
+            property.name === 'agentwarden:publisherPolicyCode' &&
+            property.value === 'INVALID_SIGNATURE_PROOF',
+        ),
+    ) === true,
+  `status=${r.status}`,
+);
+
+fs.writeFileSync(
+  attestationPath,
+  Buffer.concat([originalAttestation, Buffer.from('tampered', 'utf8')]),
+);
+r = run(['-C', tmp, 'audit', '--config', 'trusted-publisher-policy.json', '--json']);
+check(
+  'audit fails when a signature attestation is tampered',
+  r.status === 1 &&
+    JSON.parse(r.stdout).skills['remote-safe-weather']?.publisherPolicyCode ===
+      'INVALID_SIGNATURE_PROOF',
+  `status=${r.status}`,
+);
+r = run(['-C', tmp, 'sbom', '--config', 'trusted-publisher-policy.json', '--json']);
+const tamperedAttestationSbom = JSON.parse(r.stdout);
+check(
+  'sbom fails when a signature attestation is tampered',
+  r.status === 1 &&
+    tamperedAttestationSbom.components?.some(
+      (component) =>
+        component.name === 'remote-safe-weather' &&
+        component.properties?.some(
+          (property) =>
+            property.name === 'agentwarden:publisherPolicyCode' &&
+            property.value === 'INVALID_SIGNATURE_PROOF',
+        ),
+    ) === true,
+  `status=${r.status}`,
+);
+fs.writeFileSync(attestationPath, originalAttestation);
+
 r = run([
   '-C',
   tmp,

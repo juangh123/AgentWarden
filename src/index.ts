@@ -39,6 +39,7 @@ export {
   type SkillPackageFile,
   type SkillPackageInspection,
   type SkillPackageManifestEntry,
+  type WriteSkillPackageOptions,
 } from './source/package.ts';
 export {
   DEFAULT_MAX_PUBLIC_KEY_BYTES,
@@ -54,6 +55,14 @@ export {
   type SignatureVerificationResult,
   type VerifyPayloadSignatureOptions,
 } from './source/signature.ts';
+export {
+  DEFAULT_MAX_SIGNATURE_PAYLOAD_BYTES,
+  SIGNATURE_ATTESTATION_DIR,
+  createSignatureProof,
+  evaluateLockedPublisherPolicy,
+  signatureAttestationPath,
+  type LockedPublisherPolicyDecision,
+} from './source/proof.ts';
 export {
   DEFAULT_BASELINE_NAME,
   createBaseline,
@@ -132,6 +141,7 @@ export {
   findSkillKey,
   type LockedSkill,
   type LockfileSchema,
+  type SignatureProof,
 } from './manifest/lockfile.ts';
 export {
   renderScanReport,
@@ -139,6 +149,7 @@ export {
   buildSarifReport,
   toReportScanResult,
   toReportScanResults,
+  redactReportValue,
   redactText,
   type ReportFormat,
   type ReportOptions,

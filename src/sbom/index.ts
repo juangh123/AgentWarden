@@ -10,10 +10,7 @@ import {
 } from '../manifest/lockfile.ts';
 import { scanSkillContent } from '../scanner/index.ts';
 import { inspectInstalledSkillPackage } from '../source/package.ts';
-import {
-  evaluatePublisherPolicy,
-  type PublisherPolicyDecision,
-} from '../source/provenance.ts';
+import { evaluateLockedPublisherPolicy } from '../source/proof.ts';
 import { readPackageVersion } from '../version.ts';
 
 export interface CycloneDxHash {
@@ -76,6 +73,7 @@ export interface SbomEntryInspection {
   publisherPolicyPassed: boolean;
   publisherPolicyCode: string | null;
   signerKeySha256: string | null;
+  signatureVerified: boolean;
 }
 
 export interface SbomBuildResult {
@@ -179,10 +177,11 @@ function inspectEntry(
   config: SkillGuardConfig,
   inspect: boolean,
 ): SbomEntryInspection {
-  const publisherDecision = evaluatePublisherPolicy(config.publishers, {
-    signatureVerified: entry.signatureVerified,
-    signatureKeySha256: entry.signatureKeySha256,
-  });
+  const publisherDecision = evaluateLockedPublisherPolicy(
+    entry,
+    config.publishers,
+    cwd,
+  );
 
   if (!inspect) {
     return {
@@ -197,7 +196,8 @@ function inspectEntry(
       unsafePaths: [],
       publisherPolicyPassed: publisherDecision.passed,
       publisherPolicyCode: publisherDecision.code ?? null,
-      signerKeySha256: publisherDecision.keySha256 ?? entry.signatureKeySha256 ?? null,
+      signerKeySha256: publisherDecision.keySha256 ?? null,
+      signatureVerified: publisherDecision.proofVerified,
     };
   }
 
@@ -225,7 +225,8 @@ function inspectEntry(
       unsafePaths: packageInspection.unsafePaths,
       publisherPolicyPassed: publisherDecision.passed,
       publisherPolicyCode: publisherDecision.code ?? null,
-      signerKeySha256: publisherDecision.keySha256 ?? entry.signatureKeySha256 ?? null,
+      signerKeySha256: publisherDecision.keySha256 ?? null,
+      signatureVerified: publisherDecision.proofVerified,
     };
   }
 
@@ -242,7 +243,8 @@ function inspectEntry(
     unsafePaths: [],
     publisherPolicyPassed: publisherDecision.passed,
     publisherPolicyCode: publisherDecision.code ?? null,
-    signerKeySha256: publisherDecision.keySha256 ?? entry.signatureKeySha256 ?? null,
+    signerKeySha256: publisherDecision.keySha256 ?? null,
+    signatureVerified: publisherDecision.proofVerified,
   };
 }
 
@@ -316,10 +318,10 @@ function skillComponent(
       resolvedUrl,
       downloadSha256: entry.downloadSha256,
       digestVerified: entry.digestVerified,
-      signatureAlgorithm: entry.signatureAlgorithm,
-      signatureVerified: entry.signatureVerified,
-      signatureKeySha256: entry.signatureKeySha256,
-      signatureSha256: entry.signatureSha256,
+      signatureAlgorithm: inspection.signatureVerified ? entry.signatureAlgorithm : undefined,
+      signatureVerified: inspection.signatureVerified,
+      signatureKeySha256: inspection.signerKeySha256,
+      signatureSha256: inspection.signatureVerified ? entry.signatureSha256 : undefined,
       publisherPolicyPassed: inspection.publisherPolicyPassed,
       publisherPolicyCode: inspection.publisherPolicyCode,
     }),

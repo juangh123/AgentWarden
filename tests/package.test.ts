@@ -202,4 +202,25 @@ describe('skill packages', () => {
     });
     assert.deepEqual(extra.extraFiles, ['extra.txt']);
   });
+
+  it('refuses to erase a non-empty explicit destination without an override', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'skillguard-package-'));
+    const destination = path.join(directory, 'installed');
+    const skillPackage = extractSkillPackage(
+      createTarGz([{ path: 'pkg/SKILL.md', content: '# Demo\n' }]),
+    );
+    fs.mkdirSync(destination);
+    fs.writeFileSync(path.join(destination, 'keep.txt'), 'keep', 'utf8');
+
+    expectPackageError(
+      () => writeSkillPackage(skillPackage, destination),
+      'DESTINATION_NOT_EMPTY',
+      /not empty/,
+    );
+    assert.equal(fs.readFileSync(path.join(destination, 'keep.txt'), 'utf8'), 'keep');
+
+    writeSkillPackage(skillPackage, destination, { replaceExisting: true });
+    assert.equal(fs.existsSync(path.join(destination, 'keep.txt')), false);
+    assert.equal(fs.existsSync(path.join(destination, 'SKILL.md')), true);
+  });
 });

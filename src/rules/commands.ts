@@ -11,9 +11,11 @@ export const commandRules: Rule[] = [
     suggestion: 'Avoid catastrophic commands that can wipe user directories.',
     check: (parsed): Finding[] => {
       const destructivePatterns = [
-        /\brm\s+(-[rfRF]{1,4}\s+)?(\/|\/\*|~|\$HOME|\.\.)(\s|$)/,
+        /\brm\s+(?:(?:-[A-Za-z]+|--[A-Za-z-]+)\s+)+(?:--\s+)?["']?\/["']?(?=\s|$|[;&|])/,
+        /\brm\s+(?:(?:-[A-Za-z]+|--[A-Za-z-]+)\s+)+(?:--\s+)?["']?\/\*["']?(?=\s|$|[;&|])/,
+        /\brm\s+(?:(?:-[A-Za-z]+|--[A-Za-z-]+)\s+)+(?:--\s+)?["']?(?:~|\$HOME|\$\{HOME\}|\.\.)["']?(?:\/[^\s;&|]*)?["']?(?=\s|$|[;&|])/,
         /\b(mkfs|dd\s+if=.*of=\/dev)/,
-        /\bchmod\s+(-R\s+)?777\s+(\/|~|\$HOME)/,
+        /\bchmod\s+(-R\s+)?777\s+["']?(?:\/|~|\$HOME|\$\{HOME\})["']?(?:\/[^\s;&|]*)?(?=\s|$|[;&|])/,
       ];
       return scanPatterns(parsed, destructivePatterns, {
         ruleId: 'SEC-CMD-001',

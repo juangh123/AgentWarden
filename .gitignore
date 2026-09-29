@@ -3,7 +3,9 @@ dist/
 *.tsbuildinfo
 coverage/
 .skillguard/
-.agentwarden/
+.agentwarden/*
+!.agentwarden/attestations/
+!.agentwarden/attestations/**
 !examples/github-action-project/.agentwarden/
 !examples/github-action-project/.agentwarden/policy.json
 npm-debug.log*

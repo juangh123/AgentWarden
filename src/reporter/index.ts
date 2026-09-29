@@ -12,7 +12,12 @@ import {
 } from './redaction.ts';
 
 export type ReportFormat = 'pretty' | 'json' | 'sarif';
-export { toReportScanResult, toReportScanResults, redactText } from './redaction.ts';
+export {
+  toReportScanResult,
+  toReportScanResults,
+  redactReportValue,
+  redactText,
+} from './redaction.ts';
 export type { ReportOptions } from './redaction.ts';
 
 export function renderScanReport(

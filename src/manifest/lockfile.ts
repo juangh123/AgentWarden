@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SkillPackageManifestEntry } from '../source/package.ts';
+import { writeFileAtomic } from '../utils/atomicWrite.ts';
 
 export interface LockedSkill {
   name: string;
@@ -22,6 +23,14 @@ export interface LockedSkill {
   signatureVerified?: boolean;
   signatureKeySha256?: string;
   signatureSha256?: string;
+  signatureProof?: SignatureProof;
+}
+
+export interface SignatureProof {
+  algorithm: 'ed25519';
+  publicKey: string;
+  signature: string;
+  payloadSha256: string;
 }
 
 export interface LockfileSchema {
@@ -30,6 +39,31 @@ export interface LockfileSchema {
 }
 
 export const LOCKFILE_NAME = 'skills.lock';
+
+const UNSAFE_SKILL_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function createSkillMap(): Record<string, LockedSkill> {
+  return Object.create(null) as Record<string, LockedSkill>;
+}
+
+function isSafeRelativePath(value: string): boolean {
+  if (!value || value.includes('\0')) return false;
+  const normalized = value.replace(/\\/g, '/');
+  if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) return false;
+  return !normalized.split('/').includes('..');
+}
+
+function isUnsafeSkillKey(name: string): boolean {
+  return UNSAFE_SKILL_KEYS.has(name.trim().toLowerCase());
+}
+
+function isCanonicalBase64(value: unknown, expectedBytes?: number): value is string {
+  if (typeof value !== 'string' || !value || value.length % 4 !== 0) return false;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+  const decoded = Buffer.from(value, 'base64');
+  if (decoded.toString('base64') !== value) return false;
+  return expectedBytes === undefined || decoded.byteLength === expectedBytes;
+}
 
 function validateOptionalSourceMetadata(
   entry: Record<string, unknown>,
@@ -98,6 +132,44 @@ function validateOptionalSourceMetadata(
           `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid ${field}.`,
         );
       }
+    }
+  }
+
+  const signatureProof = entry.signatureProof;
+  if (signatureProof !== undefined) {
+    if (!signatureProof || typeof signatureProof !== 'object' || Array.isArray(signatureProof)) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid signatureProof.`,
+      );
+    }
+    const proof = signatureProof as Record<string, unknown>;
+    if (proof.algorithm !== 'ed25519') {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid signatureProof.algorithm.`,
+      );
+    }
+    if (!isCanonicalBase64(proof.publicKey) || Buffer.from(proof.publicKey, 'base64').byteLength > 16 * 1024) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid signatureProof.publicKey.`,
+      );
+    }
+    if (!isCanonicalBase64(proof.signature, 64)) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid signatureProof.signature.`,
+      );
+    }
+    if (typeof proof.payloadSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(proof.payloadSha256)) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has invalid signatureProof.payloadSha256.`,
+      );
+    }
+    if (
+      entry.signatureAlgorithm !== undefined &&
+      entry.signatureAlgorithm !== proof.algorithm
+    ) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" signatureProof does not match signatureAlgorithm.`,
+      );
     }
   }
 
@@ -198,32 +270,67 @@ function parseLockfile(raw: string, lockPath: string): LockfileSchema {
   }
 
   const candidate = parsed as Partial<LockfileSchema>;
+  const lockfileVersion = candidate.lockfileVersion ?? 1;
+  if (
+    !Number.isSafeInteger(lockfileVersion) ||
+    lockfileVersion < 1 ||
+    lockfileVersion > 1
+  ) {
+    throw new Error(
+      `Invalid ${LOCKFILE_NAME} at ${lockPath}: unsupported lockfileVersion.`,
+    );
+  }
   if (!candidate.skills || typeof candidate.skills !== 'object' || Array.isArray(candidate.skills)) {
     throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: missing "skills" object.`);
   }
 
   const skills = candidate.skills as Record<string, unknown>;
+  const normalizedKeys = new Set<string>();
+  const validatedSkills = createSkillMap();
   for (const [name, skill] of Object.entries(skills)) {
+    const normalizedName = name.trim().toLowerCase();
+    if (
+      !normalizedName ||
+      name !== name.trim() ||
+      isUnsafeSkillKey(name) ||
+      normalizedKeys.has(normalizedName)
+    ) {
+      throw new Error(
+        `Invalid ${LOCKFILE_NAME} at ${lockPath}: duplicate or empty skill key "${name}".`,
+      );
+    }
+    normalizedKeys.add(normalizedName);
     if (!skill || typeof skill !== 'object' || Array.isArray(skill)) {
       throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" must be an object.`);
     }
     const entry = skill as Record<string, unknown>;
     if (
       typeof entry.name !== 'string' ||
+      !entry.name.trim() ||
       typeof entry.version !== 'string' ||
+      !entry.version.trim() ||
       typeof entry.source !== 'string' ||
+      !entry.source.trim() ||
+      entry.source !== entry.source.trim() ||
+      !isSafeRelativePath(entry.source.trim()) ||
       typeof entry.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/i.test(entry.sha256) ||
       typeof entry.installedAt !== 'string' ||
-      typeof entry.verifiedScore !== 'number'
+      Number.isNaN(Date.parse(entry.installedAt)) ||
+      typeof entry.verifiedScore !== 'number' ||
+      !Number.isSafeInteger(entry.verifiedScore) ||
+      entry.verifiedScore < 0 ||
+      entry.verifiedScore > 100
     ) {
       throw new Error(`Invalid ${LOCKFILE_NAME} at ${lockPath}: entry "${name}" has missing or invalid fields.`);
     }
     validateOptionalSourceMetadata(entry, name, lockPath);
+    validatedSkills[name] = entry as unknown as LockedSkill;
   }
 
   return {
-    lockfileVersion: typeof candidate.lockfileVersion === 'number' ? candidate.lockfileVersion : 1,
-    skills: candidate.skills as Record<string, LockedSkill>,
+    lockfileVersion,
+    skills: validatedSkills,
   };
 }
 
@@ -243,22 +350,34 @@ export function resolveFromRoot(targetPath: string, rootDir: string = process.cw
 export function readLockfile(cwd: string = process.cwd()): LockfileSchema {
   const lockPath = path.join(cwd, LOCKFILE_NAME);
   if (!fs.existsSync(lockPath)) {
-    return { lockfileVersion: 1, skills: {} };
+    return { lockfileVersion: 1, skills: createSkillMap() };
   }
   return parseLockfile(fs.readFileSync(lockPath, 'utf8'), lockPath);
 }
 
 export function writeLockfile(data: LockfileSchema, cwd: string = process.cwd()): void {
   const lockPath = path.join(cwd, LOCKFILE_NAME);
-  const sorted: LockfileSchema = { lockfileVersion: data.lockfileVersion, skills: {} };
+  const sorted: LockfileSchema = {
+    lockfileVersion: data.lockfileVersion,
+    skills: createSkillMap(),
+  };
   for (const key of Object.keys(data.skills).sort((a, b) => a.localeCompare(b))) {
     sorted.skills[key] = data.skills[key];
   }
-  fs.writeFileSync(lockPath, JSON.stringify(sorted, null, 2) + '\n', 'utf8');
+  const serialized = JSON.stringify(sorted, null, 2) + '\n';
+  parseLockfile(serialized, lockPath);
+  writeFileAtomic(lockPath, serialized);
 }
 
 export function updateLockfileSkill(skill: LockedSkill, cwd: string = process.cwd()): void {
   const lock = readLockfile(cwd);
+  if (isUnsafeSkillKey(skill.name) || skill.name !== skill.name.trim() || !skill.name) {
+    throw new Error(`Invalid skill name "${skill.name}".`);
+  }
+  const existingKey = findSkillKey(lock, skill.name);
+  if (existingKey && existingKey !== skill.name) {
+    delete lock.skills[existingKey];
+  }
   lock.skills[skill.name] = {
     ...skill,
     source: normalizePath(skill.source)
@@ -269,7 +388,7 @@ export function updateLockfileSkill(skill: LockedSkill, cwd: string = process.cw
 /** Exact match first, then a case-insensitive fallback (returns the stored key). */
 export function findSkillKey(lock: LockfileSchema, name: string): string | undefined {
   if (!name) return undefined;
-  if (lock.skills[name]) return name;
+  if (Object.hasOwn(lock.skills, name)) return name;
   const lower = name.toLowerCase();
   return Object.keys(lock.skills).find((k) => k.toLowerCase() === lower);
 }

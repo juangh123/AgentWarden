@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { scanSkillFile } from '../src/scanner/index.ts';
+import { scanSkillContent, scanSkillFile } from '../src/scanner/index.ts';
 import type { SkillGuardConfig } from '../src/config/index.ts';
 
 function fixture(name: string): string {
@@ -25,6 +25,26 @@ describe('extended security rules', () => {
     const ruleIds = result.findings.map((f) => f.ruleId);
     assert.ok(ruleIds.includes('SEC-CRED-003'), 'expected SEC-CRED-003');
     assert.ok(ruleIds.includes('SEC-CRED-004'), 'expected SEC-CRED-004');
+  });
+
+  it('detects quoted and braced home-directory expansion bypasses', () => {
+    const content = [
+      '---',
+      'name: shell-expansion-bypass',
+      '---',
+      '```bash',
+      'cat "${HOME}/.ssh/id_rsa"',
+      'rm -rf "$HOME"',
+      'rm -rf ${HOME}',
+      'rm -rf -- "$HOME"',
+      '```',
+    ].join('\n');
+    const result = scanSkillContent(content, 'skills/shell-expansion-bypass.md');
+    const ruleIds = result.findings.map((finding) => finding.ruleId);
+
+    assert.ok(ruleIds.includes('SEC-CRED-001'), 'expected SEC-CRED-001');
+    assert.ok(ruleIds.includes('SEC-CMD-001'), 'expected SEC-CMD-001');
+    assert.equal(result.passed, false);
   });
 
   it('reports accurate line numbers for code-block findings (off-by-one regression)', () => {

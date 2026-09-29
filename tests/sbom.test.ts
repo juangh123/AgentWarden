@@ -1,18 +1,21 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { updateLockfileSkill } from '../src/manifest/lockfile.ts';
 import { buildCycloneDxSbom } from '../src/sbom/index.ts';
 import { scanSkillContent } from '../src/scanner/index.ts';
+import { createSignatureProof } from '../src/source/proof.ts';
+import { verifyPayloadSignature } from '../src/source/signature.ts';
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-sbom-'));
 }
 
 describe('CycloneDX SBOM export', () => {
-  it('builds a deterministic CycloneDX 1.5 document with provenance properties', () => {
+  it('builds a deterministic CycloneDX 1.5 document with provenance properties', async () => {
     const cwd = tempDir();
     try {
       const source = 'signed-skill.md';
@@ -26,7 +29,15 @@ describe('CycloneDX SBOM export', () => {
       ].join('\n');
       fs.writeFileSync(path.join(cwd, source), content, 'utf8');
       const scan = scanSkillContent(content, source);
-      const keySha256 = 'a'.repeat(64);
+      const payload = Buffer.from(content, 'utf8');
+      const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+      const signature = crypto.sign(null, payload, privateKey);
+      const verification = await verifyPayloadSignature(payload, {
+        publicKey: `base64:${publicKey.export({ type: 'spki', format: 'der' }).toString('base64')}`,
+        signature: `base64:${signature.toString('base64')}`,
+      });
+      const keySha256 = verification.publicKeySha256;
+      const proof = createSignatureProof(verification, payload, cwd);
       updateLockfileSkill(
         {
           name: 'signed-skill',
@@ -43,7 +54,8 @@ describe('CycloneDX SBOM export', () => {
           signatureAlgorithm: 'ed25519',
           signatureVerified: true,
           signatureKeySha256: keySha256,
-          signatureSha256: 'c'.repeat(64),
+          signatureSha256: verification.signatureSha256,
+          signatureProof: proof,
         },
         cwd,
       );

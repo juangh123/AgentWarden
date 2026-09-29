@@ -32,7 +32,9 @@ export interface LoadedEd25519PublicKey {
 export interface SignatureVerificationResult {
   algorithm: 'ed25519';
   publicKeySha256: string;
+  publicKeySpkiBase64: string;
   signatureSha256: string;
+  signatureBase64: string;
   publicKeySource: string;
   signatureSource: string;
 }
@@ -299,7 +301,11 @@ export function verifyEd25519Signature(
   return {
     algorithm: 'ed25519',
     publicKeySha256: publicKey.sha256,
+    publicKeySpkiBase64: Buffer.from(
+      publicKey.key.export({ type: 'spki', format: 'der' }),
+    ).toString('base64'),
     signatureSha256: sha256(signature),
+    signatureBase64: Buffer.from(signature).toString('base64'),
     publicKeySource: publicKey.source,
     signatureSource: 'detached',
   };

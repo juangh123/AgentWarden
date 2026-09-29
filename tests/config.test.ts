@@ -173,7 +173,7 @@ describe('config normalization', () => {
     }
   });
 
-  it('tracks implicit config sources and preserves malformed implicit fallback', () => {
+  it('tracks implicit config sources and fails closed when a discovered config is malformed', () => {
     const root = tempDir();
     try {
       const implicit = path.join(root, '.wardenrc.json');
@@ -186,11 +186,10 @@ describe('config normalization', () => {
       assert.equal(loaded.config.minScore, 80);
 
       fs.writeFileSync(implicit, '{"profile":', 'utf8');
-      const fallback = loadConfigWithMetadata(root);
-      assert.equal(fallback.source, undefined);
-      assert.deepEqual(fallback.sources, []);
-      assert.equal(fallback.config.profile, 'legacy');
-      assert.equal(fallback.config.minScore, 60);
+      assert.throws(
+        () => loadConfigWithMetadata(root),
+        (error) => error instanceof ConfigError && error.message.includes('Invalid config file'),
+      );
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

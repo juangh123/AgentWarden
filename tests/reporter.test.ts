@@ -6,6 +6,7 @@ import {
   buildSarifReport,
   createBaseline,
   redactText,
+  redactReportValue,
   scanSkillContent,
   toReportScanResult,
 } from '../src/index.ts';
@@ -45,15 +46,84 @@ describe('report redaction', () => {
     const text = [
       'Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456',
       'curl https://user:supersecret@example.com/path',
+      'curl https://:passwordonly@example.com/path',
       '-----BEGIN OPENSSH PRIVATE KEY-----',
     ].join('\n');
     const redacted = redactText(text);
 
     assert.ok(!redacted.includes('abcdefghijklmnopqrstuvwxyz123456'));
     assert.ok(!redacted.includes('supersecret'));
+    assert.ok(!redacted.includes('passwordonly'));
     assert.ok(!redacted.includes('BEGIN OPENSSH PRIVATE KEY'));
     assert.ok(redacted.includes('[REDACTED]'));
     assert.ok(redacted.includes('[REDACTED PRIVATE KEY]'));
+  });
+
+  it('redacts credentials in URL query parameters without removing safe parameters', () => {
+    const querySecret = 'QUERY_SECRET_1234567890';
+    const text = [
+      `https://example.com/mcp?api_key=${querySecret}&mode=safe`,
+      `https://example.com/callback#access_token=${querySecret}&mode=safe`,
+      `https://example.com/artifact?signature=${querySecret}&mode=safe`,
+      `api_key=${querySecret}&token=ANOTHER_SECRET`,
+    ].join('\n');
+    const redacted = redactText(text);
+
+    assert.ok(!redacted.includes(querySecret));
+    assert.ok(!redacted.includes('ANOTHER_SECRET'));
+    assert.ok(redacted.includes('mode=safe'));
+    assert.ok(redacted.includes('[REDACTED]') || redacted.includes('%5BREDACTED%5D'));
+  });
+
+  it('redacts nested report metadata values', () => {
+    const secret = 'X-Amz-CREDENTIAL-1234567890';
+    const redacted = redactReportValue({
+      source: {
+        resolvedUrl: `https://example.com/artifact?X-Amz-Signature=${secret}&safe=yes`,
+      },
+    });
+
+    assert.ok(!JSON.stringify(redacted).includes(secret));
+    assert.ok(JSON.stringify(redacted).includes('safe=yes'));
+  });
+
+  it('keeps signature fingerprints while redacting signature sources', () => {
+    const sourceSecret = 'SIGNATURE_SOURCE_SECRET_1234567890';
+    const keySha256 = 'a'.repeat(64);
+    const signatureSha256 = 'b'.repeat(64);
+    const redacted = redactReportValue({
+      signature: {
+        algorithm: 'ed25519',
+        verified: true,
+        keySha256,
+        signatureSha256,
+        signatureSource: `https://example.com/publisher.sig?signature=${sourceSecret}`,
+      },
+    });
+
+    assert.equal(redacted.signature.algorithm, 'ed25519');
+    assert.equal(redacted.signature.verified, true);
+    assert.equal(redacted.signature.keySha256, keySha256);
+    assert.equal(redacted.signature.signatureSha256, signatureSha256);
+    assert.ok(!redacted.signature.signatureSource.includes(sourceSecret));
+  });
+
+  it('redacts query credentials from default report projections', () => {
+    const querySecret = 'QUERY_SECRET_REPORT_1234567890';
+    const result = scanSkillContent(
+      JSON.stringify({
+        mcpServers: {
+          example: {
+            url: `https://example.com/mcp?api_key=${querySecret}&safe=yes`,
+          },
+        },
+      }),
+      '.mcp.json',
+    );
+    const serialized = JSON.stringify(toReportScanResult(result));
+
+    assert.ok(!serialized.includes(querySecret));
+    assert.ok(serialized.includes('safe=yes'));
   });
 
   it('emits line-stable SARIF fingerprints shared with baselines', () => {

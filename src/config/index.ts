@@ -356,7 +356,7 @@ export function normalizeConfig(raw?: Partial<SkillGuardConfig>): SkillGuardConf
 
 /**
  * Load the effective config and retain the source file that produced it.
- * Explicit config paths fail closed; implicit candidate files retain fallback behavior.
+ * Any discovered config file is authoritative and fails closed when invalid.
  */
 export function loadConfigWithMetadata(
   cwd: string = process.cwd(),
@@ -376,17 +376,13 @@ export function loadConfigWithMetadata(
   for (const name of CONFIG_FILE_NAMES) {
     const source = path.join(cwd, name);
     if (!fs.existsSync(source)) continue;
-    try {
-      const tree = readConfigTree(source);
-      return {
-        config: normalizeConfig(tree.config),
-        source,
-        sources: tree.sources,
-        explicit: false,
-      };
-    } catch {
-      // Malformed implicit config falls through to defaults.
-    }
+    const tree = readConfigTree(source);
+    return {
+      config: normalizeConfig(tree.config),
+      source,
+      sources: tree.sources,
+      explicit: false,
+    };
   }
 
   return {

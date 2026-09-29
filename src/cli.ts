@@ -9,6 +9,8 @@ import {
 } from './scanner/discovery.ts';
 import { ChangedFilesError, getChangedFiles } from './git/changed.ts';
 import {
+  redactReportValue,
+  redactText,
   renderScanReport,
   renderScanReports,
   toReportScanResult,
@@ -75,6 +77,10 @@ import {
   type PublisherPolicyDecision,
   type PublisherProvenance,
 } from './source/provenance.ts';
+import {
+  createSignatureProof,
+  evaluateLockedPublisherPolicy,
+} from './source/proof.ts';
 import { buildCycloneDxSbom } from './sbom/index.ts';
 import {
   InitError,
@@ -388,7 +394,7 @@ ${chalk.bold('COMMANDS:')}
   ${chalk.green('help')}                 Show this help manual
 
 ${chalk.bold('OPTIONS:')}
-  ${chalk.yellow('-f, --force')}            Bypass install warning or apply baseline write changes
+  ${chalk.yellow('-f, --force')}            Bypass install warning, replace a non-empty --output, or apply baseline writes
   ${chalk.yellow('--format <type>')}        Report format: pretty (default), json, sarif
   ${chalk.yellow('--json')}                 Shorthand for --format json
   ${chalk.yellow('--sarif')}                Shorthand for --format sarif
@@ -575,15 +581,21 @@ function signatureReport(signature: SignatureVerificationResult | undefined) {
     : undefined;
 }
 
-function signatureLockMetadata(signature: SignatureVerificationResult | undefined) {
-  return signature
-    ? {
-        signatureAlgorithm: signature.algorithm,
-        signatureVerified: true,
-        signatureKeySha256: signature.publicKeySha256,
-        signatureSha256: signature.signatureSha256,
-      }
-    : {};
+function signatureLockMetadata(
+  signature: SignatureVerificationResult | undefined,
+  payload: Uint8Array | undefined,
+) {
+  if (!signature) return {};
+  if (!payload) {
+    throw new Error('Signed payload is required when recording publisher provenance');
+  }
+  return {
+    signatureAlgorithm: signature.algorithm,
+    signatureVerified: true,
+    signatureKeySha256: signature.publicKeySha256,
+    signatureSha256: signature.signatureSha256,
+    signatureProof: createSignatureProof(signature, payload),
+  };
 }
 
 function signatureProvenance(
@@ -736,6 +748,7 @@ interface PackageInstallSource {
   downloadSha256?: string;
   digestVerified?: boolean;
   signature?: SignatureVerificationResult;
+  signaturePayload?: Uint8Array;
 }
 
 function installSkillPackage(
@@ -768,9 +781,14 @@ function installSkillPackage(
     path.join(destination, ...skillPackage.entryPath.split('/')),
   );
   const installAborted = !scanned.result.passed && !force;
-  const { signature: verifiedSignature, ...sourceFields } = source;
+  const {
+    signature: verifiedSignature,
+    signaturePayload: _signaturePayload,
+    ...sourceFields
+  } = source;
+  const safeSourceFields = redactReportValue(sourceFields);
   const sourceDetails = {
-    ...sourceFields,
+    ...safeSourceFields,
     path: sourcePath,
     packagePath: relativeDirectory,
     packageFormat: 'tar.gz',
@@ -778,7 +796,9 @@ function installSkillPackage(
     packageEntry: skillPackage.entryPath,
     packageFiles: skillPackage.manifest.length,
     scannedFiles: scanned.scannedFiles.length,
-    ...(verifiedSignature ? { signature: signatureReport(verifiedSignature) } : {}),
+    ...(verifiedSignature
+      ? { signature: redactReportValue(signatureReport(verifiedSignature)) }
+      : {}),
   };
 
   if (format === 'json') {
@@ -810,7 +830,9 @@ function installSkillPackage(
     console.log(chalk.gray(`ℹ️  Updating existing lock entry for "${scanned.result.parsedSkill.name}" (was: ${previous.source}).`));
   }
 
-  writeSkillPackage(skillPackage, destination);
+  writeSkillPackage(skillPackage, destination, {
+    replaceExisting: options.output === undefined || force,
+  });
   updateLockfileSkill({
     name: scanned.result.parsedSkill.name,
     version: scanned.result.parsedSkill.version || '0.1.0',
@@ -819,8 +841,12 @@ function installSkillPackage(
     installedAt: new Date().toISOString(),
     verifiedScore: scanned.result.score,
     sourceType: source.type,
-    ...(source.requestedUrl ? { remoteUrl: source.requestedUrl } : {}),
-    ...(source.resolvedUrl ? { resolvedUrl: source.resolvedUrl } : {}),
+    ...(safeSourceFields.requestedUrl
+      ? { remoteUrl: safeSourceFields.requestedUrl }
+      : {}),
+    ...(safeSourceFields.resolvedUrl
+      ? { resolvedUrl: safeSourceFields.resolvedUrl }
+      : {}),
     ...(source.downloadSha256 ? { downloadSha256: source.downloadSha256 } : {}),
     ...(source.digestVerified !== undefined
       ? { digestVerified: source.digestVerified }
@@ -829,7 +855,7 @@ function installSkillPackage(
     packageSha256: skillPackage.sha256,
     packageEntry: skillPackage.entryPath,
     packageFiles: skillPackage.manifest,
-    ...signatureLockMetadata(source.signature),
+    ...signatureLockMetadata(source.signature, source.signaturePayload),
   });
 
   if (format === 'pretty') {
@@ -863,7 +889,9 @@ async function cmdInstallLocal(
       JSON.stringify(
         {
           ...toReportScanResult(result, reportOptions(options)),
-          ...(signature ? { signature: signatureReport(signature) } : {}),
+          ...(signature
+            ? { signature: redactReportValue(signatureReport(signature)) }
+            : {}),
           installAborted: !result.passed && !force,
         },
         null,
@@ -896,7 +924,7 @@ async function cmdInstallLocal(
     installedAt: new Date().toISOString(),
     verifiedScore: result.score,
     sourceType: 'local',
-    ...signatureLockMetadata(signature),
+    ...signatureLockMetadata(signature, bytes),
   });
 
   if (format === 'pretty') {
@@ -969,6 +997,7 @@ async function cmdInstallRemote(
         downloadSha256: download.sha256,
         digestVerified: download.digestVerified,
         ...(signature ? { signature } : {}),
+        ...(signature ? { signaturePayload: download.bytes } : {}),
       },
       options,
       format,
@@ -982,15 +1011,19 @@ async function cmdInstallRemote(
   const relativePosix = toRelativePosix(destination);
   const result = scanSkillContent(download.content, download.filename, config);
   const installAborted = !result.passed && !force;
+  const safeRequestedUrl = redactText(download.requestedUrl);
+  const safeResolvedUrl = redactText(download.resolvedUrl);
   const sourceDetails = {
     type: 'remote',
     path: relativePosix,
-    requestedUrl: download.requestedUrl,
-    resolvedUrl: download.resolvedUrl,
+    requestedUrl: safeRequestedUrl,
+    resolvedUrl: safeResolvedUrl,
     downloadSha256: download.sha256,
     digestVerified: download.digestVerified,
     size: download.size,
-    ...(signature ? { signature: signatureReport(signature) } : {}),
+    ...(signature
+      ? { signature: redactReportValue(signatureReport(signature)) }
+      : {}),
   };
 
   if (format === 'json') {
@@ -1031,17 +1064,17 @@ async function cmdInstallRemote(
     installedAt: new Date().toISOString(),
     verifiedScore: result.score,
     sourceType: 'remote',
-    remoteUrl: download.requestedUrl,
-    resolvedUrl: download.resolvedUrl,
+    remoteUrl: safeRequestedUrl,
+    resolvedUrl: safeResolvedUrl,
     downloadSha256: download.sha256,
     digestVerified: download.digestVerified,
-    ...signatureLockMetadata(signature),
+    ...signatureLockMetadata(signature, download.bytes),
   });
 
   if (format === 'pretty') {
     console.log(
       chalk.green(
-        `🔒 Successfully verified and locked remote signature to skills.lock (source: ${relativePosix}, URL: ${download.resolvedUrl}${signature ? `, signer: ${signature.publicKeySha256.slice(0, 16)}` : ''})!\n`,
+        `🔒 Successfully verified and locked remote signature to skills.lock (source: ${relativePosix}, URL: ${safeResolvedUrl}${signature ? `, signer: ${signature.publicKeySha256.slice(0, 16)}` : ''})!\n`,
       ),
     );
   }
@@ -1070,7 +1103,10 @@ async function cmdInstallLocalPackage(
   installSkillPackage(
     skillPackage,
     path.basename(fullPath),
-    { type: 'local', ...(signature ? { signature } : {}) },
+    {
+      type: 'local',
+      ...(signature ? { signature, signaturePayload: bytes } : {}),
+    },
     options,
     format,
     config,
@@ -1126,15 +1162,17 @@ function cmdVerify(target: string, config: SkillGuardConfig): void {
       console.error(chalk.red(`❌ Invalid package metadata for skill "${packageKey}".`));
       process.exit(EXIT_FAIL);
     }
-    enforcePublisherPolicy(
-      config,
-      {
-        signatureVerified: lockedEntry.signatureVerified,
-        signatureKeySha256: lockedEntry.signatureKeySha256,
-      },
-      'pretty',
-      `package verification "${packageKey}"`,
+    const publisherDecision = evaluateLockedPublisherPolicy(
+      lockedEntry,
+      config.publishers,
     );
+    if (!publisherDecision.passed) {
+      failPublisherPolicy(
+        publisherDecision,
+        'pretty',
+        `package verification "${packageKey}"`,
+      );
+    }
 
     const packageRoot = path.dirname(resolveFromRoot(lockedEntry.source));
     const inspection = inspectInstalledSkillPackage(packageRoot, {
@@ -1201,15 +1239,17 @@ function cmdVerify(target: string, config: SkillGuardConfig): void {
     console.error(chalk.yellow(`⚠️  Skill "${skillName}" is not registered in skills.lock. Run "agentwarden install ${target}" first.`));
     process.exit(EXIT_FAIL);
   }
-  enforcePublisherPolicy(
-    config,
-    {
-      signatureVerified: lockedEntry.signatureVerified,
-      signatureKeySha256: lockedEntry.signatureKeySha256,
-    },
-    'pretty',
-    `skill verification "${key}"`,
+  const publisherDecision = evaluateLockedPublisherPolicy(
+    lockedEntry,
+    config.publishers,
   );
+  if (!publisherDecision.passed) {
+    failPublisherPolicy(
+      publisherDecision,
+      'pretty',
+      `skill verification "${key}"`,
+    );
+  }
 
   if (lockedEntry.sha256 !== result.sha256) {
     console.error(chalk.red.bold(`❌ TAMPERING DETECTED: Hash mismatch for skill "${key}"!`));
@@ -1257,10 +1297,10 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
     let currentFindingCount: number | null = null;
     let packageMatch: boolean | null = null;
     let packageFilesChecked: number | null = null;
-    const publisherDecision = evaluatePublisherPolicy(config.publishers, {
-      signatureVerified: item.signatureVerified,
-      signatureKeySha256: item.signatureKeySha256,
-    });
+    const publisherDecision = evaluateLockedPublisherPolicy(
+      item,
+      config.publishers,
+    );
 
     if (item.packageFormat === 'tar.gz' && item.packageSha256 && item.packageEntry && item.packageFiles) {
       const packageRoot = path.dirname(resolvedPath);
@@ -1315,7 +1355,7 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
       packageFilesChecked,
       publisherPolicyPassed: publisherDecision.passed,
       publisherPolicyCode: publisherDecision.code ?? null,
-      signerKeySha256: publisherDecision.keySha256 ?? item.signatureKeySha256 ?? null,
+      signerKeySha256: publisherDecision.keySha256 ?? null,
     };
   }
 

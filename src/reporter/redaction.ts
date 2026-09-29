@@ -20,7 +20,12 @@ const PRIVATE_KEY_BLOCK =
   /-{5}BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-{5}[\s\S]*?-{5}END (?:RSA |EC |OPENSSH |DSA |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-{5}/gi;
 
 const SECRET_KEY_NAME =
-  /(?:api[_-]?key|access[_-]?key|secret|token|password|passwd|private[_-]?key|authorization|credential)/i;
+  /(?:api[_-]?key|access[_-]?key|secret|token|password|passwd|private[_-]?key|authorization|credential|signature|sig|x-amz-signature|x-amz-credential|sharedaccesssignature)/i;
+
+const SAFE_SIGNATURE_METADATA_SUFFIX =
+  /(?:sha256|hash|algorithm|verified|source|url|path|count|present)$/i;
+
+const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi;
 
 function isPlaceholder(value: string): boolean {
   const normalized = value.trim();
@@ -30,6 +35,38 @@ function isPlaceholder(value: string): boolean {
     /^(?:\$\{?[\w.]+\}?|process\.env\.|env\.|secrets\.|vars\.|<[^>]+>|\{\{[^}]+\}\})/.test(normalized) ||
     /^(?:example|placeholder|changeme|replace[_-]?me|your[_-]?|xxx+)/i.test(normalized)
   );
+}
+
+function redactUrlQuery(match: string): string {
+  let candidate = match;
+  let suffix = '';
+  while (candidate && /[),.;\]}]$/.test(candidate)) {
+    suffix = candidate.slice(-1) + suffix;
+    candidate = candidate.slice(0, -1);
+  }
+
+  try {
+    const url = new URL(candidate);
+    let changed = false;
+    if (url.username || url.password) {
+      url.username = '';
+      url.password = '';
+      changed = true;
+    }
+    for (const key of [...url.searchParams.keys()]) {
+      const values = url.searchParams.getAll(key);
+      if (
+        SECRET_KEY_NAME.test(key) &&
+        values.some((value) => value.trim() && !isPlaceholder(value))
+      ) {
+        url.searchParams.set(key, '[REDACTED]');
+        changed = true;
+      }
+    }
+    return changed ? `${url.toString()}${suffix}` : match;
+  } catch {
+    return match;
+  }
 }
 
 /** Redact common credential formats and sensitive key/value assignments from report text. */
@@ -67,7 +104,15 @@ export function redactText(text: string): string {
       '$1[REDACTED]',
     )
     .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9\-._~+/]+=*/gi, '$1 [REDACTED]')
-    .replace(/(https?:\/\/[^/\s:@]+:)([^@\s/]+)(@)/gi, '$1[REDACTED]$3');
+    .replace(/(https?:\/\/[^/\s:@]+:)([^@\s/]+)(@)/gi, '$1[REDACTED]$3')
+    .replace(URL_PATTERN, redactUrlQuery)
+    .replace(
+      /(^|[\s?&#;])([^=&#\s<>"']+)=([^&#\s<>"']*)/gm,
+      (match, separator: string, key: string, value: string) =>
+        SECRET_KEY_NAME.test(key) && value.trim() && !isPlaceholder(value)
+          ? `${separator}${key}=[REDACTED]`
+          : match,
+    );
 
   return redacted;
 }
@@ -81,6 +126,19 @@ function redactFinding(finding: Finding): Finding {
   };
 }
 
+function isSensitiveObjectKey(key: string): boolean {
+  if (!SECRET_KEY_NAME.test(key)) return false;
+  if (
+    /^(?:signature|sig|x-amz-signature|x-amz-credential|sharedaccesssignature)/i.test(
+      key,
+    ) &&
+    SAFE_SIGNATURE_METADATA_SUFFIX.test(key)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function redactValue(value: unknown): unknown {
   if (typeof value === 'string') return redactText(value);
   if (Array.isArray(value)) return value.map(redactValue);
@@ -89,7 +147,7 @@ function redactValue(value: unknown): unknown {
   const redacted: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
     if (
-      SECRET_KEY_NAME.test(key) &&
+      isSensitiveObjectKey(key) &&
       typeof child === 'string' &&
       child.trim() &&
       !isPlaceholder(child)
@@ -122,4 +180,9 @@ export function toReportScanResult(result: ScanResult, options: ReportOptions = 
 
 export function toReportScanResults(results: ScanResult[], options: ReportOptions = {}): ScanResult[] {
   return results.map((result) => toReportScanResult(result, options));
+}
+
+/** Redact arbitrary structured report metadata, including nested URL strings. */
+export function redactReportValue<T>(value: T): T {
+  return redactValue(value) as T;
 }

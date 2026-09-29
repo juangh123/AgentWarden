@@ -226,7 +226,7 @@ agentwarden --version
 
 | 选项 | 说明 |
 | :--- | :--- |
-| `-f, --force` | 跳过高危阻断，或确认写入基线/允许 `init` 覆盖已有文件 |
+| `-f, --force` | 跳过高危阻断、允许替换非空 `--output` 安装目录，或确认写入基线/允许 `init` 覆盖已有文件 |
 | `--format pretty\|json\|sarif` | 输出格式（也支持 `--json` / `--sarif` 简写） |
 | `--config <file>` | 显式加载 JSON 策略文件；缺失或格式错误时退出码为 `2` |
 | `--profile <name>` | 策略档位：`legacy`/`balanced`/`strict`（扫描默认 `legacy`，`init` 默认 `balanced`） |
@@ -285,12 +285,12 @@ agentwarden --version
 | 字段 | 含义 |
 | :--- | :--- |
 | `sourceType` | `local` 或 `remote`；旧版锁项可省略，视为兼容的本地记录 |
-| `remoteUrl` | 用户请求的原始 URL |
-| `resolvedUrl` | 完成重定向后的最终 URL |
+| `remoteUrl` | 用户请求的 URL；写入锁文件前会移除账号密码、敏感查询参数和片段 |
+| `resolvedUrl` | 完成重定向后的最终 URL；写入锁文件前会移除账号密码、敏感查询参数和片段 |
 | `downloadSha256` | 原始下载字节的 SHA-256，用于验证传输内容是否与 pin 一致 |
 | `digestVerified` | 本次安装是否执行并通过了摘要校验 |
 
-锁文件中的 `sha256` 仍是本地快照的审计哈希，`verify` / `audit` 使用它检测文件篡改。扫描器会统一换行并将内容按 UTF-8 文本处理；远程安装还会移除 BOM。因此，对包含 CRLF 或 BOM 的响应，`downloadSha256` 不保证与 `sha256` 字符串相同，二者用途不同。新增字段均为可选，现有 v1 `skills.lock` 保持兼容。
+锁文件中的 `sha256` 仍是本地快照的审计哈希，`verify` / `audit` 使用它检测文件篡改。扫描器会统一换行并将内容按 UTF-8 文本处理；远程安装还会移除 BOM。因此，对包含 CRLF 或 BOM 的响应，`downloadSha256` 不保证与 `sha256` 字符串相同，二者用途不同。锁文件读取会严格校验 v1 版本、字段类型、大小写重复项和相对来源路径；写入前执行同一套校验，并通过同目录临时文件加原子替换落盘，避免留下半写锁文件。新增字段均为可选，现有 v1 `skills.lock` 保持兼容。
 
 ---
 
@@ -326,11 +326,12 @@ agentwarden install https://publisher.example/weather.tar.gz \
 | 字段 | 含义 |
 | :--- | :--- |
 | `signatureAlgorithm` | 当前为 `ed25519` |
-| `signatureVerified` | 安装时是否成功完成验签；当前成功记录固定为 `true` |
+| `signatureVerified` | 兼容展示字段；发布者策略不会直接信任该布尔值 |
 | `signatureKeySha256` | 受信任公钥 SPKI DER 的 SHA-256 指纹 |
 | `signatureSha256` | detached 签名字节本身的 SHA-256 指纹 |
+| `signatureProof` | 可重验证明，包含 SPKI 公钥、detached 签名和原始签名负载的 SHA-256 |
 
-`verify` 和 `audit` 仍以锁文件中的内容哈希及包清单检查本地完整性；签名验证发生在安装时，用于建立发布者来源。锁文件中的签名字段均为可选，因此未使用该功能的旧版 v1 `skills.lock` 保持兼容。
+安装时，签名的原始字节会以内容寻址方式保存到 `.agentwarden/attestations/<payloadSha256>.bin`。单个证明文件上限为 `20 MiB`，路径中的摘要必须是 64 位 SHA-256；超过上限、路径非法或证明材料缺失/被篡改都会使校验失败。该目录默认保留在版本控制中，需与 `skills.lock` 一同提交才能让其他机器和 CI 重验发布者证明。`verify`、`audit` 和 `sbom` 会重新读取该证明材料、重新执行 Ed25519 验签，并确认签名负载与锁文件中的内容哈希或整包清单一致。对远程单文件，重验时按安装扫描语义移除 BOM 并统一换行后再比对内容哈希；本地文件仍按原始文本字节语义绑定。仅含旧版自报 `signatureVerified` 字段、没有 `signatureProof` 的锁项会被视为未提供可重验签名；启用 `requireSignature` 后必须重新安装生成证明。
 
 ---
 
@@ -372,6 +373,7 @@ agentwarden policy --config .agentwarden/publisher-policy.json --json
 - 密钥指纹可使用大写、`sha256:` 前缀和重复项；标准化统一转换为小写并去重。
 - `--force` 只绕过内容风险扫描，不能绕过必需签名、可信密钥或撤销策略。
 - `verify` 和 `audit` 会按当前配置重新检查锁文件中的发布者元数据，因此策略新增或撤销密钥后，既有安装也会被 CI 发现。
+- `signatureProof` 会同时验证密码学签名和签名负载绑定；伪造布尔值、替换公钥、篡改证明文件或替换已安装内容都会被拒绝。
 
 `trustedKeys` 和 `revokedKeys` 在配置继承中追加合并；后出现的 `revokedKeys` 会从最终可信集合中移除同一指纹，便于在子配置中撤销父配置曾信任的发布者。`requireSignature` 由子配置覆盖。`policy` 与 `policy diff` 输出均包含发布者策略，便于在变更进入主分支前审查。
 
@@ -399,7 +401,7 @@ agentwarden sbom --format pretty --config .agentwarden/publisher-policy.json
 | `entrySha256` / `packageFileCount` | 包入口兼容哈希及包内文件数量 |
 | `missingFiles` / `extraFiles` / `modifiedFiles` / `unsafePaths` | 包级完整性差异 |
 | `remoteUrl` / `resolvedUrl` / `downloadSha256` | 去除账号密码、查询串和片段后的分发来源及下载摘要 |
-| `signatureAlgorithm` / `signatureVerified` | 安装时记录的发布者签名算法和验证状态 |
+| `signatureAlgorithm` / `signatureVerified` | 当前审计时重新验证通过的签名算法和验证状态 |
 | `signatureKeySha256` / `signatureSha256` | 发布者公钥指纹和 detached 签名字节指纹 |
 | `publisherPolicyPassed` / `publisherPolicyCode` | 按当前配置重新计算出的发布者策略判定 |
 
@@ -418,6 +420,7 @@ SBOM 的 `serialNumber` 基于锁文件、发布者策略和工具版本确定�
 - 包内所有文件必须是有效 UTF-8 文本且不能包含 NUL 字节，避免不可扫描的二进制载荷进入安装目录。
 - 所有文本文件都会经过现有规则引擎；发现会携带包内相对路径，聚合得分作为整包安全得分。
 - 写入采用同目录 staging 目录加目录替换，安装失败时恢复原目录，不会写入半成品。
+- 显式 `--output` 指向非空目录时默认拒绝覆盖，必须在确认目标内容可丢弃后传入 `--force`。默认 `.agentwarden/skills/<skill-name>/` 仍允许作为专用安装目录更新。
 
 整包锁项保留入口文件的 `sha256` 兼容字段，并增加：
 
@@ -471,13 +474,13 @@ SBOM 的 `serialNumber` 基于锁文件、发布者策略和工具版本确定�
 - `baseline`：显式启用发现基线；不存在或格式损坏时会直接失败，不会静默忽略。
 - `severityOverrides`：按规则 ID 调整有效严重级别；影响评分、失败阈值、基线和 SARIF 输出。
 
-继承时 `ignoreRules`、`allowedDomains`、`publishers.trustedKeys`、`publishers.revokedKeys`、`include`、`exclude` 为追加合并，`severityOverrides` 按键合并，其他字段由子配置覆盖。缺失父配置或循环引用会终止加载；显式 `--config` 下返回退出码 `2`，隐式候选配置则继续兼容回退到默认策略。
+继承时 `ignoreRules`、`allowedDomains`、`publishers.trustedKeys`、`publishers.revokedKeys`、`include`、`exclude` 为追加合并，`severityOverrides` 按键合并，其他字段由子配置覆盖。缺失父配置或循环引用会终止加载；显式 `--config` 和自动发现的候选配置都会失败关闭，返回退出码 `2`，不会静默回退到默认策略。
 
 命令行中的 `--profile` 会先采用该档位的默认阈值；仅当同时显式传入 `--fail-on` 或 `--min-score` 时，对应 CLI 值才会覆盖档位默认值。重复传入的 `--include` / `--exclude` 会追加到配置文件的路径范围内。
 
 使用 `agentwarden policy --json` 可以检查合并配置文件、策略档位和 CLI 参数后的最终值，适合在 CI 中记录安全门禁的实际配置。
 
-`policy --json` 的 `configSource` 字段会显示最终配置文件绝对路径，`configSources` 按父级到子级列出完整继承链；未加载配置文件时分别为 `null` 和空数组。显式传入的 `--config` 文件不存在、不是文件、JSON 根节点不是对象或继承关系损坏时会立即以退出码 `2` 失败。隐式发现候选文件时仍保持兼容行为：损坏文件会跳过并回退到 `legacy` 默认策略。
+`policy --json` 的 `configSource` 字段会显示最终配置文件绝对路径，`configSources` 按父级到子级列出完整继承链；未加载配置文件时分别为 `null` 和空数组。显式传入的 `--config` 或自动发现的候选配置不存在、不是文件、JSON 根节点不是对象或继承关系损坏时都会立即以退出码 `2` 失败。
 
 ### 策略差异
 
@@ -504,7 +507,7 @@ agentwarden scan skills/ --severity-override SEC-CRED-003=medium
 
 严重级别覆盖会参与评分和 `failOn` 判断，因此修改级别或收敛基线前应经过代码审查。无效规则 ID 不会报错，但也不会出现在规则目录中；可通过 `rules --json` 检查目标规则是否显示 `overridden: true`，确认覆盖已实际生效。
 
-配置文件非法或缺失字段时自动回退到 `legacy` 档位（`failOn: high`、`minScore: 60`），不会中断运行。
+配置文件无法读取、JSON 损坏或继承链损坏时会失败关闭。成功解析后，个别无效的标量字段会按默认值规范化；但不会在整份配置文件损坏时静默回退到 `legacy`。
 
 ---
 
@@ -577,9 +580,10 @@ agentwarden scan skills/ --baseline .agentwarden-baseline.json
 报告默认脱敏，避免安全扫描结果本身泄露凭证：
 
 - API Key、GitHub/OpenAI/Slack/AWS/JWT 等常见 Token 会被替换为 `[REDACTED]`。
-- `Authorization`、Bearer/Basic Token、URL 内嵌密码和敏感 key/value 会被隐藏。
+- `Authorization`、Bearer/Basic Token、URL 内嵌密码、查询参数/片段中的敏感 key/value 和签名下载 URL 会被隐藏。
 - 私钥内容以及没有结束标记的私钥头会被替换。
 - `rawContent`、`promptText` 和代码内容会经过脱敏后再进入 JSON/SARIF。
+- 安装 JSON、`skills.lock` 的远程 URL 元数据和 SBOM 分发来源不会保留敏感查询参数；签名哈希、算法和验证状态仍保留用于审计。
 
 仅在受信任的本地调试环境下使用 `--no-redact`。CI 日志、Issue、SARIF 上传和共享终端输出不应关闭脱敏。
 
