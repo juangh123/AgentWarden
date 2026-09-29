@@ -233,10 +233,10 @@ npx agentwarden-cli@0.3.4 scan malicious-skill.md
 
 | 日期 | 渠道 | 内容 | 状态 |
 | :--- | :--- | :--- | :--- |
-| 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；等待真实评论和反馈 |
+| 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；2026-09-29 复核 1 upvote / 0 comments；正文仍固定旧版本 `v0.3.2`，建议编辑到 `v0.3.4` |
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；2026-09-23 为阅读 20、点赞 1、收藏 1、评论 0 |
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
-| 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；等待真实评论和反馈 |
+| 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；2026-09-29 脚本侧无法读取消息（`401`），回复数待维护者登录后核对 |
 
 ### 开源目录收录 PR
 
@@ -561,6 +561,8 @@ V2EX 与 Reddit 评论维护都依赖维护者本人操作；仓库侧下一步�
 #### 分发交接（同日续）
 
 本轮把仓库侧还能自动化的部分走完，确认分发瓶颈仍在账号侧。
+
+逐渠道的操作步骤、入口和发布后动作见 [分发环节操作指引](launch-distribution-runbook.md)。
 
 指标刷新（2026-09-29 巡检）：
 
