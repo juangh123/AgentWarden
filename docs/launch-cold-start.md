@@ -52,10 +52,15 @@ npm test
 npm run smoke
 npm run test:package
 npm run test:mvp
+npm run test:release
 ```
 
 `npm run test:mvp` 会生成并校验 `release/agentwarden-cli-<version>.tgz` 与
-`release/SHA256SUMS`，再把 tarball 安装到干净目录并验证完整命令链。确认产物：
+`release/SHA256SUMS`，再把 tarball 安装到干净目录并验证完整命令链。发布分支必须
+一并提交重新生成的这两份文件。`npm run test:release` 校验仓库内已提交的产物与
+`SHA256SUMS` 一致、可安装可用，并与当前源码重新打包出来的文件内容一致；Release
+workflow 发布的就是这份已提交产物，不再在 runner 上重新打包，所以该检查只在发布
+提交上必须全绿。确认产物：
 
 > 验证已发布包时，必须在仓库目录之外的干净目录执行 `npx`。在包自身的仓库里
 > 运行时，`npx` 会把请求解析到本地同名同版本包，出现
