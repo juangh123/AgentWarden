@@ -6,6 +6,17 @@ versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- The release workflow now verifies and publishes the tarball committed in
+  the repository instead of repacking a fresh one on the runner, so the
+  checksum published to npm and GitHub Release always matches the recorded
+  artifact. `npm run test:release` runs that verification, including a
+  clean install and full CLI lifecycle check of the committed tarball.
+- Added `.gitattributes` so text files check out with LF endings on every
+  platform, which stops Windows checkouts from packing different tarball
+  bytes than the Linux release runner.
+
 ## [0.3.4] - 2026-09-27
 
 ### Added
