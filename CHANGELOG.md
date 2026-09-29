@@ -6,6 +6,8 @@ versioning.
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-09-27
+
 ### Added
 
 - Added `agentwarden policy guard <base-ref>` and the GitHub Action
@@ -33,6 +35,11 @@ versioning.
 - The MVP packaging gate now validates the local publish target against an
   isolated mock registry, keeping the check repeatable after a version is
   already published.
+
+### Security
+
+- Policy and finding-baseline changes can no longer ride along with a feature
+  pull request to weaken the gate that evaluates that same pull request.
 
 ## [0.3.3] - 2026-09-24
 
@@ -134,7 +141,8 @@ versioning.
 - Publisher policy can require signatures and reject revoked keys.
 - Package publishing excludes the repository `skills.lock`.
 
-[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.4
 [0.3.3]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.3
 [0.3.2]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.2
 [0.3.1]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.1
