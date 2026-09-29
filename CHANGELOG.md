@@ -6,6 +6,8 @@ versioning.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-09-30
+
 ### Changed
 
 - The release workflow now verifies and publishes the tarball committed in
@@ -16,6 +18,25 @@ versioning.
 - Added `.gitattributes` so text files check out with LF endings on every
   platform, which stops Windows checkouts from packing different tarball
   bytes than the Linux release runner.
+
+### Security
+
+- Publisher provenance is now re-verified from a content-addressed
+  `signatureProof` and matching local attestation instead of trusting
+  self-reported signature booleans.
+- Lockfile reads now fail closed on unsupported schemas, unsafe skill keys or
+  paths, duplicate package entries, malformed provenance, invalid timestamps,
+  and out-of-range scores. Hash casing and portable package paths are
+  normalized before comparison.
+- Signature attestations are read through a file descriptor with regular-file
+  and 20 MiB limits, and changes during the read are rejected.
+- Malformed implicitly discovered policy files now fail closed instead of
+  silently falling back to the legacy profile.
+- URL credentials, sensitive query parameters, fragments, and signed download
+  URLs are removed from install output, lockfile metadata, `list --json`, and
+  SBOM distributions.
+- Explicit non-empty package output directories require `--force`, and
+  baseline files are written through an atomic same-directory replacement.
 
 ## [0.3.4] - 2026-09-27
 
@@ -152,7 +173,8 @@ versioning.
 - Publisher policy can require signatures and reject revoked keys.
 - Package publishing excludes the repository `skills.lock`.
 
-[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.5
 [0.3.4]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.4
 [0.3.3]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.3
 [0.3.2]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.2

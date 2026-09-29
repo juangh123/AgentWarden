@@ -1,5 +1,8 @@
 # AgentWarden 冷启动执行清单
 
+> 状态更新（2026-09-30）：`v0.3.5` 安全补丁版本已准备，包含发布者证明重验、
+> 锁文件失败关闭、证明文件安全读取、报告脱敏与原子写入修复。发布 workflow
+> 将继续发布仓库内已提交并校验的 tarball。
 > 状态更新（2026-09-29）：`v0.3.4` 已正式发布。GitHub Release 与 npm
 > `agentwarden-cli@0.3.4` 均已上线，provenance 由 Trusted Publisher 通过 OIDC 生成。
 > 发布验收过程中发现并修复了一处发布产物完整性问题：仓库内提交的 tarball 与 CI
@@ -84,12 +87,12 @@ workflow 发布的就是这份已提交产物，不再在 runner 上重新打包
 agentwarden-cli
 ```
 
-`agentwarden-cli@0.3.4` 是当前公开版本，发布于 2026-09-29。
+`agentwarden-cli@0.3.5` 是当前公开版本，发布于 2026-09-30。
 发布完成后验证 registry 状态：
 
 ```bash
-npm view agentwarden-cli@0.3.4 version dist.integrity
-npx --yes agentwarden-cli@0.3.4 --version
+npm view agentwarden-cli@0.3.5 version dist.integrity
+npx --yes agentwarden-cli@0.3.5 --version
 ```
 
 最初的 bootstrap 版本 `0.3.2` 没有 provenance。GitHub Actions Trusted
@@ -114,8 +117,8 @@ Release workflow 在 tag 推送后执行：
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.3.4 -m "AgentWarden v0.3.4"
-git push origin v0.3.4
+git tag -a v0.3.5 -m "AgentWarden v0.3.5"
+git push origin v0.3.5
 ```
 
 workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 tarball，
@@ -123,7 +126,7 @@ workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 ta
 发布后确认：
 
 ```bash
-gh release view v0.3.4 --repo juangh123/AgentWarden
+gh release view v0.3.5 --repo juangh123/AgentWarden
 npm view agentwarden-cli version dist.integrity
 ```
 
@@ -159,15 +162,15 @@ gh repo edit juangh123/AgentWarden \
 ### 英文短帖
 
 ```text
-AgentWarden v0.3.4 is available as agentwarden-cli.
+AgentWarden v0.3.5 is available as agentwarden-cli.
 
 It scans AI Agent Skills and MCP configurations before execution, locks reviewed
 assets with SHA-256, verifies Ed25519 publisher provenance, emits redacted SARIF,
 and exports CycloneDX SBOMs.
 
 Try an intentionally unsafe example:
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.4/examples/malicious-skill.md
-npx agentwarden-cli@0.3.4 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/malicious-skill.md
+npx agentwarden-cli@0.3.5 scan malicious-skill.md
 
 It is a static gate, not a sandbox or a guarantee. Feedback and bypass reports
 are welcome.
@@ -176,14 +179,14 @@ are welcome.
 ### 中文短帖
 
 ```text
-AgentWarden v0.3.4 已发布，npm 包名为 agentwarden-cli。
+AgentWarden v0.3.5 已发布，npm 包名为 agentwarden-cli。
 
 它可在 Agent Skill / MCP 配置进入运行时前执行静态扫描，用 skills.lock 锁定
 SHA-256 完整性，验证 Ed25519 发布者来源，并输出脱敏 SARIF 与 CycloneDX SBOM。
 
 一条命令验证阻断行为：
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.4/examples/malicious-skill.md
-npx agentwarden-cli@0.3.4 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/malicious-skill.md
+npx agentwarden-cli@0.3.5 scan malicious-skill.md
 
 它是静态安全门禁，不是沙箱，也不承诺“零风险”。欢迎提交绕过案例和真实工作流反馈。
 ```
@@ -233,7 +236,7 @@ npx agentwarden-cli@0.3.4 scan malicious-skill.md
 
 | 日期 | 渠道 | 内容 | 状态 |
 | :--- | :--- | :--- | :--- |
-| 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；2026-09-29 复核 1 upvote / 0 comments；正文仍固定旧版本 `v0.3.2`，建议编辑到 `v0.3.4` |
+| 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；2026-09-29 复核 1 upvote / 0 comments；正文仍固定旧版本 `v0.3.2`，建议编辑到 `v0.3.5` |
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；2026-09-23 为阅读 20、点赞 1、收藏 1、评论 0 |
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
 | 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；2026-09-29 脚本侧无法读取消息（`401`），回复数待维护者登录后核对 |
@@ -270,7 +273,7 @@ npx agentwarden-cli@0.3.4 scan malicious-skill.md
 | 指标 | 说明 |
 | :--- | :--- |
 | npm weekly downloads | 是否形成自然安装 |
-| First-run success rate | `npx --yes agentwarden-cli@0.3.4 --version` 与首次扫描成功率 |
+| First-run success rate | `npx --yes agentwarden-cli@0.3.5 --version` 与首次扫描成功率 |
 | Time to first blocked finding | 从打开 README 到得到退出码 `1` 的时间 |
 | Action adoption | 引用 Action 的公开仓库数 |
 | Issue conversion | 用法、误报和规则请求分别有多少 |

@@ -38,11 +38,11 @@
 mkdir agentwarden-demo
 cd agentwarden-demo
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.4/examples/safe-skill.md
-npx --yes agentwarden-cli@0.3.4 scan safe-skill.md       # 期望退出码 0
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/safe-skill.md
+npx --yes agentwarden-cli@0.3.5 scan safe-skill.md       # 期望退出码 0
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.4/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.4 scan malicious-skill.md  # 期望退出码 1
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.5 scan malicious-skill.md  # 期望退出码 1
 ```
 
 Windows PowerShell 用户把 `curl` 换成 `curl.exe`，并用 `$LASTEXITCODE` 查看退出码。
@@ -95,8 +95,8 @@ https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_a
 
 1. 登录后打开首帖，看评论数是否大于 0。有评论则逐条人工回复；没有则不动作。
 2. 帖子正文里的演示命令仍固定在旧版本，建议顺手编辑到当前版本：
-   - `.../v0.3.2/examples/malicious-skill.md` → `.../v0.3.4/examples/malicious-skill.md`
-   - `npx agentwarden-cli@0.3.2 scan ...` → `npx agentwarden-cli@0.3.4 scan ...`
+   - `.../v0.3.2/examples/malicious-skill.md` → `.../v0.3.5/examples/malicious-skill.md`
+   - `npx agentwarden-cli@0.3.2 scan ...` → `npx agentwarden-cli@0.3.5 scan ...`
 
    编辑方式：帖子下方的 `Edit` 按钮 → 改这两处版本号 → 保存。
 3. 不在 `r/mcp` 或其他 subreddit 重复投放同一内容；先继续参与相关问题讨论。
