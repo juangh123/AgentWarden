@@ -1,5 +1,13 @@
 # AgentWarden 冷启动执行清单
 
+> 状态更新（2026-09-29）：`v0.3.4` 已正式发布。GitHub Release 与 npm
+> `agentwarden-cli@0.3.4` 均已上线，provenance 由 Trusted Publisher 通过 OIDC 生成。
+> 发布验收过程中发现并修复了一处发布产物完整性问题：仓库内提交的 tarball 与 CI
+> 实际发布的字节不一致，根因是 Windows CRLF 检出与 Linux CI 的换行差异；现在
+> Release workflow 校验并发布仓库内已提交的同一份产物，并新增 `npm run test:release`
+> 发布门禁。本轮本地门禁：TypeScript、132/132 单测、127/127 端到端检查、20/20 MVP
+> 打包验收通过；新增的发布产物验收校验仓库产物与校验值一致、可安装可用，并在
+> 发布提交上与源码内容一致。
 > 状态更新（2026-09-27）：当前公开版本仍为 `v0.3.3`，`v0.3.4` 发布候选已在
 > `codex/release-v0.3.4` 分支准备，用于交付外部社区反馈驱动的 `policy guard`。
 > npm 最近一周下载出现 183 次的短时增长，其中 2026-09-24 单日 138 次；由于
@@ -68,7 +76,7 @@ npm run test:mvp
 agentwarden-cli
 ```
 
-`agentwarden-cli@0.3.3` 是当前公开版本，`0.3.4` 是本次发布候选。
+`agentwarden-cli@0.3.4` 是当前公开版本，发布于 2026-09-29。
 发布完成后验证 registry 状态：
 
 ```bash
@@ -472,6 +480,75 @@ npm 日粒度下载为：09-18 两次、09-19 五次、09-20 两次、09-21 两�
 公开发布仍需维护者合并发布分支并推送 `v0.3.4` tag。仓库侧不再需要用
 未发布命令继续扩展范围；发布后优先观察注册表披露、首次扫描反馈和首个
 外部仓库接入，再决定下一项产品能力。
+
+### 2026-09-29 Day 13 快照、v0.3.4 发布验收与发布产物修复
+
+| 指标 | 当前值 |
+| :--- | :--- |
+| Stars / Watchers / Forks | 0 / 0 / 0 |
+| 本仓库 Open Issues / Open PRs | 0 / 0 |
+| GitHub Release 资产下载 | v0.3.4 tarball 与 `SHA256SUMS` 发布当天各 0 次 |
+| npm 最近一周下载 | 183（2026-09-18 至 2026-09-26 窗口，沿用 Day 11 结算值） |
+| npm 日粒度下载 | 09-18 两次、09-19 五次、09-20 两次、09-21 两次、09-22 一次、09-23 两次、09-24 138 次、09-25 31 次、09-26 七次、09-27 五次、09-28 零次 |
+| npm 9-13 至 9-28 累计 | 206 次；脉冲回落后 09-27 为五次、09-28 为零次，仍不视为稳定采用 |
+| Awesome 权威目录收录 | 1/4 已合并；`awesome-mcp-security` #334、`awesome-mcp-devtools` #338、`Awesome-MCP-ZH` #603 仍待审核且无新评论 |
+| GitHub Discussion #21 | 3 条评论，无新增；外部反馈已在 v0.3.4 收口 |
+| DEV 文章 | 0 个公开反应 / 0 条评论 |
+| 掘金文章 | 沿用 2026-09-23 可核验值：阅读 20 / 点赞 1 / 收藏 1 / 评论 0 |
+| Hacker News | 仍未检索到 AgentWarden 提交；`Show HN` 仍需维护者在可互动的晚间发布 |
+| V2EX | 草稿就绪；仍需维护者登录后在 `分享创造` 节点发布 |
+
+本轮把 Day 11 准备就绪的发布候选推送到公网：
+
+- 合并 PR #59（`release: prepare v0.3.4`），推送 `v0.3.4` tag，由 Release workflow 完成发布。
+- 发布后仓库不再保留未发布的 `policy guard` 能力，`v0.3.4` 的 Action 与 CLI 都包含策略守护。
+
+发布验收（2026-09-29）：
+
+| 检查项 | 结果 |
+| :--- | :--- |
+| `main` CI | `6519415` 全部通过（[run 36571858343](https://github.com/juangh123/AgentWarden/actions/runs/36571858343)） |
+| Release workflow | verify 与 publish 均成功（[run 36572017608](https://github.com/juangh123/AgentWarden/actions/runs/36572017608)） |
+| npm registry | `latest = 0.3.4`，发布时间 `2026-09-29T13:03:03Z` |
+| npm integrity | `sha512-WTVhwliScHhVyciy60gd/gHzm6WYP32pNIOOpG7CeJccEyeIgWV8vyU18ROkz9tAN3lshllHqGBUY8wtINtMrg==` |
+| npm provenance | [SLSA provenance](https://registry.npmjs.org/-/npm/v1/attestations/agentwarden-cli@0.3.4) 已生成并通过 OIDC 签名 |
+| GitHub Release | [v0.3.4](https://github.com/juangh123/AgentWarden/releases/tag/v0.3.4) 已公开发布，附带 tarball 与 `SHA256SUMS` |
+| Release tarball | 91,095 bytes，SHA-256 `6eb45e9c6073d327497b933c37385c95ddf9ac4ae2b9ddd39fe89c81394736ca` |
+| 发布附件 `SHA256SUMS` | 与下载后的 Release tarball SHA-256 一致，校验通过 |
+| 本地发布门禁 | TypeScript、132/132 单测、127/127 端到端检查、npm 安装烟测、20/20 MVP 打包验收全部通过；发布产物校验见下节 |
+
+#### 发布产物完整性修复
+
+发布后交叉核对发现：仓库内提交的 `release/agentwarden-cli-0.3.4.tgz`
+（91,218 bytes，SHA-256 `da2894a2ebef1454c928c18fe8167cc8c445f4bfb7793d0614c8cf0e3c56136b`）
+与 CI 实际发布到 npm 和 GitHub Release 的产物（91,095 bytes，SHA-256
+`6eb45e9c6073d327497b933c37385c95ddf9ac4ae2b9ddd39fe89c81394736ca`）不一致。
+根因是 Windows 检出把文本文件写成 CRLF、Linux CI 使用 LF，`npm pack` 因此在
+两种环境下产生不同字节；而 Release workflow 只校验了 runner 上重新生成的
+tarball 与 `SHA256SUMS`，没有校验仓库内已提交的那一份，用户按仓库记录校验
+发布附件时会看到不匹配。
+
+处理方式：
+
+- 新增 `.gitattributes`（`* text=auto eol=lf`），让所有平台的文本检出统一为 LF。
+- `release/` 中的 tarball 与 `SHA256SUMS` 已替换为实际发布的字节，仓库记录与 npm、GitHub Release 对齐。
+- 新增 `npm run test:release`：校验仓库内 tarball 与 `SHA256SUMS` 一致，并对这份已提交产物执行 publish dry-run、干净安装与完整 CLI 生命周期验收。
+- 该命令还用不依赖外部工具的 tar 内容比对，确认已提交产物与当前源码重新打包出来的文件内容一致；跨 npm 版本只比较文件名与内容，不比较压缩字节。
+- Release workflow 的 verify 任务改用 `npm run test:release`，publish 任务发布的是仓库内已提交并经校验的同一份 tarball，不再在 runner 上重新打包。
+- 已验证负例：把 `SHA256SUMS` 改成错误摘要后，`npm run test:release` 以 `FAIL: committed tarball matches release/SHA256SUMS`、退出码 `1` 失败。
+
+发布门禁的语义：`npm run test:release` 只在发布提交上必须全绿。已发布版本在
+`main` 上继续保留其实际发布字节；一旦包内会出现的文件（`dist/`、`README.md`、
+`package.json`、`LICENSE`）发生变化，内容比对会报告差异，直到下一个版本重新
+生成产物。因此 `main` 上出现该差异属于预期，不是回归。
+
+已知残留：`v0.3.4` tag 指向的提交树中仍是修复前的 tarball 字节。已发布的 npm
+与 GitHub Release 产物以发布附件中的 `SHA256SUMS` 为准；`main` 已对齐，后续版本
+由新的发布门禁保证仓库记录与发布字节一致。
+
+Day 13 的结论：仓库侧工程与发布链路已收口，当前瓶颈回到分发。`Show HN`、
+V2EX 与 Reddit 评论维护都依赖维护者本人操作；仓库侧下一步优先争取首个外部
+仓库接入 `policy-guard`，而不是在缺少反馈时扩大版本范围。
 
 ## 发布后 14 天
 

@@ -1,0 +1,13 @@
+# Keep text checkouts at LF on every platform so that `npm pack` produces the
+# same tarball bytes on Windows and on the Linux release runner.
+* text=auto eol=lf
+
+# Binary assets must never be normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.tgz binary
+*.zip binary

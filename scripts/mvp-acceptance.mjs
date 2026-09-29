@@ -1,6 +1,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as zlib from 'node:zlib';
 import * as path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +18,64 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-mvp-'));
 const consumer = path.join(temp, 'consumer');
 const project = path.join(temp, 'project');
 const checks = [];
+// The release path must publish the artifact that is committed in the repo, so
+// `--verify-committed` packs a scratch copy, compares it with the committed
+// tarball file by file, and then runs the whole acceptance against the
+// committed bytes that the release will actually publish.
+const verifyCommittedArtifact = process.argv.includes('--verify-committed');
+
+function sha256File(file) {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+// Compare packaged contents without depending on the npm/tar version that
+// produced the gzip stream: two builds of the same source differ in header
+// metadata but must agree on every file name and file body.
+function readTarEntries(tarball) {
+  const buffer = zlib.gunzipSync(fs.readFileSync(tarball));
+  const entries = new Map();
+  let offset = 0;
+  while (offset + 512 <= buffer.length) {
+    const header = buffer.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const field = (start, end) =>
+      header.subarray(start, end).toString('utf8').replace(/\0.*$/, '');
+    const name = field(0, 100);
+    const prefix = field(345, 500);
+    const size = parseInt(field(124, 136).trim() || '0', 8) || 0;
+    const type = String.fromCharCode(header[156]);
+    const entryPath = (prefix ? `${prefix}/${name}` : name).replace(/^\.\//, '');
+    if (type === '0' || type === '\0') {
+      const body = buffer.subarray(offset + 512, offset + 512 + size);
+      entries.set(entryPath, crypto.createHash('sha256').update(body).digest('hex'));
+    }
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  return entries;
+}
+
+function compareTarEntries(expected, actual) {
+  const differences = [];
+  for (const [key, digest] of expected) {
+    if (!actual.has(key)) differences.push(`missing:${key}`);
+    else if (actual.get(key) !== digest) differences.push(`changed:${key}`);
+  }
+  for (const key of actual.keys()) {
+    if (!expected.has(key)) differences.push(`unexpected:${key}`);
+  }
+  return differences;
+}
+
+function readRecordedChecksum(tarball) {
+  const file = path.join(releaseDirectory, 'SHA256SUMS');
+  if (!fs.existsSync(file)) return null;
+  const name = path.basename(tarball);
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const match = /^([0-9a-f]{64})\s+\*?(.+)$/i.exec(line.trim());
+    if (match && match[2].trim() === name) return match[1].toLowerCase();
+  }
+  return null;
+}
 
 function check(name, condition, detail = '') {
   const ok = Boolean(condition);
@@ -181,21 +240,31 @@ function write(file, content) {
 
 let mockRegistry = null;
 try {
-  fs.rmSync(releaseDirectory, { recursive: true, force: true });
-  fs.mkdirSync(releaseDirectory, { recursive: true });
+  const expectedTarball = `agentwarden-cli-${packageVersion}.tgz`;
+  const tarball = path.join(releaseDirectory, expectedTarball);
+  const packDestination = verifyCommittedArtifact
+    ? path.join(temp, 'packed')
+    : releaseDirectory;
+
+  if (verifyCommittedArtifact) {
+    fs.mkdirSync(packDestination, { recursive: true });
+  } else {
+    fs.rmSync(releaseDirectory, { recursive: true, force: true });
+    fs.mkdirSync(releaseDirectory, { recursive: true });
+  }
   fs.mkdirSync(consumer, { recursive: true });
   fs.mkdirSync(project, { recursive: true });
 
   // 1. Build the artifact exactly the way publishing would.
   const packed = runNpm(
-    ['pack', '--json', '--pack-destination', releaseDirectory],
+    ['pack', '--json', '--pack-destination', packDestination],
     root,
   );
   if (packed.status !== 0) {
     throw new Error(`npm pack failed: ${packed.stderr || packed.stdout}`);
   }
   const packReport = parsePackReport(packed.stdout, packed.stderr)[0];
-  const expectedTarball = `agentwarden-cli-${packageVersion}.tgz`;
+  const packedTarball = path.join(packDestination, expectedTarball);
   check('npm pack produces the versioned tarball', packReport.filename === expectedTarball, packReport.filename);
 
   const packagedFiles = packReport.files.map((file) => file.path);
@@ -221,15 +290,38 @@ try {
   );
 
   // 2. Checksum the artifact so a release can be verified after download.
-  const tarball = path.join(releaseDirectory, expectedTarball);
-  const digest = crypto.createHash('sha256').update(fs.readFileSync(tarball)).digest('hex');
-  const checksums = `${digest}  ${expectedTarball}\n`;
-  fs.writeFileSync(path.join(releaseDirectory, 'SHA256SUMS'), checksums, 'utf8');
-  const reread = crypto
-    .createHash('sha256')
-    .update(fs.readFileSync(tarball))
-    .digest('hex');
-  check('SHA256SUMS matches the packed tarball', reread === digest, digest.slice(0, 16));
+  if (verifyCommittedArtifact) {
+    const committedExists = fs.existsSync(tarball);
+    const committedDigest = committedExists ? sha256File(tarball) : null;
+    const recordedDigest = readRecordedChecksum(tarball);
+    check('committed release tarball exists', committedExists, path.relative(root, tarball));
+    check(
+      'committed tarball matches release/SHA256SUMS',
+      committedExists && recordedDigest === committedDigest,
+      recordedDigest === null
+        ? 'release/SHA256SUMS is missing or has no entry for the tarball'
+        : `${committedDigest.slice(0, 16)}`,
+    );
+    if (!committedExists) {
+      throw new Error(`committed release artifact is missing: ${path.relative(root, tarball)}`);
+    }
+    const differences = compareTarEntries(readTarEntries(packedTarball), readTarEntries(tarball));
+    check(
+      'committed tarball ships the same file contents as a fresh pack',
+      differences.length === 0,
+      differences.slice(0, 5).join(', ') || `${readTarEntries(tarball).size} files`,
+    );
+    if (differences.length > 0) {
+      console.error(
+        'The committed release tarball does not match the current source. Matching only has to hold on a release commit; run `npm run test:mvp` to regenerate release/ before tagging.',
+      );
+    }
+  } else {
+    const digest = sha256File(tarball);
+    const checksums = `${digest}  ${expectedTarball}\n`;
+    fs.writeFileSync(path.join(releaseDirectory, 'SHA256SUMS'), checksums, 'utf8');
+    check('SHA256SUMS matches the packed tarball', sha256File(tarball) === digest, digest.slice(0, 16));
+  }
 
   const publishTarget = `./${path.relative(root, tarball).replace(/\\/g, '/')}`;
   mockRegistry = await startMockRegistry();

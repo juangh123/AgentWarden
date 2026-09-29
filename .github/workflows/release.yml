@@ -27,7 +27,9 @@ jobs:
       - run: npm test
       - run: npm run smoke
       - run: npm run test:package
-      - run: npm run test:mvp
+      # Release publishes the committed tarball, so verify those exact bytes
+      # instead of repacking a fresh artifact on the runner.
+      - run: npm run test:release
       - name: Preserve verified release artifacts
         uses: actions/upload-artifact@v7
         with:
