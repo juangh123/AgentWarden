@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:e893ee88-4e74-5d38-ba39-e94e2d322c18",
+  "serialNumber": "urn:uuid:a12b053e-a4ee-5b49-b844-e7f701a66265",
   "version": 1,
   "metadata": {
     "tools": {
@@ -10,7 +10,7 @@
           "type": "application",
           "bom-ref": "urn:agentwarden:tool:agentwarden",
           "name": "agentwarden",
-          "version": "0.3.3",
+          "version": "0.3.4",
           "scope": "required"
         }
       ]
@@ -19,7 +19,7 @@
       "type": "application",
       "bom-ref": "urn:agentwarden:workspace",
       "name": "agentwarden-lockfile",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "scope": "required"
     }
   },

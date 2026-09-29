@@ -1,5 +1,13 @@
 # AgentWarden 冷启动执行清单
 
+> 状态更新（2026-09-27）：当前公开版本仍为 `v0.3.3`，`v0.3.4` 发布候选已在
+> `codex/release-v0.3.4` 分支准备，用于交付外部社区反馈驱动的 `policy guard`。
+> npm 最近一周下载出现 183 次的短时增长，其中 2026-09-24 单日 138 次；由于
+> Stars、Issue、评论和外部接入尚未同步增长，这批下载暂按发布与验证脉冲记录，
+> 不能等同于持续采用。公开发布仍需推送 `v0.3.4` tag，由 Trusted Publisher
+> 完成 npm provenance 与 GitHub Release。本地发布门禁已复核：TypeScript、
+> 132/132 单测、127/127 端到端检查、安装包烟测和 20/20 MVP 验收全部通过。
+>
 > 状态更新（2026-09-24）：`v0.3.3` GitHub Release 与 npm 发布均已完成，
 > GitHub Action 已发布到
 > [GitHub Marketplace](https://github.com/marketplace/actions/agentwarden-security-gate)，
@@ -60,11 +68,12 @@ npm run test:mvp
 agentwarden-cli
 ```
 
-`agentwarden-cli@0.3.3` 是当前版本。发布完成后验证 registry 状态：
+`agentwarden-cli@0.3.3` 是当前公开版本，`0.3.4` 是本次发布候选。
+发布完成后验证 registry 状态：
 
 ```bash
-npm view agentwarden-cli@0.3.3 version dist.integrity
-npx --yes agentwarden-cli@0.3.3 --version
+npm view agentwarden-cli@0.3.4 version dist.integrity
+npx --yes agentwarden-cli@0.3.4 --version
 ```
 
 最初的 bootstrap 版本 `0.3.2` 没有 provenance。GitHub Actions Trusted
@@ -89,8 +98,8 @@ Release workflow 在 tag 推送后执行：
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.3.3 -m "AgentWarden v0.3.3"
-git push origin v0.3.3
+git tag -a v0.3.4 -m "AgentWarden v0.3.4"
+git push origin v0.3.4
 ```
 
 workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 tarball，
@@ -98,7 +107,7 @@ workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 ta
 发布后确认：
 
 ```bash
-gh release view v0.3.3 --repo juangh123/AgentWarden
+gh release view v0.3.4 --repo juangh123/AgentWarden
 npm view agentwarden-cli version dist.integrity
 ```
 
@@ -134,15 +143,15 @@ gh repo edit juangh123/AgentWarden \
 ### 英文短帖
 
 ```text
-AgentWarden v0.3.3 is available as agentwarden-cli.
+AgentWarden v0.3.4 is available as agentwarden-cli.
 
 It scans AI Agent Skills and MCP configurations before execution, locks reviewed
 assets with SHA-256, verifies Ed25519 publisher provenance, emits redacted SARIF,
 and exports CycloneDX SBOMs.
 
 Try an intentionally unsafe example:
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
-npx agentwarden-cli@0.3.3 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.4/examples/malicious-skill.md
+npx agentwarden-cli@0.3.4 scan malicious-skill.md
 
 It is a static gate, not a sandbox or a guarantee. Feedback and bypass reports
 are welcome.
@@ -151,14 +160,14 @@ are welcome.
 ### 中文短帖
 
 ```text
-AgentWarden v0.3.3 已发布，npm 包名为 agentwarden-cli。
+AgentWarden v0.3.4 已发布，npm 包名为 agentwarden-cli。
 
 它可在 Agent Skill / MCP 配置进入运行时前执行静态扫描，用 skills.lock 锁定
 SHA-256 完整性，验证 Ed25519 发布者来源，并输出脱敏 SARIF 与 CycloneDX SBOM。
 
 一条命令验证阻断行为：
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.3/examples/malicious-skill.md
-npx agentwarden-cli@0.3.3 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.4/examples/malicious-skill.md
+npx agentwarden-cli@0.3.4 scan malicious-skill.md
 
 它是静态安全门禁，不是沙箱，也不承诺“零风险”。欢迎提交绕过案例和真实工作流反馈。
 ```
@@ -245,7 +254,7 @@ npx agentwarden-cli@0.3.3 scan malicious-skill.md
 | 指标 | 说明 |
 | :--- | :--- |
 | npm weekly downloads | 是否形成自然安装 |
-| First-run success rate | `npx --yes agentwarden-cli@0.3.3 --version` 与首次扫描成功率 |
+| First-run success rate | `npx --yes agentwarden-cli@0.3.4 --version` 与首次扫描成功率 |
 | Time to first blocked finding | 从打开 README 到得到退出码 `1` 的时间 |
 | Action adoption | 引用 Action 的公开仓库数 |
 | Issue conversion | 用法、误报和规则请求分别有多少 |
@@ -417,6 +426,52 @@ Day 8 没有出现需要紧急发布补丁的新安装失败或安全反馈。�
 
 同日验证：TypeScript 检查通过，128/128 单元测试通过，121/121 端到端检查通过。
 Day 9 的唯一高优先级工程缺口仍来自真实社区反馈，说明评论巡检已经产生实际安全收益。
+
+### 2026-09-27 Day 11 快照与 v0.3.4 发布准备
+
+| 指标 | 当前值 |
+| :--- | :--- |
+| Stars / Watchers / Forks | 0 / 0 / 0 |
+| 本仓库 Open Issues / Open PRs | 0 / 0 |
+| GitHub Release 资产下载 | 2（v0.3.3 tarball 与 SHA256SUMS 各 1 次） |
+| npm weekly downloads | 183（2026-09-17 至 2026-09-26 API 窗口总计 190；截至巡检时 last-week 为 183） |
+| npm 版本分布 | 最近一周 0.3.3 为 164 次、0.3.2 为 19 次 |
+| Awesome 权威目录收录 | 1/4 已合并；`awesome-mcp-security` #334、`awesome-mcp-devtools` #338、`Awesome-MCP-ZH` #603 仍待审核 |
+| GitHub Discussion #21 | 3 条评论；外部反馈已复现并完成代码修复 |
+| DEV 文章 | 0 个公开反应 / 0 条评论 |
+| Hacker News | 未检索到 AgentWarden 提交；仍需维护者在可持续互动的晚间时段亲自发布 |
+| V2EX | 草稿就绪；仍需维护者登录后在 `分享创造` 节点发布 |
+
+npm 日粒度下载为：09-18 两次、09-19 五次、09-20 两次、09-21 两次、
+09-22 一次、09-23 两次、09-24 138 次、09-25 31 次、09-26 七次。
+09-24 与 v0.3.3 发布时间重合，随后快速回落，且没有同时出现 Star、Issue、
+评论或外部 Action 引用增长，因此当前把它记录为发布、镜像和验证行为造成的
+短时脉冲。下一完整统计窗口若不能保持增长，不应把 183 次解释为稳定采用。
+
+本轮把外部评论提出的策略绕过问题收口为 `v0.3.4` 发布候选：
+
+- `agentwarden policy guard <base-ref>` 比较工作区与批准基线之间的有效策略。
+- `policy-guard` 已接入 Action，并覆盖全部策略影响输入及发现基线。
+- 新初始化的下游工作流默认在 PR 中启用守护，同时保留直接调用的兼容性。
+- `examples/github-action-project` 提供可复制的下游接入、严格策略和
+  `CODEOWNERS` 边界。
+- `v0.3.4` 发布候选包含 Release Notes、版本引用、npm/API 文档和冷启动文案更新。
+
+本地发布门禁结果：
+
+| 检查项 | 结果 |
+| :--- | :--- |
+| TypeScript 检查 | 通过 |
+| 单元测试 | 132/132 通过 |
+| 端到端烟测 | 127/127 通过 |
+| npm tarball 安装烟测 | 通过 |
+| MVP 打包验收 | 20/20 通过 |
+| Git 源码安装烟测 | 通过 |
+| 发布产物 | `release/agentwarden-cli-0.3.4.tgz` 与 `release/SHA256SUMS` 已生成并核对；SHA-256 为 `da2894a2...e3c56136b` |
+
+公开发布仍需维护者合并发布分支并推送 `v0.3.4` tag。仓库侧不再需要用
+未发布命令继续扩展范围；发布后优先观察注册表披露、首次扫描反馈和首个
+外部仓库接入，再决定下一项产品能力。
 
 ## 发布后 14 天
 

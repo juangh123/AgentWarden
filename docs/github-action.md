@@ -9,14 +9,14 @@ AgentWarden Action 在 CI 中扫描 Skill、Tool 和 MCP 配置，把结果写�
 可直接从 Marketplace 添加；仓库内也可以显式引用：
 
 ```yaml
-- uses: juangh123/AgentWarden@v0.3.3
+- uses: juangh123/AgentWarden@v0.3.4
 ```
 
 版本选择建议：
 
 | 引用方式 | 适用场景 |
 | :--- | :--- |
-| `@v0.3.3` | 推荐；版本固定，升级可控 |
+| `@v0.3.4` | 推荐；版本固定，升级可控 |
 | `@v0` | 自动接收兼容的 v0.x 修复；执行前应检查 Release Notes |
 | `@<commit-sha>` | 高安全环境；最严格的可重复与防篡改方式 |
 
@@ -30,7 +30,7 @@ Action 直接从固定版本中运行 `src/cli.ts`，不执行 `npm install`，�
 在仓库根目录执行：
 
 ```bash
-npx --yes agentwarden-cli@0.3.3 init
+npx --yes agentwarden-cli@0.3.4 init
 ```
 
 该命令会生成：
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: juangh123/AgentWarden@v0.3.3
+      - uses: juangh123/AgentWarden@v0.3.4
         with:
           path: skills/
           profile: strict
@@ -95,7 +95,7 @@ steps:
   - uses: actions/checkout@v7
 
   - name: Run AgentWarden
-    uses: juangh123/AgentWarden@v0.3.3
+    uses: juangh123/AgentWarden@v0.3.4
     with:
       path: .
       profile: strict
@@ -119,7 +119,7 @@ steps:
   with:
     fetch-depth: 0
 
-- uses: juangh123/AgentWarden@v0.3.3
+- uses: juangh123/AgentWarden@v0.3.4
   with:
     path: .
     changed: 'true'
@@ -133,7 +133,7 @@ steps:
 对已经审核并接受的历史发现，可以保存稳定指纹基线，并强制所有例外在指定日期前重新检查：
 
 ```yaml
-- uses: juangh123/AgentWarden@v0.3.3
+- uses: juangh123/AgentWarden@v0.3.4
   with:
     path: skills/
     baseline: .agentwarden-baseline.json
@@ -154,7 +154,7 @@ PR 可能在同一提交里既加入有风险的 Skill，又通过 `ignoreRules`
   with:
     fetch-depth: 0
 
-- uses: juangh123/AgentWarden@v0.3.3
+- uses: juangh123/AgentWarden@v0.3.4
   with:
     path: .
     config: .agentwarden/policy.json
