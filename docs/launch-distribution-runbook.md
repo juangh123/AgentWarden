@@ -27,8 +27,9 @@
 | 掘金 | `AgentWarden` | https://juejin.cn/user/252246275414937 | 只需监控 |
 | DEV | `agentwarden` | https://dev.to/agentwarden | 只需监控 |
 
-本机无法替代账号操作：浏览器控制与第三方会话都不在手边，社区登录、发帖和评论
-只能由维护者本人完成。这里的脚本只负责准备事实、复现命令和记录结果。
+本机无法替代账号操作：2026-10-01 复核时，Codex 浏览器控制仍返回
+`unsupported Codex auth method: apikey`，第三方会话也不在手边。社区登录、发帖和
+评论只能由维护者本人完成。这里的脚本只负责准备事实、复现命令和记录结果。
 
 ## 开始前一次性核对
 
@@ -91,7 +92,8 @@ Windows PowerShell 用户把 `curl` 换成 `curl.exe`，并用 `$LASTEXITCODE` �
 首帖：
 https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/
 
-当前状态（2026-09-29 复核）：1 upvote / 0 comments。
+当前状态（2026-10-01）：脚本侧仍无法读取（`403`）；沿用 2026-09-29 公开复核的
+1 upvote / 0 comments，需维护者登录后确认。
 
 1. 登录后打开首帖，看评论数是否大于 0。有评论则逐条人工回复；没有则不动作。
 2. 帖子正文里的演示命令仍固定在旧版本，建议顺手编辑到当前版本：
@@ -106,7 +108,7 @@ https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_a
 主题：
 https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072
 
-当前状态（2026-09-29）：脚本侧读不到消息（频道消息接口返回 `401`），需要维护者
+当前状态（2026-10-01）：脚本侧仍读不到消息（频道消息接口返回 `401`），需要维护者
 登录后核对。
 
 1. 登录 Discord，打开上面的主题链接，查看是否有新回复。
@@ -125,11 +127,11 @@ https://discord.com/channels/1312302100125843476/1544674994423074867/threads/155
 
 ## 渠道 F：开源目录 PR 跟进
 
-| 目录 | PR | 状态（2026-09-29） |
+| 目录 | PR | 状态（2026-10-01） |
 | :--- | :--- | :--- |
-| [Awesome MCP Security](https://github.com/Puliczek/awesome-mcp-security) | [#334](https://github.com/Puliczek/awesome-mcp-security/pull/334) | 开放、可合并、0 条评论 |
-| [Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools) | [#338](https://github.com/punkpeye/awesome-mcp-devtools/pull/338) | 开放、可合并、0 条评论 |
-| [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [#603](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) | 开放、可合并、0 条评论 |
+| [Awesome MCP Security](https://github.com/Puliczek/awesome-mcp-security) | [#334](https://github.com/Puliczek/awesome-mcp-security/pull/334) | 开放、`mergeable_state=clean`、0 条评论 |
+| [Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools) | [#338](https://github.com/punkpeye/awesome-mcp-devtools/pull/338) | 开放、`mergeable_state=clean`、0 条评论 |
+| [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [#603](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) | 开放、`mergeable_state=clean`、0 条评论 |
 
 规则：每条只提交一次，不催审；维护者要求改格式或分类时在原 PR 中处理。
 

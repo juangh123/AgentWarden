@@ -1,5 +1,13 @@
 # AgentWarden 冷启动执行清单
 
+> 状态更新（2026-10-01）：`agentwarden-cli@0.3.5` 与 GitHub Release `v0.3.5`
+> 已完成发布。仓库外干净目录复核 `--version`、安全样例退出码 `0`、恶意样例退出码
+> `1` 均通过，浮动的 `v0` 标签也已指向 `v0.3.5` 发布提交。
+> 截至巡检时，npm 最近一周下载为 446 次（2026-09-23 至 2026-09-29），
+> 2026-09-30 与 2026-10-01 暂为 0；Stars / Watchers / Forks 仍为 0，
+> `v0.3.5` Release 资产下载为 0。账号侧浏览器控制仍因
+> `unsupported Codex auth method: apikey` 不可用，V2EX 首发、`Show HN`、
+> Reddit 编辑与评论巡检、Discord 回复巡检仍需维护者本人操作。
 > 状态更新（2026-09-30）：`v0.3.5` 安全补丁版本已准备，包含发布者证明重验、
 > 锁文件失败关闭、证明文件安全读取、报告脱敏与原子写入修复。发布 workflow
 > 将继续发布仓库内已提交并校验的 tarball。
@@ -608,6 +616,49 @@ V2EX 与 Reddit 评论维护都依赖维护者本人操作；仓库侧下一步�
 4. Discord：查看 MCP 社区 `showcase` 主题回复；只做人工回复，不重复发帖。
 
 发布完成后把各渠道链接与时间补进“已发布渠道记录”，本清单即可转入下一轮周巡检。
+
+### 2026-10-01 Day 15 分发快照
+
+本轮继续尝试推进账号侧分发，但 Codex 浏览器控制仍返回
+`unsupported Codex auth method: apikey`，无法读取或操作用户 Chrome 的登录会话。
+V2EX 页面与 Reddit JSON 仍返回 `403`，因此没有代替维护者发帖、编辑或回复。
+
+| 指标 | 当前值 |
+| :--- | :--- |
+| npm 最近一周下载 | 446（2026-09-23 至 2026-09-29 API 窗口） |
+| npm 最近一月下载 | 480（2026-08-31 至 2026-09-29 API 窗口） |
+| npm 日粒度下载 | 09-24 138、09-25 31、09-26 7、09-27 5、09-28 0、09-29 263、09-30 0、10-01 0（截至 13:26 UTC+8） |
+| GitHub Release 资产下载 | `v0.3.5` tarball 与 `SHA256SUMS` 各 0 次；`v0.3.4` 各 1 次；`v0.3.3` 各 2 次 |
+| Stars / Watchers / Forks | 0 / 0 / 0 |
+| 本仓库 Open Issues / Open PRs | 0 / 0 |
+| GitHub Discussion #21 | 3 条评论，无新增 |
+| DEV 文章 | 0 反应 / 0 评论 |
+| Hacker News | 精确检索仓库 URL 与 `AgentWarden` 均为 0 submissions / 0 comments |
+| 社区目录 PR | #334、#338、#603 均仍开放、`mergeable_state=clean` 且 0 条评论 |
+
+本轮复核通过项：
+
+- `npx --yes agentwarden-cli@0.3.5 --version` 输出 `agentwarden v0.3.5`，
+  退出码 `0`。
+- 仓库外干净目录扫描 `safe-skill.md` 退出码 `0`，安全分 `100/100`。
+- 同一目录扫描 `malicious-skill.md` 命中 5 条 CRITICAL，安全分 `0/100`，
+  退出码 `1`。
+- 远端浮动标签 `v0` 与 `v0.3.5` 均解析到发布提交
+  `b3425a42de75993333f1c9fdfbc1d9d57f94351a`。
+- npm registry 的 `latest = 0.3.5`，发布时间为
+  `2026-09-29T23:25:12.777Z`。
+
+仍待维护者本人完成的动作：
+
+1. V2EX：登录后按[V2EX 事实清单](launch-v2ex.md)撰写并发布，发布后回到原帖回复。
+2. Hacker News：在可预留 2 至 3 小时的晚间时段，按
+   [HN 事实清单](launch-hacker-news.md)亲自撰写标题和首条评论。
+3. Reddit：登录后检查 [r/mcp 首帖](https://www.reddit.com/r/mcp/comments/1wh2kyb/)
+   的新评论，并把正文里的旧版本 `v0.3.2` 更新为 `v0.3.5`。
+4. Discord：登录后检查 `showcase` 主题回复；有技术问题才在原主题人工回复。
+
+公开指标仍未显示 Stars、Issue、评论或外部 Action 接入增长，因此本轮不把 npm
+下载脉冲解释为持续采用。仓库侧继续保持当前版本，不再在没有新反馈时扩展范围。
 
 ## 发布后 14 天
 
