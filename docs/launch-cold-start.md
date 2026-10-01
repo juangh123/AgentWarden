@@ -5,9 +5,10 @@
 > `1` 均通过，浮动的 `v0` 标签也已指向 `v0.3.5` 发布提交。
 > 截至巡检时，npm 最近一周下载为 446 次（2026-09-23 至 2026-09-29），
 > 2026-09-30 与 2026-10-01 暂为 0；Stars / Watchers / Forks 仍为 0，
-> `v0.3.5` Release 资产下载为 0。账号侧浏览器控制仍因
-> `unsupported Codex auth method: apikey` 不可用，V2EX 首发、`Show HN`、
-> Reddit 编辑与评论巡检、Discord 回复巡检仍需维护者本人操作。
+> `v0.3.5` Release 资产下载为 0。Codex 浏览器扩展仍因 API Key 认证不可用时，
+> 本轮改用独立 Playwright 会话完成 Reddit 与 Discord 复核；Reddit 正文已更新到
+> `v0.3.5`，Discord 无新回复。V2EX 仍需邀请码激活，Hacker News 当前缺少可用
+> 凭据，首发动作暂不能继续。
 > 状态更新（2026-09-30）：`v0.3.5` 安全补丁版本已准备，包含发布者证明重验、
 > 锁文件失败关闭、证明文件安全读取、报告脱敏与原子写入修复。发布 workflow
 > 将继续发布仓库内已提交并校验的 tarball。
@@ -217,10 +218,10 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 | :--- | :--- | :--- | :--- |
 | DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料；2026-09-19 发布英文长帖，公开主页现有 1 篇文章 | 监控阅读、收藏、评论和转发；收到技术问题时由维护者本人回复 |
 | Discord | `agentwarden_cli` | 2026-09-20 已加入 MCP Contributor Discord 并完成规则确认；已加入 Model Context Protocol 社区并通过 MEE6 验证；已在 `showcase` 发布项目主题；OpenAI 验证受地区限制不可用 | MCP Contributor 只由维护者本人参与，不发送 AI 生成内容；监控 `showcase` 回复，不重复发帖 |
-| Hacker News | `agentwarden` | 已注册，about 已完善；2026-09-23 确认 `Show HN` 限制已解除 | 建议维护者选择能够持续跟进的时段（推荐工作日 20:00 至 22:00 UTC+8）按[事实清单](launch-hacker-news.md)亲自撰写并提交，预留 2 至 3 小时互动 |
-| Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册，公开主页已核对，2026-09-15 已在 `r/mcp` 发布首帖 | 监控并人工回复评论；不在多个社区重复投放；继续参与相关讨论后再扩展 |
+| Hacker News | `agentwarden` | 已注册，about 已完善；`Show HN` 限制已解除；2026-10-01 当前会话没有可用密码 | 先找回或重置账号凭据，再选择能够持续跟进的时段按[事实清单](launch-hacker-news.md)亲自提交并预留 2 至 3 小时互动 |
+| Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册并在 `r/mcp` 发布首帖；2026-10-01 已登录复核并将正文更新到 `v0.3.5` | 监控并人工回复新评论；不再重复投放；继续参与相关讨论后再扩展 |
 | 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖；2026-09-23 增至 20 阅读、1 点赞、1 收藏 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
-| V2EX | 待发布 | 已就绪[分享创造草稿](launch-v2ex.md)与技术事实清单 | 维护者在浏览器登录可用账号后，按规范在 `create` 节点发布并亲自跟进回复 |
+| V2EX | 待激活 | 已就绪[分享创造草稿](launch-v2ex.md)与技术事实清单；2026-10-01 账号停在邀请码激活页 | 先获得邀请码并完成账号激活，再按规范在 `create` 节点发布并亲自跟进回复 |
 | 即刻 | 待注册 | 未注册，优先级低于掘金 | 掘金账号可用后再推进，按移动端社区习惯参与 |
 
 ### Discord 目标社区
@@ -229,7 +230,7 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 | :--- | :--- | :--- | :--- |
 | 1 | OpenAI 官方社区 | https://discord.gg/openai | 已在服务器列表中，但账号验证返回 `unsupported_country_region_territory`，当前不可参与 |
 | 2 | MCP Contributor Discord | https://discord.gg/6CSzBmMkjX | 已加入并完成 onboarding。只参与 Security IG、Skills over MCP 或工具链讨论；服务器禁止 AI 生成消息和产品营销 |
-| 3 | Model Context Protocol 社区 | https://discord.com/invite/model-context-protocol-1312302100125843476 | 已加入并通过 MEE6 验证；2026-09-20 在 `showcase` 发布 [AgentWarden](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072)，使用 `Security`、`CLI` 标签，当前 0 条消息 |
+| 3 | Model Context Protocol 社区 | https://discord.com/invite/model-context-protocol-1312302100125843476 | 已加入并通过 MEE6 验证；2026-09-20 在 `showcase` 发布 [AgentWarden](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072)，使用 `Security`、`CLI` 标签；2026-10-01 复核仅原帖 1 条、0 条回复 |
 
 `showcase` 当前可用标签为 `Server`、`Client`、`Security`、`WebMCP`、`CLI`、
 `Library`、`Experiment`。本次发布使用 `Security` 和 `CLI`。每个项目只保留
@@ -244,10 +245,10 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 
 | 日期 | 渠道 | 内容 | 状态 |
 | :--- | :--- | :--- | :--- |
-| 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；2026-09-29 复核 1 upvote / 0 comments；正文仍固定旧版本 `v0.3.2`，建议编辑到 `v0.3.5` |
+| 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；2026-10-01 复核 1 upvote / 0 comments / 94 views；正文示例与命令已更新到 `v0.3.5` |
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；2026-09-23 为阅读 20、点赞 1、收藏 1、评论 0 |
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
-| 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；2026-09-29 脚本侧无法读取消息（`401`），回复数待维护者登录后核对 |
+| 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；2026-10-01 登录复核仅原帖 1 条、0 条回复 |
 
 ### 开源目录收录 PR
 
@@ -619,9 +620,10 @@ V2EX 与 Reddit 评论维护都依赖维护者本人操作；仓库侧下一步�
 
 ### 2026-10-01 Day 15 分发快照
 
-本轮继续尝试推进账号侧分发，但 Codex 浏览器控制仍返回
-`unsupported Codex auth method: apikey`，无法读取或操作用户 Chrome 的登录会话。
-V2EX 页面与 Reddit JSON 仍返回 `403`，因此没有代替维护者发帖、编辑或回复。
+本轮在 Codex 浏览器扩展因 API Key 认证不可用时，改用独立 Playwright
+持久会话完成账号侧复核。Reddit 正文已从 `v0.3.2` 更新到 `v0.3.5`；
+Discord 子区只有原帖，没有新回复。V2EX 账号停在邀请码激活页，
+Hacker News 当前没有可用密码，因此这两条未执行发布。
 
 | 指标 | 当前值 |
 | :--- | :--- |
@@ -634,6 +636,8 @@ V2EX 页面与 Reddit JSON 仍返回 `403`，因此没有代替维护者发帖�
 | GitHub Discussion #21 | 3 条评论，无新增 |
 | DEV 文章 | 0 反应 / 0 评论 |
 | Hacker News | 精确检索仓库 URL 与 `AgentWarden` 均为 0 submissions / 0 comments |
+| Reddit `r/mcp` | 1 upvote / 0 comments / 94 views；正文已更新到 `v0.3.5` |
+| Discord `showcase` | 仅原帖 1 条，0 条回复 |
 | 社区目录 PR | #334、#338、#603 均仍开放、`mergeable_state=clean` 且 0 条评论 |
 
 本轮复核通过项：
@@ -650,12 +654,13 @@ V2EX 页面与 Reddit JSON 仍返回 `403`，因此没有代替维护者发帖�
 
 仍待维护者本人完成的动作：
 
-1. V2EX：登录后按[V2EX 事实清单](launch-v2ex.md)撰写并发布，发布后回到原帖回复。
-2. Hacker News：在可预留 2 至 3 小时的晚间时段，按
-   [HN 事实清单](launch-hacker-news.md)亲自撰写标题和首条评论。
-3. Reddit：登录后检查 [r/mcp 首帖](https://www.reddit.com/r/mcp/comments/1wh2kyb/)
-   的新评论，并把正文里的旧版本 `v0.3.2` 更新为 `v0.3.5`。
-4. Discord：登录后检查 `showcase` 主题回复；有技术问题才在原主题人工回复。
+1. V2EX：先获得邀请码并完成账号激活，再按[V2EX 事实清单](launch-v2ex.md)
+   撰写并发布，发布后回到原帖回复。
+2. Hacker News：先找回或重置账号凭据；完成后在可预留 2 至 3 小时的晚间时段，
+   按 [HN 事实清单](launch-hacker-news.md)亲自撰写标题和首条评论。
+3. Reddit：继续检查 [r/mcp 首帖](https://www.reddit.com/r/mcp/comments/1wh2kyb/)
+   的新评论；正文版本更新已于 2026-10-01 完成。
+4. Discord：继续检查 `showcase` 主题回复；有技术问题才在原主题人工回复。
 
 公开指标仍未显示 Stars、Issue、评论或外部 Action 接入增长，因此本轮不把 npm
 下载脉冲解释为持续采用。仓库侧继续保持当前版本，不再在没有新反馈时扩展范围。

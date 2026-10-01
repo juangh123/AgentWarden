@@ -20,16 +20,16 @@
 
 | 渠道 | 账号 | 入口 | 登录要求 |
 | :--- | :--- | :--- | :--- |
-| V2EX | 维护者账号 | https://www.v2ex.com/go/create | 必须登录；站内对脚本请求返回 `403`，只能在浏览器操作 |
-| Hacker News | `agentwarden` | https://news.ycombinator.com/submit | 必须登录；`Show HN` 限制已解除 |
-| Reddit | `u/Basic_Support_9438` | https://www.reddit.com/r/mcp/comments/1wh2kyb/ | 必须登录；本机网络对 `reddit.com` 直接返回 `403` |
+| V2EX | 维护者账号 | https://www.v2ex.com/go/create | 2026-10-01 账号停在邀请码激活页；完成激活后才能继续登录 |
+| Hacker News | `agentwarden` | https://news.ycombinator.com/submit | 2026-10-01 当前会话没有可用密码；需先找回或重置凭据 |
+| Reddit | `u/Basic_Support_9438` | https://www.reddit.com/r/mcp/comments/1wh2kyb/ | 2026-10-01 已通过独立 Playwright 会话登录并完成正文更新 |
 | Discord | `agentwarden_cli` | https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072 | 必须登录 |
 | 掘金 | `AgentWarden` | https://juejin.cn/user/252246275414937 | 只需监控 |
 | DEV | `agentwarden` | https://dev.to/agentwarden | 只需监控 |
 
-本机无法替代账号操作：2026-10-01 复核时，Codex 浏览器控制仍返回
-`unsupported Codex auth method: apikey`，第三方会话也不在手边。社区登录、发帖和
-评论只能由维护者本人完成。这里的脚本只负责准备事实、复现命令和记录结果。
+Codex 浏览器扩展在 API Key 认证下不可用，但 2026-10-01 已改用独立 Playwright
+持久会话完成 Reddit 与 Discord 复核。浏览器会话只负责导航和读取状态；
+最终发布、编辑和评论仍按平台规则由维护者确认。这里的脚本不生成代发内容。
 
 ## 开始前一次性核对
 
@@ -53,6 +53,9 @@ Windows PowerShell 用户把 `curl` 换成 `curl.exe`，并用 `$LASTEXITCODE` �
 
 事实清单与建议结构见 [launch-v2ex.md](launch-v2ex.md)。
 
+当前阻塞（2026-10-01）：账号停在邀请码激活页。获得邀请码并完成激活后，才能继续
+下面步骤；不要尝试绕过站点注册或激活限制。
+
 1. 浏览器登录 V2EX，打开 https://www.v2ex.com/go/create ，确认 `分享创造` 节点可用、
    账号没有发帖限制。
 2. 新建主题，从 [launch-v2ex.md](launch-v2ex.md) 的标题方向里选一个，或按自己口吻
@@ -70,6 +73,9 @@ Windows PowerShell 用户把 `curl` 换成 `curl.exe`，并用 `$LASTEXITCODE` �
 ## 渠道 B：Hacker News `Show HN`
 
 事实清单、标题方向与首评参考见 [launch-hacker-news.md](launch-hacker-news.md)。
+
+当前阻塞（2026-10-01）：现有 `agentwarden` 账号没有可用密码。先通过官方找回流程
+恢复账号；在凭据恢复前不创建替代账号，也不提交无人维护的首发。
 
 1. 选择能持续跟进的时段（建议工作日 `20:00` 至 `22:00` UTC+8，覆盖美东上午），
    并预留 2 至 3 小时在线。
@@ -92,15 +98,11 @@ Windows PowerShell 用户把 `curl` 换成 `curl.exe`，并用 `$LASTEXITCODE` �
 首帖：
 https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/
 
-当前状态（2026-10-01）：脚本侧仍无法读取（`403`）；沿用 2026-09-29 公开复核的
-1 upvote / 0 comments，需维护者登录后确认。
+当前状态（2026-10-01）：已登录并完成正文更新；公开页面复核为 1 upvote /
+0 comments / 94 views。
 
-1. 登录后打开首帖，看评论数是否大于 0。有评论则逐条人工回复；没有则不动作。
-2. 帖子正文里的演示命令仍固定在旧版本，建议顺手编辑到当前版本：
-   - `.../v0.3.2/examples/malicious-skill.md` → `.../v0.3.5/examples/malicious-skill.md`
-   - `npx agentwarden-cli@0.3.2 scan ...` → `npx agentwarden-cli@0.3.5 scan ...`
-
-   编辑方式：帖子下方的 `Edit` 按钮 → 改这两处版本号 → 保存。
+1. 打开首帖，看评论数是否大于 0。有评论则逐条人工回复；没有则不动作。
+2. 后续发布新版本时，沿用同样的最小改动方式同步正文里的 URL 和 `npx` 命令版本。
 3. 不在 `r/mcp` 或其他 subreddit 重复投放同一内容；先继续参与相关问题讨论。
 
 ## 渠道 D：Discord `showcase` 维护
@@ -108,8 +110,7 @@ https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_a
 主题：
 https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072
 
-当前状态（2026-10-01）：脚本侧仍读不到消息（频道消息接口返回 `401`），需要维护者
-登录后核对。
+当前状态（2026-10-01）：已登录复核；子区只有原帖 1 条，0 条回复。
 
 1. 登录 Discord，打开上面的主题链接，查看是否有新回复。
 2. 有技术问题就在原主题里人工回复；补充信息时更新原主题，不新建重复主题。
