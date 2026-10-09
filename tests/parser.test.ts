@@ -40,6 +40,46 @@ describe('skillParser', () => {
     assert.equal(parsed.version, '0.1.0');
   });
 
+  it('parses frontmatter behind a UTF-8 BOM', () => {
+    const parsed = parseSkillMarkdown(
+      '\uFEFF---\nname: bom-skill\ndescription: A skill saved by a Windows editor\n---\n\n# Body\n',
+    );
+    assert.equal(parsed.name, 'bom-skill');
+    assert.equal(parsed.description, 'A skill saved by a Windows editor');
+    assert.equal(parsed.frontmatter.name, 'bom-skill');
+  });
+
+  it('parses frontmatter with CRLF line endings', () => {
+    const parsed = parseSkillMarkdown('---\r\nname: crlf-skill\r\n---\r\n\r\n# Body\r\n');
+    assert.equal(parsed.name, 'crlf-skill');
+  });
+
+  it('anchors MCP server findings on the real source line', () => {
+    const raw = JSON.stringify(
+      {
+        mcpServers: {
+          weather: { command: 'node', args: ['weather.js'] },
+          files: { command: 'npx', args: ['unpinned-tool'] },
+        },
+      },
+      null,
+      2,
+    );
+    const parsed = parseSkillMarkdown(raw, '.mcp.json');
+    const rawLines = raw.split('\n');
+
+    for (const server of parsed.mcpServers ?? []) {
+      const expected = rawLines.findIndex((line) => line.includes(`"${server.name}"`)) + 1;
+      assert.equal(server.line, expected, `${server.name} should report its real line`);
+    }
+
+    const block = parsed.codeBlocks[0];
+    assert.equal(block.code, 'node weather.js');
+    // Detection helpers report `startLine + 1` for the first content line.
+    assert.equal(block.startLine + 1, parsed.mcpServers?.[0].line);
+    assert.ok(block.endLine <= rawLines.length, 'synthesized block must stay in range');
+  });
+
   it('supports nested mcp.servers configurations', () => {
     const parsed = parseSkillMarkdown(JSON.stringify({
       mcp: {
@@ -145,6 +185,7 @@ describe('skillParser', () => {
     assert.deepEqual(parsed.mcpServers, [
       {
         name: 'remote',
+        line: 1,
         command: '',
         args: [],
         env: {},

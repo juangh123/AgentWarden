@@ -1,8 +1,16 @@
 // Minimal ANSI color helper for zero-dependency CLI execution.
-// Honors NO_COLOR and can be toggled at runtime via setColorEnabled().
+// Honors NO_COLOR, respects FORCE_COLOR as an explicit override, and can be
+// toggled at runtime via setColorEnabled().
 
-const autoColor = process.env.NO_COLOR === undefined || process.env.NO_COLOR === '';
-let colorEnabled = autoColor && !process.env.FORCE_COLOR;
+const noColorRequested = process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== '';
+const forceColorValue = process.env.FORCE_COLOR;
+const forceColorDisabled = forceColorValue === '0' || forceColorValue === 'false';
+const forceColorRequested =
+  forceColorValue !== undefined && forceColorValue !== '' && !forceColorDisabled;
+
+let colorEnabled = !noColorRequested;
+if (forceColorDisabled) colorEnabled = false;
+else if (forceColorRequested) colorEnabled = true;
 
 export function setColorEnabled(enabled: boolean): void {
   colorEnabled = enabled;

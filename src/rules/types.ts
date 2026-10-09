@@ -23,6 +23,8 @@ export interface ParsedSkill {
   parseError?: string;
   mcpServers?: Array<{
     name: string;
+    /** 1-based line of this server's key in the source configuration. */
+    line?: number;
     command?: string;
     args?: string[];
     env?: Record<string, string>;

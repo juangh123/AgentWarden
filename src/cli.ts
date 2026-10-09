@@ -63,8 +63,8 @@ import {
   extractSkillPackage,
   inspectInstalledSkillPackage,
   isSkillPackageSource,
+  prepareSkillPackageWrite,
   readSkillPackageBytes,
-  writeSkillPackage,
   type SkillPackage,
 } from './source/package.ts';
 import { calculateScore } from './scanner/scoring.ts';
@@ -91,7 +91,7 @@ import { writeFileAtomic } from './utils/atomicWrite.ts';
 
 const VERSION = readPackageVersion();
 
-const EXIT_OK = 0;
+// 0 is the implicit success code; failures set process.exitCode explicitly.
 const EXIT_FAIL = 1;
 const EXIT_USAGE = 2;
 
@@ -138,7 +138,55 @@ const BOOLEAN_OPTIONS = new Set([
   'changed',
   'allow-http',
   'no-workflow',
+  'replace-directory',
 ]);
+
+/**
+ * Options that only make sense for specific commands.
+ *
+ * Anything not listed here is accepted everywhere. Listing an option here means
+ * a misplaced flag fails with exit code 2 instead of being silently ignored,
+ * which previously let CI believe a gate was active when it was not.
+ */
+const COMMAND_SCOPED_OPTIONS: ReadonlyArray<{
+  option: string;
+  commands: ReadonlySet<string>;
+}> = [
+  { option: 'fail-on-diff', commands: new Set(['policy']) },
+  { option: 'output', commands: new Set(['install', 'sbom', 'baseline']) },
+  { option: 'sha256', commands: new Set(['install']) },
+  { option: 'signature', commands: new Set(['install']) },
+  { option: 'public-key', commands: new Set(['install']) },
+  { option: 'allow-http', commands: new Set(['install']) },
+  { option: 'changed', commands: new Set(['scan']) },
+  { option: 'changed-from', commands: new Set(['scan']) },
+  { option: 'sarif', commands: new Set(['scan', 'install']) },
+  { option: 'no-workflow', commands: new Set(['init']) },
+  { option: 'workflow-path', commands: new Set(['init']) },
+  { option: 'action-ref', commands: new Set(['init']) },
+  { option: 'dry-run', commands: new Set(['init', 'baseline']) },
+  { option: 'force', commands: new Set(['init', 'install', 'baseline']) },
+  { option: 'replace-directory', commands: new Set(['install']) },
+  { option: 'expires-in', commands: new Set(['baseline']) },
+  { option: 'expires-at', commands: new Set(['baseline']) },
+  { option: 'expiring-within', commands: new Set(['baseline']) },
+  { option: 'fail-on-expiring', commands: new Set(['baseline']) },
+  { option: 'fail-on-unmatched', commands: new Set(['baseline']) },
+  { option: 'owner', commands: new Set(['baseline']) },
+  { option: 'note', commands: new Set(['baseline']) },
+];
+
+function validateCommandOptions(command: string, options: ParsedArgs['options']): void {
+  for (const rule of COMMAND_SCOPED_OPTIONS) {
+    if (options[rule.option] === undefined) continue;
+    if (rule.commands.has(command)) continue;
+    usageError(
+      `Option --${rule.option} is not supported by "${command}" ` +
+        `(expected: ${[...rule.commands].join(', ')})`,
+    );
+  }
+}
+
 const SHORT_FLAGS: Record<string, string> = { f: 'force', h: 'help', v: 'version', C: 'cwd' };
 const REPEATABLE_OPTIONS: Record<string, string> = {
   'ignore-rule': 'ignoreRule',
@@ -412,6 +460,7 @@ ${chalk.bold('OPTIONS:')}
   ${chalk.yellow('--fail-on-diff')}         Exit 1 when policy diff detects changes
   ${chalk.yellow('--baseline <file>')}      Suppress exact findings recorded in a baseline
   ${chalk.yellow('--output <file>')}        Baseline, package, or SBOM output path
+  ${chalk.yellow('--replace-directory')}    Allow install to replace a directory AgentWarden did not create
   ${chalk.yellow('--sha256 <digest>')}      Required SHA-256 pin for remote installs
   ${chalk.yellow('--signature <ref>')}      Detached Ed25519 signature file, URL, base64:, or hex:
   ${chalk.yellow('--public-key <ref>')}     Trusted Ed25519 public key file or inline pem:/base64:
@@ -508,8 +557,14 @@ function scanTargets(
       }
       return;
     }
-    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
-    process.exit(EXIT_FAIL);
+    console.error(
+      chalk.yellow(
+        `No skill or MCP configuration files found in: ${targets.join(', ')} ` +
+          `(nothing to scan; check the path or the include/exclude filters)`,
+      ),
+    );
+    process.exitCode = EXIT_USAGE;
+    return;
   }
 
   if (changedMode && format === 'pretty') {
@@ -523,7 +578,9 @@ function scanTargets(
   const scanResults: ScanResult[] = files.map((file) => scanSkillFile(file, config));
   renderScanReports(scanResults, format, reportOptions(options));
 
-  if (scanResults.some((r) => !r.passed)) process.exit(EXIT_FAIL);
+  // Set the exit code instead of calling process.exit so a large JSON/SARIF
+  // report is always flushed before the process ends.
+  if (scanResults.some((r) => !r.passed)) process.exitCode = EXIT_FAIL;
 }
 
 interface InstallSignatureOptions {
@@ -642,8 +699,33 @@ function enforcePublisherPolicy(
   format: ReportFormat,
   operation: string,
 ): void {
+  warnIfPublisherIdentityUnpinned(config);
   const decision = evaluatePublisherPolicy(config.publishers, provenance);
   if (!decision.passed) failPublisherPolicy(decision, format, operation);
+}
+
+let publisherTrustWarningEmitted = false;
+
+/**
+ * `requireSignature` without `trustedKeys` only proves that *some* valid
+ * signature exists; it does not pin a publisher identity. Say so once per run
+ * so that a "publisher policy passed" line is never mistaken for identity
+ * assurance.
+ */
+function warnIfPublisherIdentityUnpinned(config: SkillGuardConfig): void {
+  if (publisherTrustWarningEmitted) return;
+  const publishers = config.publishers;
+  if (!publishers?.requireSignature) return;
+  if ((publishers.trustedKeys ?? []).length > 0) return;
+
+  publisherTrustWarningEmitted = true;
+  console.error(
+    chalk.yellow(
+      'Warning: publishers.requireSignature is enabled but publishers.trustedKeys is empty, ' +
+        'so any valid signature is accepted and no publisher identity is pinned. ' +
+        'Add trustedKeys to enforce a specific publisher.',
+    ),
+  );
 }
 
 function resolveRemoteInstallPath(filename: string, output: unknown): string {
@@ -822,7 +904,10 @@ function installSkillPackage(
     if (format === 'pretty') {
       console.log(chalk.red('🚫 Aborted installation due to security risk. Use --force to override.\n'));
     }
-    process.exit(EXIT_FAIL);
+    // Set the exit code and return instead of exiting so the report that was
+    // just printed cannot be truncated.
+    process.exitCode = EXIT_FAIL;
+    return;
   }
 
   const lock = readLockfile();
@@ -831,33 +916,61 @@ function installSkillPackage(
     console.log(chalk.gray(`ℹ️  Updating existing lock entry for "${scanned.result.parsedSkill.name}" (was: ${previous.source}).`));
   }
 
-  writeSkillPackage(skillPackage, destination, {
+  // Stage the whole directory first and only swap it in on commit, then keep
+  // the previous directory until the lockfile write has succeeded. `--force`
+  // alone never erases a directory AgentWarden did not install; that requires
+  // the explicit `--replace-directory` opt-in.
+  const prepared = prepareSkillPackageWrite(skillPackage, destination, {
     replaceExisting: options.output === undefined || force,
+    allowUnmanagedReplacement: Boolean(options['replace-directory']),
   });
-  updateLockfileSkill({
-    name: scanned.result.parsedSkill.name,
-    version: scanned.result.parsedSkill.version || '0.1.0',
-    source: sourcePath,
-    sha256: scanned.result.sha256,
-    installedAt: new Date().toISOString(),
-    verifiedScore: scanned.result.score,
-    sourceType: source.type,
-    ...(safeSourceFields.requestedUrl
-      ? { remoteUrl: safeSourceFields.requestedUrl }
-      : {}),
-    ...(safeSourceFields.resolvedUrl
-      ? { resolvedUrl: safeSourceFields.resolvedUrl }
-      : {}),
-    ...(source.downloadSha256 ? { downloadSha256: source.downloadSha256 } : {}),
-    ...(source.digestVerified !== undefined
-      ? { digestVerified: source.digestVerified }
-      : {}),
-    packageFormat: 'tar.gz',
-    packageSha256: skillPackage.sha256,
-    packageEntry: skillPackage.entryPath,
-    packageFiles: skillPackage.manifest,
-    ...signatureLockMetadata(source.signature, source.signaturePayload),
-  });
+
+  if (prepared.removedEntries.length > 0 && format === 'pretty') {
+    console.log(
+      chalk.yellow(
+        `⚠️  Replacing managed skill directory ${relativeDirectory}; removing: ${prepared.removedEntries.join(', ')}\n`,
+      ),
+    );
+  }
+
+  try {
+    prepared.commit();
+  } catch (error) {
+    prepared.rollback();
+    throw error;
+  }
+
+  try {
+    updateLockfileSkill({
+      name: scanned.result.parsedSkill.name,
+      version: scanned.result.parsedSkill.version || '0.1.0',
+      source: sourcePath,
+      sha256: scanned.result.sha256,
+      installedAt: new Date().toISOString(),
+      verifiedScore: scanned.result.score,
+      sourceType: source.type,
+      ...(safeSourceFields.requestedUrl
+        ? { remoteUrl: safeSourceFields.requestedUrl }
+        : {}),
+      ...(safeSourceFields.resolvedUrl
+        ? { resolvedUrl: safeSourceFields.resolvedUrl }
+        : {}),
+      ...(source.downloadSha256 ? { downloadSha256: source.downloadSha256 } : {}),
+      ...(source.digestVerified !== undefined
+        ? { digestVerified: source.digestVerified }
+        : {}),
+      packageFormat: 'tar.gz',
+      packageSha256: skillPackage.sha256,
+      packageEntry: skillPackage.entryPath,
+      packageFiles: skillPackage.manifest,
+      ...signatureLockMetadata(source.signature, source.signaturePayload),
+    });
+  } catch (error) {
+    // A failed lockfile write must not leave the previous directory destroyed.
+    prepared.restore();
+    throw error;
+  }
+  prepared.finalize();
 
   if (format === 'pretty') {
     console.log(
@@ -907,7 +1020,8 @@ async function cmdInstallLocal(
     if (format === 'pretty') {
       console.log(chalk.red('🚫 Aborted installation due to security risk. Use --force to override.\n'));
     }
-    process.exit(EXIT_FAIL);
+    process.exitCode = EXIT_FAIL;
+    return;
   }
 
   const lock = readLockfile();
@@ -1047,7 +1161,8 @@ async function cmdInstallRemote(
     if (format === 'pretty') {
       console.log(chalk.red('🚫 Aborted installation due to security risk. Use --force to override.\n'));
     }
-    process.exit(EXIT_FAIL);
+    process.exitCode = EXIT_FAIL;
+    return;
   }
 
   const lock = readLockfile();
@@ -1143,6 +1258,7 @@ async function cmdInstall(
 }
 
 function cmdVerify(target: string, config: SkillGuardConfig): void {
+  warnIfPublisherIdentityUnpinned(config);
   const fullPath = resolvePath(target);
   const lock = readLockfile();
   const packageKey = Object.keys(lock.skills).find((candidate) => {
@@ -1262,7 +1378,12 @@ function cmdVerify(target: string, config: SkillGuardConfig): void {
   console.log(chalk.green.bold(`✓ Integrity verified: "${key}" matches skills.lock record (Score: ${lockedEntry.verifiedScore}/100).`));
 }
 
-function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, format: ReportFormat): void {
+function cmdAudit(
+  _options: ParsedArgs['options'],
+  config: SkillGuardConfig,
+  format: ReportFormat,
+): void {
+  warnIfPublisherIdentityUnpinned(config);
   const lock = readLockfile();
   const keys = Object.keys(lock.skills).sort();
 
@@ -1363,7 +1484,7 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
   if (format === 'json') {
     auditResult.passed = !hasFailure;
     console.log(JSON.stringify(auditResult, null, 2));
-    if (hasFailure) process.exit(EXIT_FAIL);
+    if (hasFailure) process.exitCode = EXIT_FAIL;
     return;
   }
 
@@ -1436,7 +1557,8 @@ function cmdAudit(options: ParsedArgs['options'], config: SkillGuardConfig, form
   console.log('\n' + chalk.gray('═'.repeat(60)));
   if (hasFailure) {
     console.log(chalk.red.bold('❌ Audit completed: integrity or security policy failures detected!\n'));
-    process.exit(EXIT_FAIL);
+    process.exitCode = EXIT_FAIL;
+    return;
   }
   console.log(chalk.green.bold('✅ All installed skills passed integrity and current policy checks.\n'));
 }
@@ -1536,7 +1658,7 @@ function cmdSbom(options: ParsedArgs['options']): void {
     console.log(chalk.gray('─'.repeat(78)) + '\n');
   }
 
-  if (!result.passed) process.exit(EXIT_FAIL);
+  if (!result.passed) process.exitCode = EXIT_FAIL;
 }
 
 function resolveInitFormat(options: ParsedArgs['options']): 'pretty' | 'json' {
@@ -1685,6 +1807,7 @@ function policySnapshot(details: BuiltConfig) {
 }
 
 function cmdPolicy(details: BuiltConfig, format: ReportFormat): void {
+  warnIfPublisherIdentityUnpinned(details.config);
   const policy = policySnapshot(details);
   if (format === 'json') {
     console.log(JSON.stringify(policy, null, 2));
@@ -1807,7 +1930,7 @@ function cmdPolicyDiff(
   }
 
   if (options['fail-on-diff'] && difference.changed) {
-    process.exit(EXIT_FAIL);
+    process.exitCode = EXIT_FAIL;
   }
 }
 
@@ -1959,7 +2082,7 @@ function cmdPolicyGuard(
   }
 
   if (changed) {
-    process.exit(EXIT_FAIL);
+    process.exitCode = EXIT_FAIL;
   }
 }
 
@@ -2033,8 +2156,14 @@ function cmdBaselineStatus(
     exclude: config.exclude,
   });
   if (files.length === 0) {
-    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
-    process.exit(EXIT_FAIL);
+    console.error(
+      chalk.yellow(
+        `No skill or MCP configuration files found in: ${targets.join(', ')} ` +
+          `(nothing to scan; check the path or the include/exclude filters)`,
+      ),
+    );
+    process.exitCode = EXIT_USAGE;
+    return;
   }
 
   const baseline = readBaseline(baselinePath, process.cwd());
@@ -2110,7 +2239,7 @@ function cmdBaselineStatus(
     (options['fail-on-expiring'] && expiring) ||
     (options['fail-on-unmatched'] && unmatchedEntries.length > 0)
   ) {
-    process.exit(EXIT_FAIL);
+    process.exitCode = EXIT_FAIL;
   }
 }
 
@@ -2136,8 +2265,14 @@ function cmdBaselineMaintenance(
     exclude: config.exclude,
   });
   if (files.length === 0) {
-    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
-    process.exit(EXIT_FAIL);
+    console.error(
+      chalk.yellow(
+        `No skill or MCP configuration files found in: ${targets.join(', ')} ` +
+          `(nothing to scan; check the path or the include/exclude filters)`,
+      ),
+    );
+    process.exitCode = EXIT_USAGE;
+    return;
   }
 
   const baseline = readBaseline(baselinePath, process.cwd());
@@ -2244,8 +2379,14 @@ function cmdBaseline(targets: string[], options: ParsedArgs['options'], format: 
     exclude: config.exclude,
   });
   if (files.length === 0) {
-    console.error(chalk.yellow(`No skill or MCP configuration files found in: ${targets.join(', ')}`));
-    process.exit(EXIT_FAIL);
+    console.error(
+      chalk.yellow(
+        `No skill or MCP configuration files found in: ${targets.join(', ')} ` +
+          `(nothing to scan; check the path or the include/exclude filters)`,
+      ),
+    );
+    process.exitCode = EXIT_USAGE;
+    return;
   }
 
   const results = files.map((file) => scanSkillFile(file, config));
@@ -2320,6 +2461,8 @@ async function main(): Promise<void> {
     printHelp();
     return;
   }
+
+  validateCommandOptions(command, options);
 
   if (command === 'init') {
     if (positionals.length > 1) {
@@ -2440,6 +2583,16 @@ async function main(): Promise<void> {
 try {
   await main();
 } catch (err) {
+  // A refused install destination is a usage/path problem, not a security
+  // finding: report it with the documented usage exit code.
+  if (
+    err instanceof SkillPackageError &&
+    (err.code === 'DESTINATION_NOT_EMPTY' ||
+      err.code === 'DESTINATION_NOT_MANAGED' ||
+      err.code === 'DESTINATION_UNSAFE')
+  ) {
+    usageError(err.message);
+  }
   console.error(chalk.red(`Fatal: ${err instanceof Error ? err.message : String(err)}`));
   process.exit(EXIT_FAIL);
 }

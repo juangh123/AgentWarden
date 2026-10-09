@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { compareStrings } from '../utils/compare.ts';
 
 export interface ChangedFilesOptions {
   cwd?: string;
@@ -93,7 +94,7 @@ function collectExistingFiles(repositoryRoot: string, candidates: Iterable<strin
     if (!fs.existsSync(absolute)) continue;
     if (fs.statSync(absolute).isFile()) files.add(absolute);
   }
-  return [...files].sort((a, b) => a.localeCompare(b));
+  return [...files].sort(compareStrings);
 }
 
 /** Resolve the Git changes that should participate in an incremental scan. */

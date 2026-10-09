@@ -20,26 +20,26 @@ AgentWarden 是面向 AI Agent Skill / Tool / MCP 配置的零运行时依赖安
 ## 🚀 快速开始
 
 需要 Node.js >= 22.6。无需先安装，可直接运行。以下示例固定到
-`agentwarden-cli@0.3.5`，避免首次运行受后续 `latest` 变化影响：
+`agentwarden-cli@0.3.6`，避免首次运行受后续 `latest` 变化影响：
 
 ```bash
 # 扫描 Skill 或目录
-npx --yes agentwarden-cli@0.3.5 scan ./skills
+npx --yes agentwarden-cli@0.3.6 scan ./skills
 
 # 使用 SHA-256 固定远程 Skill，再扫描、验签并写入 skills.lock
-npx --yes agentwarden-cli@0.3.5 install https://example.com/skills/weather.md \
+npx --yes agentwarden-cli@0.3.6 install https://example.com/skills/weather.md \
   --sha256 <64-char-sha256> \
   --signature https://example.com/skills/weather.md.sig \
   --public-key ./trusted-publisher.pem
 
 # 从 skills.lock 导出 CycloneDX 1.5 SBOM
-npx --yes agentwarden-cli@0.3.5 sbom --output agentwarden.cdx.json
+npx --yes agentwarden-cli@0.3.6 sbom --output agentwarden.cdx.json
 ```
 
 全局安装后可使用 `agentwarden`、`warden` 和兼容别名 `skillguard`：
 
 ```bash
-npm install --global agentwarden-cli@0.3.5
+npm install --global agentwarden-cli@0.3.6
 agentwarden scan ./skills
 warden verify .agentwarden/skills/weather.md
 ```
@@ -47,14 +47,14 @@ warden verify .agentwarden/skills/weather.md
 在新仓库中生成策略文件和 GitHub Actions 安全门禁：
 
 ```bash
-npx --yes agentwarden-cli@0.3.5 init
-npx --yes agentwarden-cli@0.3.5 init --profile strict
-npx --yes agentwarden-cli@0.3.5 init --force --no-workflow
-npx --yes agentwarden-cli@0.3.5 init --dry-run --json
-npx --yes agentwarden-cli@0.3.5 init --workflow-path .github/workflows/security.yml --action-ref juangh123/AgentWarden@v0
+npx --yes agentwarden-cli@0.3.6 init
+npx --yes agentwarden-cli@0.3.6 init --profile strict
+npx --yes agentwarden-cli@0.3.6 init --force --no-workflow
+npx --yes agentwarden-cli@0.3.6 init --dry-run --json
+npx --yes agentwarden-cli@0.3.6 init --workflow-path .github/workflows/security.yml --action-ref juangh123/AgentWarden@v0.3
 ```
 
-> `agentwarden-cli@0.3.5` 通过 GitHub Actions Trusted Publisher 生成
+> `agentwarden-cli@0.3.6` 通过 GitHub Actions Trusted Publisher 生成
 > provenance。最初的 bootstrap 版本 `0.3.2` 未附带
 > provenance。生产流水线请固定版本或 commit SHA，不要长期依赖浮动的
 > `latest`。
@@ -64,11 +64,11 @@ npx --yes agentwarden-cli@0.3.5 init --workflow-path .github/workflows/security.
 在任意空目录下载公开样例，无需先克隆仓库：
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/safe-skill.md
-npx --yes agentwarden-cli@0.3.5 scan safe-skill.md  # exits 0
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.6/examples/safe-skill.md
+npx --yes agentwarden-cli@0.3.6 scan safe-skill.md  # exits 0
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.5 scan malicious-skill.md  # exits 1
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.6/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.6 scan malicious-skill.md  # exits 1
 ```
 
 恶意 Skill 会显示命中的凭证读取、命令执行、提示词注入和数据外带规则，并返回非零退出码，便于直接作为 CI 门禁。
@@ -80,7 +80,7 @@ npx --yes agentwarden-cli@0.3.5 scan malicious-skill.md  # exits 1
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: juangh123/AgentWarden@v0.3.5
+- uses: juangh123/AgentWarden@v0.3.6
   with:
     path: skills/
     profile: strict
@@ -226,7 +226,8 @@ agentwarden --version
 
 | 选项 | 说明 |
 | :--- | :--- |
-| `-f, --force` | 跳过高危阻断、允许替换非空 `--output` 安装目录，或确认写入基线/允许 `init` 覆盖已有文件 |
+| `-f, --force` | 跳过高危阻断、替换 AgentWarden 管理的 `--output` 技能目录、确认写入基线，或允许 `init` 覆盖已有文件 |
+| `--replace-directory` | 允许 `install` 替换并非由 AgentWarden 创建的非空 `--output` 目录（危险：会删除该目录原有内容） |
 | `--format pretty\|json\|sarif` | 输出格式（也支持 `--json` / `--sarif` 简写） |
 | `--config <file>` | 显式加载 JSON 策略文件；缺失或格式错误时退出码为 `2` |
 | `--profile <name>` | 策略档位：`legacy`/`balanced`/`strict`（扫描默认 `legacy`，`init` 默认 `balanced`） |
@@ -333,6 +334,8 @@ agentwarden install https://publisher.example/weather.tar.gz \
 
 安装时，签名的原始字节会以内容寻址方式保存到 `.agentwarden/attestations/<payloadSha256>.bin`。单个证明文件上限为 `20 MiB`，路径中的摘要必须是 64 位 SHA-256；超过上限、路径非法或证明材料缺失/被篡改都会使校验失败。该目录默认保留在版本控制中，需与 `skills.lock` 一同提交才能让其他机器和 CI 重验发布者证明。`verify`、`audit` 和 `sbom` 会重新读取该证明材料、重新执行 Ed25519 验签，并确认签名负载与锁文件中的内容哈希或整包清单一致。对远程单文件，重验时按安装扫描语义移除 BOM 并统一换行后再比对内容哈希；本地文件仍按原始文本字节语义绑定。仅含旧版自报 `signatureVerified` 字段、没有 `signatureProof` 的锁项会被视为未提供可重验签名；启用 `requireSignature` 后必须重新安装生成证明。
 
+注意：证明文件只覆盖**签名负载**。要在没有网络的干净 clone 上完成 `verify` / `audit`，被锁定的技能载荷本身也必须存在，因此需要把安装目录（默认 `.agentwarden/skills/**`）一并提交；如果该目录被 `.gitignore` 排除，`audit` 会因为找不到来源文件而按设计失败。二进制或体积较大的载荷可以选择不提交，此时离线校验只覆盖锁文件与证明，内容完整性需要在有网络的流水线中重跑。
+
 ---
 
 ## 🛡️ 可信发布者策略
@@ -379,6 +382,8 @@ agentwarden policy --config .agentwarden/publisher-policy.json --json
 
 当 `requireSignature: true` 且 `trustedKeys` 为空时，策略只要求存在一个可验证的 Ed25519 签名，不限制签名者身份；若目标包含团队或供应链信任边界，应显式配置 `trustedKeys`。
 
+这种"未固定发布者身份"的配置会在 `install`、`verify`、`audit` 和 `policy` 执行时向 stderr 输出一次警告，避免把 `publisher policy passed` 误读为发布者身份已确认。警告只写 stderr，不影响 `--json` / `--sarif` 的 stdout。
+
 ---
 
 ## 🧾 CycloneDX SBOM
@@ -419,8 +424,8 @@ SBOM 的 `serialNumber` 基于锁文件、发布者策略和工具版本确定�
 - 压缩包上限 `5 MiB`，解压后上限 `20 MiB`，最多 `256` 个文件，单文件上限 `5 MiB`。
 - 包内所有文件必须是有效 UTF-8 文本且不能包含 NUL 字节，避免不可扫描的二进制载荷进入安装目录。
 - 所有文本文件都会经过现有规则引擎；发现会携带包内相对路径，聚合得分作为整包安全得分。
-- 写入采用同目录 staging 目录加目录替换，安装失败时恢复原目录，不会写入半成品。
-- 显式 `--output` 指向非空目录时默认拒绝覆盖，必须在确认目标内容可丢弃后传入 `--force`。默认 `.agentwarden/skills/<skill-name>/` 仍允许作为专用安装目录更新。
+- 写入采用同目录 staging 目录加目录替换，只有在 `skills.lock` 写入成功后才会清理备份目录；目录替换或锁文件写入任一步失败都会恢复原目录，不会留下半成品或丢失原文件。
+- 显式 `--output` 指向非空目录时默认拒绝覆盖。只有该目录带有 AgentWarden 安装标记（本次安装写入的 `.agentwarden-skill.json`）时，`--force` 才会替换它；替换会先打印将被删除的条目。要替换一个并非由 AgentWarden 创建的非空目录，必须额外显式传入 `--replace-directory`。默认 `.agentwarden/skills/<skill-name>/` 仍允许作为专用安装目录更新。
 
 整包锁项保留入口文件的 `sha256` 兼容字段，并增加：
 
@@ -475,6 +480,8 @@ SBOM 的 `serialNumber` 基于锁文件、发布者策略和工具版本确定�
 - `severityOverrides`：按规则 ID 调整有效严重级别；影响评分、失败阈值、基线和 SARIF 输出。
 
 继承时 `ignoreRules`、`allowedDomains`、`publishers.trustedKeys`、`publishers.revokedKeys`、`include`、`exclude` 为追加合并，`severityOverrides` 按键合并，其他字段由子配置覆盖。缺失父配置或循环引用会终止加载；显式 `--config` 和自动发现的候选配置都会失败关闭，返回退出码 `2`，不会静默回退到默认策略。
+
+字段级类型与枚举同样失败关闭：`profile`、`failOn`、`minScore`、`ignoreRules`、`severityOverrides`、`include`、`exclude`、`baseline` 传入错误类型或无法识别的取值时（例如把 `minScore` 写成字符串 `"95"`，或把 `failOn` 拼成不存在的档位），会直接以退出码 `2` 失败并指出字段名，而不是回退到更宽松的默认值，避免一次笔误让门禁长期绿灯。`failOn` 与 `profile` 的取值大小写不敏感；列表字段也接受单个字符串。
 
 命令行中的 `--profile` 会先采用该档位的默认阈值；仅当同时显式传入 `--fail-on` 或 `--min-score` 时，对应 CLI 值才会覆盖档位默认值。重复传入的 `--include` / `--exclude` 会追加到配置文件的路径范围内。
 
@@ -582,7 +589,8 @@ agentwarden scan skills/ --baseline .agentwarden-baseline.json
 - API Key、GitHub/OpenAI/Slack/AWS/JWT 等常见 Token 会被替换为 `[REDACTED]`。
 - `Authorization`、Bearer/Basic Token、URL 内嵌密码、查询参数/片段中的敏感 key/value 和签名下载 URL 会被隐藏。
 - 私钥内容以及没有结束标记的私钥头会被替换。
-- `rawContent`、`promptText` 和代码内容会经过脱敏后再进入 JSON/SARIF。
+- `rawContent` 与 `promptText` 会被整体替换为 `[REDACTED]`；代码块正文默认替换为 `[REDACTED CODE]`，只保留经过脱敏的命中片段用于定位（需要原文时使用 `--no-redact`）。
+- 报告与终端输出会剥离 ANSI/OSC 等控制字符，避免不可信技能内容通过转义序列污染 CI 日志或劫持本地终端；URL fragment 与 `dbPassword = "…"` 这类驼峰命名的赋值同样会被脱敏。
 - 安装 JSON、`skills.lock` 的远程 URL 元数据、`list --json` 和 SBOM 分发来源不会保留敏感查询参数；旧锁文件或手工修改的锁项也会在 `list --json` 输出前重新脱敏。签名哈希、算法和验证状态仍保留用于审计。
 
 仅在受信任的本地调试环境下使用 `--no-redact`。CI 日志、Issue、SARIF 上传和共享终端输出不应关闭脱敏。
@@ -595,7 +603,7 @@ agentwarden scan skills/ --baseline .agentwarden-baseline.json
 
 ```yaml
 - name: AgentWarden Scan
-  run: npx --yes agentwarden-cli@0.3.5 scan skills/ --sarif > agentwarden.sarif
+  run: npx --yes agentwarden-cli@0.3.6 scan skills/ --sarif > agentwarden.sarif
 
 - name: Upload SARIF
   uses: github/codeql-action/upload-sarif@v3
@@ -794,7 +802,7 @@ Add AgentWarden as a security gate in your CI/CD pipeline:
     fetch-depth: 0
 
 - name: Run AgentWarden Security Gate
-  uses: juangh123/AgentWarden@v0.3.5
+  uses: juangh123/AgentWarden@v0.3.6
   with:
     path: '.'
     config: '.agentwarden/policy.json'

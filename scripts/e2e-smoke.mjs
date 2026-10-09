@@ -1414,6 +1414,11 @@ check(
   r.status === 1 && JSON.parse(r.stdout).error?.code === 'REVOKED_PUBLISHER',
   `status=${r.status}`,
 );
+check(
+  'requireSignature without trustedKeys warns that no publisher identity is pinned',
+  r.stderr.includes('publishers.trustedKeys is empty'),
+  `stderr=${r.stderr.slice(0, 160)}`,
+);
 check('revoked publisher rejection leaves no installed payload', !fs.existsSync(remoteSafePath));
 
 r = run([
@@ -1586,6 +1591,11 @@ check(
   r.status === 0 &&
     trustedPublisherAudit.skills['remote-safe-weather']?.publisherPolicyPassed === true,
   `status=${r.status}`,
+);
+check(
+  'no unpinned-publisher warning when trustedKeys is configured',
+  !r.stderr.includes('publishers.trustedKeys is empty'),
+  `stderr=${r.stderr.slice(0, 160)}`,
 );
 r = run([
   '-C',

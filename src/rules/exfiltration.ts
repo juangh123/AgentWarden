@@ -9,12 +9,19 @@ export const exfiltrationRules: Rule[] = [
     severity: 'critical',
     description: 'Attempts to post sensitive data to unknown external endpoints or spawn reverse shells.',
     suggestion: 'Audit all outbound network requests and eliminate reverse shell constructs.',
-    check: (parsed): Finding[] => {
+    check: (parsed, ctx: RuleContext | undefined): Finding[] => {
+      const allowed = ctx?.allowedDomains ?? [];
       const exfilPatterns = [
         /(nc|ncat|netcat)\s+(-e|\/bin\/(ba)?sh)/i,
         /bash\s+-i\s+>&?\s*\/dev\/tcp\//i,
         /curl\s+.*(-X\s+POST|-d\s+@).*http/i,
         /https?:\/\/((\d{1,3}\.){3}\d{1,3})(:\d+)?/i,
+        // Outbound upload helpers in higher-level languages. The inline URL
+        // literal keeps ordinary API client code from being flagged, while
+        // still catching one-liner exfiltration payloads.
+        /\b(?:requests|httpx|aiohttp)\.(?:post|put|patch)\s*\(\s*[frbu]*['"]https?:\/\//i,
+        /\b(?:urlopen|fetch|axios\.(?:post|put|patch)|got)\s*\(\s*[frbu]*['"`]https?:\/\//i,
+        /\bInvoke-(?:RestMethod|WebRequest)\b[^\n]*https?:\/\//i,
       ];
       return scanPatterns(parsed, exfilPatterns, {
         ruleId: 'SEC-EXFIL-001',
@@ -27,6 +34,7 @@ export const exfiltrationRules: Rule[] = [
           inCode
             ? `Detected potential exfiltration payload or raw IP connection: "${line.trim()}"`
             : `Prompt instructs exfiltrating data or connecting to raw IP endpoints: "${line.trim()}"`,
+        skip: (line) => isAllowedUrl(line, allowed),
       });
     },
   },

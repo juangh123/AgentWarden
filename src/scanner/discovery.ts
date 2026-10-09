@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hasMcpServersContainer, isMcpConfigFilename } from '../parser/mcpConfig.ts';
+import { compareStrings } from '../utils/compare.ts';
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown']);
 
@@ -40,7 +41,13 @@ function toRelativePosix(filePath: string, cwd: string): string {
   return (relative || filePath).replace(/\\/g, '/');
 }
 
+const globCache = new Map<string, RegExp>();
+const GLOB_CACHE_LIMIT = 1000;
+
 function globToRegExp(pattern: string): RegExp {
+  const cached = globCache.get(pattern);
+  if (cached) return cached;
+
   const normalized = pattern.trim().replace(/\\/g, '/').replace(/^\.\//, '');
   let source = '';
 
@@ -65,7 +72,12 @@ function globToRegExp(pattern: string): RegExp {
     }
   }
 
-  return new RegExp(`(?:^|/)${source}$`);
+  const compiled = new RegExp(`(?:^|/)${source}$`);
+  // Patterns come from config, so a bounded cache removes the per-file
+  // recompilation cost during directory scans without growing unbounded.
+  if (globCache.size >= GLOB_CACHE_LIMIT) globCache.clear();
+  globCache.set(pattern, compiled);
+  return compiled;
 }
 
 function matchesAnyGlob(filePath: string, cwd: string, patterns: string[]): boolean {
@@ -112,7 +124,9 @@ export function isSupportedSkillFile(filePath: string): boolean {
 
 function collectDirectoryFiles(directory: string): string[] {
   const files: string[] = [];
-  const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  const entries = fs
+    .readdirSync(directory, { withFileTypes: true })
+    .sort((a, b) => compareStrings(a.name, b.name));
 
   for (const entry of entries) {
     if (entry.isSymbolicLink()) continue;
@@ -162,7 +176,7 @@ export function discoverSkillFiles(
     }
   }
 
-  return [...discovered].sort((a, b) => a.localeCompare(b));
+  return [...discovered].sort(compareStrings);
 }
 
 /** Filter an explicit list of paths to supported skill files within the configured scan scope. */
@@ -183,5 +197,5 @@ export function filterSkillFiles(
     }
   }
 
-  return [...discovered].sort((a, b) => a.localeCompare(b));
+  return [...discovered].sort(compareStrings);
 }

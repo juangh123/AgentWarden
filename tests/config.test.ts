@@ -20,9 +20,56 @@ describe('config normalization', () => {
     assert.equal(normalizeConfig({ minScore: -5 }).minScore, 0);
   });
 
-  it('rejects invalid failOn and falls back to high', () => {
-    assert.equal(normalizeConfig({ failOn: 'panic' as never }).failOn, 'high');
+  it('fails closed on an invalid failOn instead of falling back', () => {
+    assert.throws(
+      () => normalizeConfig({ failOn: 'panic' as never }),
+      (error) => error instanceof ConfigError && error.message.includes('failOn'),
+    );
     assert.equal(normalizeConfig({ failOn: 'low' }).failOn, 'low');
+    assert.equal(normalizeConfig({ failOn: 'MEDIUM' as never }).failOn, 'medium');
+    assert.equal(normalizeConfig({ failOn: '' as never }).failOn, 'high');
+  });
+
+  it('fails closed on wrongly typed policy fields instead of silently loosening', () => {
+    assert.throws(
+      () => normalizeConfig({ minScore: '95' as never }),
+      (error) => error instanceof ConfigError && error.message.includes('minScore'),
+    );
+    assert.throws(
+      () => normalizeConfig({ profile: 'strictest' as never }),
+      (error) => error instanceof ConfigError && error.message.includes('profile'),
+    );
+    assert.throws(
+      () => normalizeConfig({ include: 42 as never }),
+      (error) => error instanceof ConfigError && error.message.includes('include'),
+    );
+    assert.throws(
+      () => normalizeConfig({ ignoreRules: ['SEC-CRED-001', 7] as never }),
+      (error) => error instanceof ConfigError && error.message.includes('ignoreRules'),
+    );
+    assert.throws(
+      () => normalizeConfig({ severityOverrides: 'panic' as never }),
+      (error) => error instanceof ConfigError && error.message.includes('severityOverrides'),
+    );
+    assert.throws(
+      () => normalizeConfig({ severityOverrides: { 'SEC-INJ-002': 'panic' } as never }),
+      (error) => error instanceof ConfigError && error.message.includes('severityOverrides'),
+    );
+    assert.throws(
+      () => normalizeConfig({ baseline: 42 as never }),
+      (error) => error instanceof ConfigError && error.message.includes('baseline'),
+    );
+  });
+
+  it('accepts a single string where a list is expected', () => {
+    const cfg = normalizeConfig({
+      include: 'skills/**' as never,
+      exclude: 'skills/vendor/**' as never,
+      ignoreRules: 'SEC-INJ-002' as never,
+    });
+    assert.deepEqual(cfg.include, ['skills/**']);
+    assert.deepEqual(cfg.exclude, ['skills/vendor/**']);
+    assert.deepEqual(cfg.ignoreRules, ['SEC-INJ-002']);
   });
 
   it('dedupes and cleans ignoreRules and allowedDomains', () => {
@@ -33,7 +80,6 @@ describe('config normalization', () => {
       severityOverrides: {
         'sec-cred-001': 'medium',
         'SEC-INJ-002': 'low',
-        invalid: 'panic' as never,
       },
     });
     assert.deepEqual(cfg.ignoreRules, ['SEC-CRED-001']);

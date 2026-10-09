@@ -4,6 +4,7 @@ import type { BaselineMetadata, Finding, ScanResult, Severity } from '../rules/t
 import { createFindingFingerprints, normalizeFindingPath } from '../fingerprint.ts';
 import { calculateScore, passesPolicy } from '../scanner/scoring.ts';
 import { writeFileAtomic } from '../utils/atomicWrite.ts';
+import { compareStrings } from '../utils/compare.ts';
 
 export const DEFAULT_BASELINE_NAME = '.agentwarden-baseline.json';
 const VALID_SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -159,7 +160,7 @@ export function createBaseline(
     baselineVersion: 2,
     createdAt,
     review: createReview(options),
-    entries: entries.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint)),
+    entries: entries.sort((a, b) => compareStrings(a.fingerprint, b.fingerprint)),
   };
 }
 
@@ -252,7 +253,7 @@ export function writeBaseline(
     baselineVersion: baseline.baselineVersion,
     createdAt: baseline.createdAt,
     ...(baseline.review ? { review: { ...baseline.review } } : {}),
-    entries: [...baseline.entries].sort((a, b) => a.fingerprint.localeCompare(b.fingerprint)),
+    entries: [...baseline.entries].sort((a, b) => compareStrings(a.fingerprint, b.fingerprint)),
   };
   writeFileAtomic(resolvedPath, JSON.stringify(sorted, null, 2) + '\n');
   return resolvedPath;
@@ -359,10 +360,10 @@ export function inspectBaseline(
     .sort((a, b) => {
       if (a.matched !== b.matched) return a.matched ? 1 : -1;
       return (
-        a.file.localeCompare(b.file) ||
-        a.ruleId.localeCompare(b.ruleId) ||
+        compareStrings(a.file, b.file) ||
+        compareStrings(a.ruleId, b.ruleId) ||
         (a.line ?? 0) - (b.line ?? 0) ||
-        a.fingerprint.localeCompare(b.fingerprint)
+        compareStrings(a.fingerprint, b.fingerprint)
       );
     });
 
@@ -385,7 +386,7 @@ export function inspectBaseline(
 }
 
 function sortBaselineEntries(entries: BaselineEntry[]): BaselineEntry[] {
-  return [...entries].sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
+  return [...entries].sort((a, b) => compareStrings(a.fingerprint, b.fingerprint));
 }
 
 function mergeMaintenanceReview(

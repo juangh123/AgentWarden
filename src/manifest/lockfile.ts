@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SkillPackageManifestEntry } from '../source/package.ts';
 import { writeFileAtomic } from '../utils/atomicWrite.ts';
+import { compareStrings } from '../utils/compare.ts';
 
 export interface LockedSkill {
   name: string;
@@ -55,6 +56,17 @@ function isSafeRelativePath(value: string): boolean {
 
 function isUnsafeSkillKey(name: string): boolean {
   return UNSAFE_SKILL_KEYS.has(name.trim().toLowerCase());
+}
+
+/**
+ * Reject skill names that could smuggle path structure or terminal control
+ * characters into lockfile keys, generated directory names, or reports.
+ */
+function isSafeSkillName(name: string): boolean {
+  if (!name || name !== name.trim()) return false;
+  if (name.includes('/') || name.includes('\\')) return false;
+  if (name === '.' || name === '..') return false;
+  return !/[\u0000-\u001f\u007f-\u009f]/.test(name);
 }
 
 function isCanonicalBase64(value: unknown, expectedBytes?: number): value is string {
@@ -329,6 +341,7 @@ function parseLockfile(raw: string, lockPath: string): LockfileSchema {
     if (
       !normalizedName ||
       name !== name.trim() ||
+      !isSafeSkillName(name) ||
       isUnsafeSkillKey(name) ||
       normalizedKeys.has(normalizedName)
     ) {
@@ -344,6 +357,7 @@ function parseLockfile(raw: string, lockPath: string): LockfileSchema {
     if (
       typeof entry.name !== 'string' ||
       !entry.name.trim() ||
+      !isSafeSkillName(entry.name) ||
       typeof entry.version !== 'string' ||
       !entry.version.trim() ||
       typeof entry.source !== 'string' ||
@@ -399,7 +413,7 @@ export function writeLockfile(data: LockfileSchema, cwd: string = process.cwd())
     lockfileVersion: data.lockfileVersion,
     skills: createSkillMap(),
   };
-  for (const key of Object.keys(data.skills).sort((a, b) => a.localeCompare(b))) {
+  for (const key of Object.keys(data.skills).sort(compareStrings)) {
     sorted.skills[key] = data.skills[key];
   }
   const serialized = JSON.stringify(sorted, null, 2) + '\n';

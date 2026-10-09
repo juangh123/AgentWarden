@@ -39,11 +39,11 @@ Codex 浏览器扩展在 API Key 认证下不可用，但 2026-10-01 已改用�
 mkdir agentwarden-demo
 cd agentwarden-demo
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/safe-skill.md
-npx --yes agentwarden-cli@0.3.5 scan safe-skill.md       # 期望退出码 0
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.6/examples/safe-skill.md
+npx --yes agentwarden-cli@0.3.6 scan safe-skill.md       # 期望退出码 0
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.5 scan malicious-skill.md  # 期望退出码 1
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.6/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.6 scan malicious-skill.md  # 期望退出码 1
 ```
 
 Windows PowerShell 用户把 `curl` 换成 `curl.exe`，并用 `$LASTEXITCODE` 查看退出码。

@@ -27,6 +27,20 @@ const SAFE_SIGNATURE_METADATA_SUFFIX =
 
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi;
 
+/**
+ * Control characters that must never reach a terminal or a report: ESC/OSC
+ * sequences let untrusted skill content rewrite the CI log or hijack the
+ * developer's terminal. Tab, LF and CR are preserved.
+ */
+const UNSAFE_CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
+
+/**
+ * Assignment-style secret keys, including camelCase/PascalCase variants such as
+ * `dbPassword` or `apiAccessToken` that a plain keyword match would miss.
+ */
+const SECRET_ASSIGNMENT_KEY =
+  /\b([A-Za-z_][A-Za-z0-9_.-]*(?:password|passwd|secret|token|apikey|api[_-]?key|access[_-]?key|credential|private[_-]?key)[A-Za-z0-9_.-]*\s*=\s*)(["'])([^"'\r\n]+)\2/gi;
+
 function isPlaceholder(value: string): boolean {
   const normalized = value.trim();
   return (
@@ -51,6 +65,10 @@ function redactUrlQuery(match: string): string {
     if (url.username || url.password) {
       url.username = '';
       url.password = '';
+      changed = true;
+    }
+    if (url.hash) {
+      url.hash = '';
       changed = true;
     }
     for (const key of [...url.searchParams.keys()]) {
@@ -87,6 +105,11 @@ export function redactText(text: string): string {
         isPlaceholder(value) ? match : `${name}${separator}${quote}[REDACTED]${quote}`,
     )
     .replace(
+      SECRET_ASSIGNMENT_KEY,
+      (match, prefix: string, quote: string, value: string) =>
+        isPlaceholder(value) ? match : `${prefix}${quote}[REDACTED]${quote}`,
+    )
+    .replace(
       /("(?:api[_-]?key|access[_-]?key|secret|token|password|passwd|private[_-]?key|authorization|credential)"\s*:\s*")([^"]+)(")/gi,
       (match, prefix: string, value: string, suffix: string) =>
         isPlaceholder(value) ? match : `${prefix}[REDACTED]${suffix}`,
@@ -114,7 +137,7 @@ export function redactText(text: string): string {
           : match,
     );
 
-  return redacted;
+  return redacted.replace(UNSAFE_CONTROL_CHARACTERS, '');
 }
 
 function redactFinding(finding: Finding): Finding {
@@ -168,6 +191,13 @@ export function toReportScanResult(result: ScanResult, options: ReportOptions = 
     ...result.parsedSkill,
     promptText: '[REDACTED]',
     rawContent: '[REDACTED]',
+    // Code fences are raw file content: withhold their bodies by default and
+    // rely on the (pattern-redacted) finding snippets for evidence. The
+    // explicit `--no-redact` debug path still returns the original source.
+    codeBlocks: (result.parsedSkill.codeBlocks ?? []).map((block) => ({
+      ...block,
+      code: '[REDACTED CODE]',
+    })),
   }) as ScanResult['parsedSkill'];
 
   return {

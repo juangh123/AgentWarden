@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { normalizeConfig, type SkillGuardConfig } from '../config/index.ts';
+import { compareStrings } from '../utils/compare.ts';
 import {
   readLockfile,
   resolveFromRoot,
@@ -269,7 +270,7 @@ function packageComponents(
         reference,
       };
     })
-    .sort((left, right) => left.component.name.localeCompare(right.component.name));
+    .sort((left, right) => compareStrings(left.component.name, right.component.name));
 
   return {
     components: components.map((item) => item.component),
@@ -337,7 +338,7 @@ function skillComponent(
 
 function sortedEntries(lock: LockfileSchema): LockedSkill[] {
   return Object.keys(lock.skills)
-    .sort((left, right) => left.localeCompare(right))
+    .sort(compareStrings)
     .map((key) => lock.skills[key]);
 }
 

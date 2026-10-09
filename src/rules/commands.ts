@@ -1,5 +1,65 @@
-import type { Rule, Finding } from './types.ts';
+import type { Rule, Finding, ParsedSkill } from './types.ts';
 import { scanPatterns } from './utils.ts';
+
+const DOWNLOAD_TO_FILE =
+  /\b(?:curl|wget|Invoke-WebRequest|iwr)\b[^\n]*?(?:-o|--output|-O|-OutFile)\s+["']?([^\s"';|&)]+)["']?/i;
+
+/** Interpreters that turn a downloaded file into execution. */
+const CHAIN_EXECUTORS = 'bash|sh|zsh|python[23]?|node|perl|ruby|source|\\.';
+
+/** How many following lines may separate the download from the execution. */
+const CHAIN_WINDOW = 8;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Detect the two-step "download a script to disk, then execute it" pattern.
+ *
+ * This is the non-pipe equivalent of `curl | bash` and is invisible to a
+ * line-by-line matcher, yet it is a very common dropper shape.
+ */
+function detectDownloadAndExecuteChains(parsed: ParsedSkill): Finding[] {
+  const findings: Finding[] = [];
+
+  for (const block of parsed.codeBlocks) {
+    const lines = block.code.split(/\r?\n/);
+
+    for (let index = 0; index < lines.length; index++) {
+      const target = lines[index].match(DOWNLOAD_TO_FILE)?.[1]?.trim();
+      if (!target) continue;
+
+      const escaped = escapeRegExp(target);
+      const executes = new RegExp(`\\b(?:${CHAIN_EXECUTORS})\\s+["']?${escaped}(?![\\w.-])`, 'i');
+      const chmods = new RegExp(`\\bchmod\\b[^\\n]*${escaped}`, 'i');
+
+      const lastIndex = Math.min(index + CHAIN_WINDOW, lines.length - 1);
+      for (let lookahead = index; lookahead <= lastIndex; lookahead++) {
+        const candidate = lines[lookahead];
+        if (lookahead === index && !/[;&|]/.test(candidate)) continue;
+        if (!executes.test(candidate) && !chmods.test(candidate)) continue;
+
+        findings.push({
+          ruleId: 'SEC-CMD-002',
+          title: 'Arbitrary Remote Code Execution / Dynamic Piped Download',
+          category: 'destructive_command',
+          severity: 'high',
+          description:
+            `Downloads "${target}" from the network and then executes it without integrity ` +
+            `verification: "${candidate.trim()}"`,
+          line: block.startLine + 1 + lookahead,
+          snippet: candidate.trim(),
+          suggestion:
+            'Pin the artifact by checksum or signature and review it before execution instead of downloading and running it in one step.',
+        });
+        break;
+      }
+    }
+  }
+
+  return findings;
+}
 
 export const commandRules: Rule[] = [
   {
@@ -42,7 +102,7 @@ export const commandRules: Rule[] = [
       const pipePatterns = [
         /(curl|wget)\s+[^|]+\|\s*(sh|bash|zsh|python|perl|ruby)/i,
       ];
-      return scanPatterns(parsed, pipePatterns, {
+      const findings = scanPatterns(parsed, pipePatterns, {
         ruleId: 'SEC-CMD-002',
         category: 'destructive_command',
         severity: 'high',
@@ -54,6 +114,8 @@ export const commandRules: Rule[] = [
             ? `Detected unpinned dynamic script execution: "${line.trim()}"`
             : `Prompt asks agent to download and pipe remote script to shell: "${line.trim()}"`,
       });
+      findings.push(...detectDownloadAndExecuteChains(parsed));
+      return findings;
     },
   },
   {

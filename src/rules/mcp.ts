@@ -124,6 +124,7 @@ export const mcpRules: Rule[] = [
             category: 'mcp_misconfig',
             severity: 'critical',
             description: `MCP server "${srv.name}" directly runs interpreter or downloader: "${cmd}"`,
+            ...(srv.line !== undefined ? { line: srv.line } : {}),
             snippet: `command: ${cmd} ${srv.args?.join(' ') || ''}`,
             suggestion: 'Do not configure generic interactive shells or downloaders as the primary MCP server executable.',
           });
@@ -142,6 +143,7 @@ export const mcpRules: Rule[] = [
               category: 'mcp_misconfig',
               severity: 'critical',
               description: `MCP server "${srv.name}" invokes unpinned package runner "${cmd} ${unpinnedSpec}". This allows supply chain replacement.`,
+              ...(srv.line !== undefined ? { line: srv.line } : {}),
               snippet: `command: ${cmd} ${args.join(' ')}`,
               suggestion: 'Pin the package version explicitly (e.g. npx tool-pkg@1.2.3 or -y pkg@version).',
             });
@@ -175,6 +177,7 @@ export const mcpRules: Rule[] = [
               category: 'mcp_misconfig',
               severity: 'high',
               description: `MCP server "${srv.name}" contains plaintext secret in ${location}.${k}`,
+              ...(srv.line !== undefined ? { line: srv.line } : {}),
               snippet: `${k}: "${v.slice(0, 4)}..."`,
               suggestion: 'Reference secrets dynamically instead of storing raw tokens in MCP configuration.',
             });
@@ -208,6 +211,7 @@ export const mcpRules: Rule[] = [
             category: 'mcp_misconfig',
             severity: 'high',
             description: `MCP server "${srv.name}" defines an invalid remote URL`,
+            ...(srv.line !== undefined ? { line: srv.line } : {}),
             snippet: `url: ${srv.url}`,
             suggestion: 'Use a valid HTTPS URL for remote MCP servers.',
           });
@@ -226,6 +230,7 @@ export const mcpRules: Rule[] = [
           description: embedsCredentials
             ? `MCP server "${srv.name}" embeds credentials in its remote URL`
             : `MCP server "${srv.name}" uses insecure remote protocol ${parsedUrl.protocol}`,
+          ...(srv.line !== undefined ? { line: srv.line } : {}),
           snippet: `url: ${srv.url}`,
           suggestion: 'Use HTTPS without embedded credentials for remote MCP endpoints.',
         });

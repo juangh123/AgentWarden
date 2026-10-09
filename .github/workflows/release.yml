@@ -5,10 +5,6 @@ on:
     tags:
       - 'v*.*.*'
 
-permissions:
-  contents: write
-  id-token: write
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -16,9 +12,15 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Least privilege: verification only needs to read the repository. OIDC and
+    # write access belong to the publish job alone.
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      # Third-party actions are pinned to commit SHAs; the trailing comment
+      # records which release tag each SHA was resolved from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -31,7 +33,7 @@ jobs:
       # instead of repacking a fresh artifact on the runner.
       - run: npm run test:release
       - name: Preserve verified release artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: agentwarden-release
           path: |
@@ -42,11 +44,17 @@ jobs:
   publish:
     needs: verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+          # Do not leave the workflow token in .git/config: later steps run
+          # third-party installs (npm) that must not be able to read it.
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
@@ -54,7 +62,7 @@ jobs:
       - run: npm ci
       - name: Install trusted publishing CLI
         run: |
-          npm install --global npm@^11.5.1
+          npm install --global npm@11.5.1
           node --version
           npm --version
       - name: Verify tag matches package version
@@ -64,7 +72,7 @@ jobs:
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           test "${GITHUB_REF_NAME}" = "v${PACKAGE_VERSION}"
       - name: Download verified release artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: agentwarden-release
           path: release
@@ -101,10 +109,15 @@ jobs:
               gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "AgentWarden ${GITHUB_REF_NAME}" "${ASSETS[@]}"
             fi
           fi
-      - name: Update floating major tag
+      - name: Update floating minor tag
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          MAJOR_TAG="${GITHUB_REF_NAME%%.*}"
-          git tag -f "${MAJOR_TAG}" "${GITHUB_SHA}"
-          git push origin "refs/tags/${MAJOR_TAG}" --force
+          # A 0.x project must not advertise a floating `v0` tag: every minor
+          # release may contain breaking changes. Float the minor series only.
+          MINOR_TAG="${GITHUB_REF_NAME%.*}"
+          git tag -f "${MINOR_TAG}" "${GITHUB_SHA}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${MINOR_TAG}" --force

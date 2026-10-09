@@ -16,6 +16,12 @@ export const credentialRules: Rule[] = [
         /(~|\$HOME|\$\{HOME\}|\/root|\/home\/\w+)["']?\/\.gnupg\//i,
         /(~|\$HOME|\$\{HOME\}|\/root|\/home\/\w+)["']?\/\.kube\/config/i,
         /(^|[\s/])\.env($|[\s'"])/i,
+        // System credential stores and per-tool secret files.
+        /(^|[\s'"(])\/etc\/(passwd|shadow|gshadow|sudoers)\b/i,
+        /(^|[\s'"(])\/proc\/(self|\d+)\/(environ|cmdline)\b/i,
+        /(^|[\s'"(])\/var\/run\/secrets\b/i,
+        /(~|\$HOME|\$\{HOME\})["']?\/?\.(npmrc|netrc|pgpass|git-credentials)\b/i,
+        /(~|\$HOME|\$\{HOME\})["']?\/?\.docker\/config\.json\b/i,
       ];
       return scanPatterns(parsed, sensitivePatterns, {
         ruleId: 'SEC-CRED-001',

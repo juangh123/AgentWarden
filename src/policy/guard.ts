@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { compareStrings } from '../utils/compare.ts';
 import {
   CONFIG_FILE_NAMES,
   normalizeConfig,
@@ -185,7 +186,7 @@ function sortedEntrySnapshots(entries: BaselineEntry[]): BaselineEntry[] {
     ...(entry.acceptedAt !== undefined ? { acceptedAt: entry.acceptedAt } : {}),
   }));
   return snapshots.sort((left, right) =>
-    JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    compareStrings(JSON.stringify(left), JSON.stringify(right)),
   );
 }
 

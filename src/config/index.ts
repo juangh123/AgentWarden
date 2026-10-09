@@ -80,21 +80,103 @@ export const CONFIG_FILE_NAMES = [
   'skillguard.config.json',
 ];
 
-function cleanStringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.map((v) => String(v).trim()).filter(Boolean))];
+/**
+ * Read a list-valued config field. A single string is accepted as a
+ * one-element list, but any other shape is rejected so that a typo can never
+ * silently drop policy input.
+ */
+function requireStringList(value: unknown, field: string): string[] {
+  if (value === undefined) return [];
+  const entries = typeof value === 'string' ? [value] : value;
+  if (!Array.isArray(entries)) {
+    throw new ConfigError(`Invalid "${field}" (expected a string or an array of strings)`);
+  }
+
+  const cleaned: string[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== 'string') {
+      throw new ConfigError(`Invalid "${field}" (expected every entry to be a string)`);
+    }
+    const trimmed = entry.trim();
+    if (trimmed && !cleaned.includes(trimmed)) cleaned.push(trimmed);
+  }
+  return cleaned;
 }
 
-function cleanSeverityOverrides(value: unknown): Record<string, Severity> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+function resolveProfile(value: unknown): PolicyProfileName {
+  if (value === undefined) return DEFAULT_CONFIG.profile!;
+  if (typeof value !== 'string') {
+    throw new ConfigError(`Invalid "profile" (expected one of ${VALID_PROFILES.join('|')})`);
+  }
+  const requested = value.trim().toLowerCase();
+  if (!requested) return DEFAULT_CONFIG.profile!;
+  if (!VALID_PROFILES.includes(requested as PolicyProfileName)) {
+    throw new ConfigError(
+      `Invalid "profile" "${value}" (expected one of ${VALID_PROFILES.join('|')})`,
+    );
+  }
+  return requested as PolicyProfileName;
+}
+
+function resolveFailOn(value: unknown, fallback: Severity): Severity {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string') {
+    throw new ConfigError(`Invalid "failOn" (expected one of ${VALID_FAIL_ON.join('|')})`);
+  }
+  const severity = value.trim().toLowerCase();
+  if (!severity) return fallback;
+  if (!VALID_FAIL_ON.includes(severity as Severity)) {
+    throw new ConfigError(
+      `Invalid "failOn" "${value}" (expected one of ${VALID_FAIL_ON.join('|')})`,
+    );
+  }
+  return severity as Severity;
+}
+
+function resolveMinScore(value: unknown, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new ConfigError('Invalid "minScore" (expected a number between 0 and 100)');
+  }
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function resolveBaseline(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new ConfigError('Invalid "baseline" (expected a file path string)');
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function requireSeverityOverrides(value: unknown): Record<string, Severity> {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) {
+    throw new ConfigError(
+      'Invalid "severityOverrides" (expected an object mapping rule IDs to severities)',
+    );
+  }
 
   const overrides: Record<string, Severity> = {};
   for (const [rawRuleId, rawSeverity] of Object.entries(value)) {
+    const label = `severityOverrides.${rawRuleId}`;
     const ruleId = rawRuleId.trim().toUpperCase();
-    const severity = String(rawSeverity).trim().toLowerCase() as Severity;
-    if (ruleId && VALID_FAIL_ON.includes(severity)) {
-      overrides[ruleId] = severity;
+    if (!ruleId) {
+      throw new ConfigError(`Invalid "${label}" (expected a non-empty rule ID)`);
     }
+    if (typeof rawSeverity !== 'string') {
+      throw new ConfigError(
+        `Invalid "${label}" (expected one of ${VALID_FAIL_ON.join('|')})`,
+      );
+    }
+    const severity = rawSeverity.trim().toLowerCase();
+    if (!VALID_FAIL_ON.includes(severity as Severity)) {
+      throw new ConfigError(
+        `Invalid "${label}" "${rawSeverity}" (expected one of ${VALID_FAIL_ON.join('|')})`,
+      );
+    }
+    overrides[ruleId] = severity as Severity;
   }
   return overrides;
 }
@@ -164,10 +246,6 @@ export function parseConfigContent(filePath: string, raw: string): Partial<Skill
     const detail = error instanceof Error ? error.message : String(error);
     throw new ConfigError(`Invalid config file "${filePath}": ${detail}`);
   }
-}
-
-function parseConfigFile(filePath: string): Partial<SkillGuardConfig> {
-  return parseConfigContent(filePath, fs.readFileSync(filePath, 'utf8'));
 }
 
 function cleanExtends(value: unknown, source: string): string[] {
@@ -321,36 +399,36 @@ function readConfigTree(filePath: string, stack: string[] = []): RawConfigTree {
   return readConfigTreeFrom(filePath, filesystemConfigReader, stack);
 }
 
-/** Validate and clamp a raw (possibly partial) config into a safe, usable shape. */
+/**
+ * Validate and clamp a raw (possibly partial) config into a safe, usable shape.
+ *
+ * Fails closed: an unrecognised profile, severity, or a wrongly typed field
+ * raises a ConfigError instead of silently falling back to a looser default,
+ * so a typo can never quietly weaken the security gate.
+ */
 export function normalizeConfig(raw?: Partial<SkillGuardConfig>): SkillGuardConfig {
   const source = raw ?? {};
-  const requestedProfile = String(source.profile || '').trim().toLowerCase() as PolicyProfileName;
-  const profile = VALID_PROFILES.includes(requestedProfile) ? requestedProfile : DEFAULT_CONFIG.profile!;
+  const profile = resolveProfile(source.profile);
   const profileDefaults = POLICY_PROFILES[profile];
-
-  const failOnRaw = source.failOn;
-  const failOn: Severity =
-    failOnRaw && (VALID_FAIL_ON as string[]).includes(failOnRaw) ? failOnRaw : profileDefaults.failOn;
-
-  const minScoreRaw = source.minScore;
-  const minScore =
-    typeof minScoreRaw === 'number' && Number.isFinite(minScoreRaw)
-      ? Math.min(100, Math.max(0, Math.round(minScoreRaw)))
-      : profileDefaults.minScore;
+  const baseline = resolveBaseline(source.baseline);
 
   return {
     profile,
-    ignoreRules: cleanStringList(source.ignoreRules),
-    failOn,
-    minScore,
-    allowedDomains: [...new Set(cleanStringList(source.allowedDomains).map((d) => d.toLowerCase().replace(/^\./, '')))],
+    ignoreRules: requireStringList(source.ignoreRules, 'ignoreRules'),
+    failOn: resolveFailOn(source.failOn, profileDefaults.failOn),
+    minScore: resolveMinScore(source.minScore, profileDefaults.minScore),
+    allowedDomains: [
+      ...new Set(
+        requireStringList(source.allowedDomains, 'allowedDomains').map((domain) =>
+          domain.toLowerCase().replace(/^\./, ''),
+        ),
+      ),
+    ],
     publishers: cleanPublisherPolicy(source.publishers),
-    ...(typeof source.baseline === 'string' && source.baseline.trim()
-      ? { baseline: source.baseline.trim() }
-      : {}),
-    severityOverrides: cleanSeverityOverrides(source.severityOverrides),
-    include: cleanStringList(source.include),
-    exclude: cleanStringList(source.exclude),
+    ...(baseline ? { baseline } : {}),
+    severityOverrides: requireSeverityOverrides(source.severityOverrides),
+    include: requireStringList(source.include, 'include'),
+    exclude: requireStringList(source.exclude, 'exclude'),
   };
 }
 

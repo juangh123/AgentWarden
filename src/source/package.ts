@@ -7,6 +7,11 @@ export const DEFAULT_MAX_COMPRESSED_PACKAGE_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_MAX_PACKAGE_FILES = 256;
 export const DEFAULT_MAX_PACKAGE_FILE_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_MAX_PACKAGE_UNPACKED_BYTES = 20 * 1024 * 1024;
+export const DEFAULT_MAX_INSTALLED_FILES = 2048;
+export const DEFAULT_MAX_INSTALLED_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_MAX_INSTALLED_DEPTH = 32;
+export const SKILL_PACKAGE_MARKER_FILENAME = '.agentwarden-skill.json';
+export const SKILL_PACKAGE_MARKER_SCHEMA_VERSION = 1;
 
 export type SkillPackageErrorCode =
   | 'INVALID_ARCHIVE'
@@ -20,6 +25,9 @@ export type SkillPackageErrorCode =
   | 'AMBIGUOUS_ENTRY'
   | 'INVALID_LAYOUT'
   | 'DESTINATION_NOT_EMPTY'
+  | 'DESTINATION_NOT_MANAGED'
+  | 'DESTINATION_UNSAFE'
+  | 'INSTALLED_TOO_LARGE'
   | 'INSTALL_FAILED';
 
 export class SkillPackageError extends Error {
@@ -67,6 +75,64 @@ export interface ExpectedSkillPackage {
 export interface WriteSkillPackageOptions {
   /** Allow replacement of a non-empty destination directory. Defaults to false. */
   replaceExisting?: boolean;
+  /**
+   * Allow replacing a directory that carries no AgentWarden install marker.
+   *
+   * Only meaningful together with `replaceExisting`. Callers should require a
+   * dedicated opt-in flag for this so `--force` alone can never erase files
+   * that AgentWarden did not install.
+   */
+  allowUnmanagedReplacement?: boolean;
+  /** Write the managed-directory marker. Defaults to true. */
+  writeMarker?: boolean;
+}
+
+export interface WriteSkillPackageResult {
+  destination: string;
+  replaced: boolean;
+  /** Top-level entries that were removed from a replaced directory. */
+  removedEntries: string[];
+  markerPath?: string;
+}
+
+export interface SkillPackageMarker {
+  schemaVersion: number;
+  tool: 'agentwarden';
+  packageSha256: string;
+  entryPath: string;
+  installedAt: string;
+}
+
+/**
+ * A staged package write. The staged directory is fully written before
+ * `commit()` runs, and `commit()` keeps the previous directory until
+ * `finalize()` is called so callers can `restore()` it when a follow-up step
+ * such as the lockfile update fails.
+ */
+export interface PreparedSkillPackageWrite {
+  readonly destination: string;
+  /** Absolute staging path while the write is uncommitted. */
+  readonly stagingPath: string | undefined;
+  readonly replaced: boolean;
+  readonly removedEntries: string[];
+  readonly markerPath: string | undefined;
+  /** Atomically move the staged directory into place. */
+  commit(): void;
+  /** Undo a commit by restoring the previous directory. Returns false when there is nothing to restore. */
+  restore(): boolean;
+  /** Delete the saved previous directory once later work has succeeded. */
+  finalize(): void;
+  /** Discard staged files before a commit, or restore a committed write. */
+  rollback(): boolean;
+}
+
+export interface InspectInstalledPackageOptions {
+  /** Maximum number of regular files to read. Defaults to 2048. */
+  maxFiles?: number;
+  /** Maximum total bytes to read. Defaults to 64 MiB. */
+  maxBytes?: number;
+  /** Maximum directory nesting below the package root. Defaults to 32. */
+  maxDepth?: number;
 }
 
 export interface SkillPackageInspection {
@@ -205,6 +271,12 @@ function normalizePackagePath(rawPath: string, allowEmpty = false): string {
         `Package path contains a non-portable segment: "${rawPath}"`,
       );
     }
+    if (rawSegment.toLowerCase() === SKILL_PACKAGE_MARKER_FILENAME) {
+      throw new SkillPackageError(
+        'UNSAFE_PATH',
+        `Package path uses the reserved AgentWarden install marker name: "${rawPath}"`,
+      );
+    }
     segments.push(rawSegment);
   }
 
@@ -220,6 +292,148 @@ function normalizePackagePath(rawPath: string, allowEmpty = false): string {
 
 function comparePaths(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function isSamePathOrAncestor(candidate: string, target: string): boolean {
+  if (candidate === target) return true;
+  const relative = path.relative(candidate, target);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function noFollowFlag(): number {
+  return (fs.constants as { O_NOFOLLOW?: number }).O_NOFOLLOW ?? 0;
+}
+
+function sameFileIdentity(before: fs.Stats, opened: fs.Stats): boolean {
+  if ((before.ino !== 0 || opened.ino !== 0) && before.dev === opened.dev) {
+    return before.ino === opened.ino;
+  }
+  return before.size === opened.size && Math.abs(before.mtimeMs - opened.mtimeMs) < 1;
+}
+
+/** Read a small regular file without following symlinks; returns undefined on any mismatch. */
+function readSmallFileNoFollow(filePath: string, maxBytes: number): Buffer | undefined {
+  let fd: number | undefined;
+  try {
+    const before = fs.lstatSync(filePath);
+    if (before.isSymbolicLink() || !before.isFile() || before.size > maxBytes) return undefined;
+
+    fd = fs.openSync(filePath, fs.constants.O_RDONLY | noFollowFlag());
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile() || !sameFileIdentity(before, opened) || opened.size > maxBytes) {
+      return undefined;
+    }
+    return fs.readFileSync(fd);
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // The handle is already closed; nothing left to release.
+      }
+    }
+  }
+}
+
+/** Read a regular file and fail closed when it is replaced by a link mid-read. */
+function readRegularFileNoFollow(filePath: string, label: string, maxBytes: number): Buffer {
+  let fd: number | undefined;
+  try {
+    const before = fs.lstatSync(filePath);
+    if (before.isSymbolicLink() || !before.isFile()) {
+      throw new SkillPackageError(
+        'UNSAFE_PATH',
+        `Installed package entry is not a regular file: "${label}"`,
+      );
+    }
+    if (before.size > maxBytes) {
+      throw new SkillPackageError(
+        'INSTALLED_TOO_LARGE',
+        `Installed package exceeds the ${maxBytes}-byte limit at "${label}"`,
+      );
+    }
+
+    fd = fs.openSync(filePath, fs.constants.O_RDONLY | noFollowFlag());
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile() || !sameFileIdentity(before, opened)) {
+      throw new SkillPackageError(
+        'UNSAFE_PATH',
+        `Installed package entry changed while it was being read: "${label}"`,
+      );
+    }
+    return fs.readFileSync(fd);
+  } catch (error) {
+    if (error instanceof SkillPackageError) throw error;
+    throw new SkillPackageError(
+      'UNSAFE_PATH',
+      `Unable to safely read installed package entry "${label}": ${error instanceof Error ? error.message : String(error)}`,
+    );
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // The handle is already closed; nothing left to release.
+      }
+    }
+  }
+}
+
+function isValidMarkerEntryPath(entryPath: string): boolean {
+  if (!entryPath || entryPath.startsWith('/') || entryPath.includes('\\') || entryPath.includes('\0')) {
+    return false;
+  }
+  return entryPath
+    .split('/')
+    .every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+/** Read the AgentWarden install marker from a skill directory, when present and valid. */
+export function readSkillPackageMarker(root: string): SkillPackageMarker | undefined {
+  const raw = readSmallFileNoFollow(path.join(root, SKILL_PACKAGE_MARKER_FILENAME), 4096);
+  if (!raw) return undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.toString('utf8'));
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+
+  const record = parsed as Record<string, unknown>;
+  if (record.tool !== 'agentwarden') return undefined;
+  if (record.schemaVersion !== SKILL_PACKAGE_MARKER_SCHEMA_VERSION) return undefined;
+  if (typeof record.packageSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(record.packageSha256)) {
+    return undefined;
+  }
+  if (typeof record.entryPath !== 'string' || !isValidMarkerEntryPath(record.entryPath)) {
+    return undefined;
+  }
+  if (typeof record.installedAt !== 'string' || !Number.isFinite(Date.parse(record.installedAt))) {
+    return undefined;
+  }
+
+  return {
+    schemaVersion: SKILL_PACKAGE_MARKER_SCHEMA_VERSION,
+    tool: 'agentwarden',
+    packageSha256: record.packageSha256,
+    entryPath: record.entryPath,
+    installedAt: record.installedAt,
+  };
+}
+
+/** Return true when a directory is a real directory carrying a valid install marker. */
+export function isManagedSkillDirectory(root: string): boolean {
+  try {
+    const stat = fs.lstatSync(root);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) return false;
+  } catch {
+    return false;
+  }
+  return readSkillPackageMarker(root) !== undefined;
 }
 
 function sha256(data: Uint8Array): string {
@@ -519,39 +733,83 @@ export function readSkillPackage(
   return extractSkillPackage(readSkillPackageBytes(filePath, options), options);
 }
 
-/** Atomically install package files into a directory after staging succeeds. */
-export function writeSkillPackage(
+/**
+ * Stage a skill package next to its destination.
+ *
+ * The staged directory is fully written (package files plus the AgentWarden
+ * install marker) before `commit()` runs, so an existing destination is only
+ * touched by two atomic renames. `commit()` keeps the previous directory until
+ * `finalize()` is called, which lets callers restore it when a follow-up step
+ * such as the lockfile update fails.
+ */
+export function prepareSkillPackageWrite(
   skillPackage: SkillPackage,
   destination: string,
   options: WriteSkillPackageOptions = {},
-): void {
+): PreparedSkillPackageWrite {
   const resolvedDestination = path.resolve(destination);
+  if (resolvedDestination === path.parse(resolvedDestination).root) {
+    throw new SkillPackageError(
+      'DESTINATION_UNSAFE',
+      `Refusing to install into the filesystem root: ${resolvedDestination}`,
+    );
+  }
+  if (isSamePathOrAncestor(resolvedDestination, path.resolve(process.cwd()))) {
+    throw new SkillPackageError(
+      'DESTINATION_UNSAFE',
+      `Refusing to install into the working directory or one of its parents: ${resolvedDestination}`,
+    );
+  }
+
   const parent = path.dirname(resolvedDestination);
   const suffix = `${process.pid}.${crypto.randomBytes(6).toString('hex')}`;
   const staging = path.join(parent, `.${path.basename(resolvedDestination)}.staging-${suffix}`);
   const backup = path.join(parent, `.${path.basename(resolvedDestination)}.backup-${suffix}`);
-  let movedExisting = false;
+  let replaced = false;
+  let removedEntries: string[] = [];
 
   fs.mkdirSync(parent, { recursive: true });
   if (fs.existsSync(resolvedDestination)) {
-    if (!fs.statSync(resolvedDestination).isDirectory()) {
+    const existing = fs.lstatSync(resolvedDestination);
+    if (existing.isSymbolicLink() || !existing.isDirectory()) {
       throw new SkillPackageError(
-        'INSTALL_FAILED',
-        `Package destination exists and is not a directory: ${resolvedDestination}`,
+        'DESTINATION_UNSAFE',
+        `Package destination exists and is not a real directory: ${resolvedDestination}`,
       );
     }
-    if (
-      options.replaceExisting !== true &&
-      fs.readdirSync(resolvedDestination).length > 0
-    ) {
+
+    const entries = fs.readdirSync(resolvedDestination);
+    if (entries.length > 0 && options.replaceExisting !== true) {
       throw new SkillPackageError(
         'DESTINATION_NOT_EMPTY',
         `Package destination is not empty: ${resolvedDestination}. Use --force to replace it.`,
       );
     }
-  }
-  fs.mkdirSync(staging, { recursive: false });
 
+    if (entries.length > 0) {
+      if (fs.existsSync(path.join(resolvedDestination, '.git'))) {
+        throw new SkillPackageError(
+          'DESTINATION_UNSAFE',
+          `Refusing to replace "${resolvedDestination}" because it contains a .git entry`,
+        );
+      }
+      const managed = isManagedSkillDirectory(resolvedDestination);
+      if (!managed && options.allowUnmanagedReplacement !== true) {
+        throw new SkillPackageError(
+          'DESTINATION_NOT_MANAGED',
+          `Refusing to replace "${resolvedDestination}" because it was not created by AgentWarden and holds ${entries.length} existing ${entries.length === 1 ? 'entry' : 'entries'}. Pass the explicit replace-directory opt-in to delete them.`,
+        );
+      }
+      removedEntries = entries
+        .filter((entry) => !(managed && entry === SKILL_PACKAGE_MARKER_FILENAME))
+        .sort(comparePaths);
+    }
+    replaced = true;
+  }
+
+  fs.mkdirSync(staging, { recursive: false });
+  let stagingPath: string | undefined = staging;
+  let markerPath: string | undefined;
   try {
     for (const file of skillPackage.files) {
       const target = path.join(staging, ...file.path.split('/'));
@@ -563,62 +821,198 @@ export function writeSkillPackage(
       fs.writeFileSync(target, file.data, { flag: 'wx' });
     }
 
-    if (fs.existsSync(resolvedDestination)) {
-      fs.renameSync(resolvedDestination, backup);
-      movedExisting = true;
-    }
-
-    try {
-      fs.renameSync(staging, resolvedDestination);
-    } catch (error) {
-      if (movedExisting && !fs.existsSync(resolvedDestination) && fs.existsSync(backup)) {
-        fs.renameSync(backup, resolvedDestination);
-        movedExisting = false;
-      }
-      throw error;
-    }
-
-    if (movedExisting) {
-      fs.rmSync(backup, { recursive: true, force: true });
-      movedExisting = false;
+    if (options.writeMarker !== false) {
+      const marker: SkillPackageMarker = {
+        schemaVersion: SKILL_PACKAGE_MARKER_SCHEMA_VERSION,
+        tool: 'agentwarden',
+        packageSha256: skillPackage.sha256,
+        entryPath: skillPackage.entryPath,
+        installedAt: new Date().toISOString(),
+      };
+      fs.writeFileSync(
+        path.join(staging, SKILL_PACKAGE_MARKER_FILENAME),
+        `${JSON.stringify(marker, null, 2)}\n`,
+        { flag: 'wx' },
+      );
+      markerPath = path.join(resolvedDestination, SKILL_PACKAGE_MARKER_FILENAME);
     }
   } catch (error) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    stagingPath = undefined;
     if (error instanceof SkillPackageError) throw error;
     throw new SkillPackageError(
       'INSTALL_FAILED',
-      `Unable to install skill package at ${resolvedDestination}: ${error instanceof Error ? error.message : String(error)}`,
+      `Unable to stage skill package at ${resolvedDestination}: ${error instanceof Error ? error.message : String(error)}`,
     );
-  } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
-    if (movedExisting && fs.existsSync(backup) && !fs.existsSync(resolvedDestination)) {
-      fs.renameSync(backup, resolvedDestination);
-    }
   }
+
+  let committed = false;
+  let backupPath: string | undefined;
+
+  const commitStaged = (): void => {
+    const staged = stagingPath;
+    if (committed) {
+      throw new SkillPackageError(
+        'INSTALL_FAILED',
+        `Skill package write has already been committed: ${resolvedDestination}`,
+      );
+    }
+    if (staged === undefined) {
+      throw new SkillPackageError(
+        'INSTALL_FAILED',
+        `Skill package write has no staged files to commit: ${resolvedDestination}`,
+      );
+    }
+
+    if (fs.existsSync(resolvedDestination)) {
+      fs.renameSync(resolvedDestination, backup);
+      backupPath = backup;
+    }
+    try {
+      fs.renameSync(staged, resolvedDestination);
+    } catch (error) {
+      if (
+        backupPath !== undefined &&
+        !fs.existsSync(resolvedDestination) &&
+        fs.existsSync(backupPath)
+      ) {
+        fs.renameSync(backupPath, resolvedDestination);
+        backupPath = undefined;
+      }
+      throw error instanceof SkillPackageError
+        ? error
+        : new SkillPackageError(
+            'INSTALL_FAILED',
+            `Unable to install skill package at ${resolvedDestination}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+    }
+    stagingPath = undefined;
+    committed = true;
+  };
+
+  const restorePrevious = (): boolean => {
+    if (!committed || backupPath === undefined || !fs.existsSync(backupPath)) return false;
+
+    const parked = path.join(parent, `.${path.basename(resolvedDestination)}.discard-${suffix}`);
+    if (fs.existsSync(resolvedDestination)) fs.renameSync(resolvedDestination, parked);
+    try {
+      fs.renameSync(backupPath, resolvedDestination);
+    } catch (error) {
+      if (!fs.existsSync(resolvedDestination) && fs.existsSync(parked)) {
+        fs.renameSync(parked, resolvedDestination);
+      }
+      throw error;
+    }
+    fs.rmSync(parked, { recursive: true, force: true });
+    backupPath = undefined;
+    committed = false;
+    return true;
+  };
+
+  const discardStaging = (): boolean => {
+    if (committed) return restorePrevious();
+    if (stagingPath === undefined) return false;
+    fs.rmSync(stagingPath, { recursive: true, force: true });
+    stagingPath = undefined;
+    return true;
+  };
+
+  const finalizeBackup = (): void => {
+    if (backupPath === undefined) return;
+    fs.rmSync(backupPath, { recursive: true, force: true });
+    backupPath = undefined;
+  };
+
+  return {
+    destination: resolvedDestination,
+    get stagingPath() {
+      return stagingPath;
+    },
+    replaced,
+    removedEntries,
+    markerPath,
+    commit: commitStaged,
+    restore: restorePrevious,
+    finalize: finalizeBackup,
+    rollback: discardStaging,
+  };
 }
 
-function readInstalledPackageFiles(root: string): {
+/** Atomically install package files into a directory after staging succeeds. */
+export function writeSkillPackage(
+  skillPackage: SkillPackage,
+  destination: string,
+  options: WriteSkillPackageOptions = {},
+): WriteSkillPackageResult {
+  const prepared = prepareSkillPackageWrite(skillPackage, destination, options);
+  try {
+    prepared.commit();
+  } catch (error) {
+    prepared.rollback();
+    throw error;
+  }
+  prepared.finalize();
+
+  return {
+    destination: prepared.destination,
+    replaced: prepared.replaced,
+    removedEntries: prepared.removedEntries,
+    ...(prepared.markerPath ? { markerPath: prepared.markerPath } : {}),
+  };
+}
+
+interface InstalledPackageReadResult {
   exists: boolean;
   files: SkillPackageFile[];
   unsafePaths: string[];
-} {
-  if (!fs.existsSync(root)) return { exists: false, files: [], unsafePaths: [] };
+  managed: boolean;
+}
+
+function readInstalledPackageFiles(
+  root: string,
+  options: Required<InspectInstalledPackageOptions>,
+): InstalledPackageReadResult {
+  if (!fs.existsSync(root)) {
+    return { exists: false, files: [], unsafePaths: [], managed: false };
+  }
 
   const rootStat = fs.lstatSync(root);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
-    return { exists: true, files: [], unsafePaths: ['.'] };
+    return { exists: true, files: [], unsafePaths: ['.'], managed: false };
   }
 
+  const managed = isManagedSkillDirectory(root);
   const files: SkillPackageFile[] = [];
   const unsafePaths: string[] = [];
   const seen = new Set<string>();
+  const maxVisitedEntries = Math.max(1024, options.maxFiles * 8);
+  let totalBytes = 0;
+  let visitedEntries = 0;
 
-  function visit(directory: string): void {
+  function visit(directory: string, depth: number): void {
+    if (depth > options.maxDepth) {
+      throw new SkillPackageError(
+        'INSTALLED_TOO_LARGE',
+        `Installed package exceeds the ${options.maxDepth}-level directory depth limit`,
+      );
+    }
+
     const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
       comparePaths(a.name, b.name),
     );
     for (const entry of entries) {
+      visitedEntries += 1;
+      if (visitedEntries > maxVisitedEntries) {
+        throw new SkillPackageError(
+          'INSTALLED_TOO_LARGE',
+          `Installed package exceeds the ${maxVisitedEntries}-entry limit`,
+        );
+      }
+
       const absolute = path.join(directory, entry.name);
       const relative = path.relative(root, absolute).replace(/\\/g, '/');
+      if (depth === 0 && managed && relative === SKILL_PACKAGE_MARKER_FILENAME) continue;
+
       const lower = relative.toLowerCase();
       if (seen.has(lower)) {
         unsafePaths.push(relative);
@@ -632,23 +1026,59 @@ function readInstalledPackageFiles(root: string): {
         continue;
       }
       if (stat.isDirectory()) {
-        visit(absolute);
+        visit(absolute, depth + 1);
         continue;
       }
-      files.push({ path: relative, data: fs.readFileSync(absolute) });
+
+      if (files.length >= options.maxFiles) {
+        throw new SkillPackageError(
+          'INSTALLED_TOO_LARGE',
+          `Installed package exceeds the ${options.maxFiles}-file limit`,
+        );
+      }
+      const remainingBytes = options.maxBytes - totalBytes;
+      if (remainingBytes <= 0) {
+        throw new SkillPackageError(
+          'INSTALLED_TOO_LARGE',
+          `Installed package exceeds the ${options.maxBytes}-byte limit`,
+        );
+      }
+      const data = readRegularFileNoFollow(absolute, relative, remainingBytes);
+      totalBytes += data.byteLength;
+      if (totalBytes > options.maxBytes) {
+        throw new SkillPackageError(
+          'INSTALLED_TOO_LARGE',
+          `Installed package exceeds the ${options.maxBytes}-byte limit`,
+        );
+      }
+      files.push({ path: relative, data });
     }
   }
 
-  visit(root);
-  return { exists: true, files, unsafePaths };
+  visit(root, 0);
+  return { exists: true, files, unsafePaths, managed };
 }
 
 /** Inspect an installed package against its lockfile manifest and whole-package hash. */
 export function inspectInstalledSkillPackage(
   root: string,
   expected: ExpectedSkillPackage,
+  options: InspectInstalledPackageOptions = {},
 ): SkillPackageInspection {
-  const installed = readInstalledPackageFiles(root);
+  const maxFiles = options.maxFiles ?? DEFAULT_MAX_INSTALLED_FILES;
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_INSTALLED_BYTES;
+  const maxDepth = options.maxDepth ?? DEFAULT_MAX_INSTALLED_DEPTH;
+  for (const [label, value] of [
+    ['maxFiles', maxFiles],
+    ['maxBytes', maxBytes],
+    ['maxDepth', maxDepth],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new SkillPackageError('INSTALLED_TOO_LARGE', `${label} must be a positive integer`);
+    }
+  }
+
+  const installed = readInstalledPackageFiles(root, { maxFiles, maxBytes, maxDepth });
   if (!installed.exists) {
     return {
       exists: false,

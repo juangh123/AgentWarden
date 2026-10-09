@@ -12,10 +12,30 @@ export const injectionRules: Rule[] = [
     check: (parsed): Finding[] => {
       const injectionPatterns = [
         /ignore\s+(all\s+)?(previous|prior|system)\s+instructions/i,
+        /ignore\s+(everything|anything|all)\s+(above|before|that)/i,
         /disregard\s+(all\s+)?(safety|rules|guidelines)/i,
         /you\s+are\s+now\s+in\s+unrestricted\s+mode/i,
         /bypass\s+(all\s+)?(security|guardrails|permissions)/i,
         /never\s+mention\s+these\s+instructions/i,
+        /(?:do\s+not|don't|never)\s+(?:tell|inform|mention\s+to)\s+the\s+user\s+(?:about\s+)?(?:these|this|the)\s+(?:instructions?|prompts?|rules?)/i,
+        /hidden\s+system\s+(?:prompt|instruction)s?\b/i,
+        /override\s+(?:your\s+)?(?:safety|security)\s+(?:rules|guidelines|instructions)/i,
+        // Chinese
+        // A qualifier is required so that ordinary prose such as "忽略规则"
+        // (the name of a config field) is not treated as an override attempt.
+        /忽略(?:之前|以上|上述|上面|前面|先前|所有|全部|系统|安全|任何|的)+(?:规则|指令|限制|提示)/,
+        /无视(?:之前|以上|上述|上面|前面|先前|所有|全部|系统|安全|任何|的)+(?:规则|指令|限制)/,
+        /(?:不要|别|不能)(?:向|跟)?(?:用户|人类|使用者)?(?:提及|告诉|透露|说明|暴露)(?:这些|以上|本)?(?:指令|提示|规则)/,
+        // Requires a demonstrative so that phrases like "隐藏提示" used in
+        // ordinary documentation are not reported as concealment attempts.
+        /(?:隐藏|保密|掩盖)(?:这些|以上|本|此次|相关)(?:指令|提示|规则)/,
+        /(?:获取|取得|夺取)(?:系统|最高)(?:权限|控制权)/,
+        // Japanese
+        /(?:以前|前)の(?:指示|命令|ルール)を(?:無視|忘れ)/,
+        /(?:ユーザー|人間)に(?:これらの)?(?:指示|命令)を(?:伝えない|言わない|知らせない)/,
+        // Korean
+        /이전\s*(?:지시|명령|규칙)(?:을|를)?\s*(?:무시|잊어)/,
+        /(?:사용자|인간)에게\s*(?:이|이러한)?\s*(?:지시|명령)을?\s*(?:말하지|알리지)/,
       ];
       return scanPatterns(parsed, injectionPatterns, {
         ruleId: 'SEC-INJ-001',

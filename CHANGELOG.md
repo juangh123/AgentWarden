@@ -4,7 +4,100 @@ All notable changes to AgentWarden are documented here. The project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic
 versioning.
 
-## [Unreleased]
+## [0.3.6] - 2026-10-10
+
+### Fixed
+
+- Closed a detection gap where a realistic dropper skill produced zero
+  findings and a 100/100 score. Rules now recognise CJK (Chinese, Japanese,
+  Korean) instruction-override phrasing, the non-pipe "download to a file then
+  execute it" chain (`curl -o`, `wget -O`, `Invoke-WebRequest -OutFile`
+  followed by `chmod`/execution), generic upload helpers
+  (`requests`/`httpx`/`urlopen`/`fetch`/`Invoke-RestMethod`) and sensitive
+  system paths such as `/etc/passwd`, `/etc/shadow`, `/proc/self/environ`,
+  `~/.npmrc` and `~/.docker/config.json`.
+- Config fields are now validated strictly. A wrongly typed or misspelled
+  `profile`, `failOn`, `minScore`, `ignoreRules`, `severityOverrides`,
+  `include`, `exclude` or `baseline` raises `ConfigError` and exits with code
+  `2` instead of silently falling back to a looser default, so a typo can no
+  longer leave a gate quietly downgraded.
+- A skill file with a UTF-8 BOM or without frontmatter no longer loses its
+  metadata, and no longer writes an absolute path into `skills.lock`. The
+  fallback name is a relative, machine-independent slug.
+- `install --output <dir> --force` no longer deletes a non-empty directory that
+  AgentWarden did not create. Replacing a foreign directory now requires the
+  new explicit `--replace-directory` flag, the entries to be removed are
+  printed first, and the directory swap is committed together with the
+  `skills.lock` write so a failed lockfile update restores the previous
+  directory instead of leaving data destroyed.
+- The default report withholds code fence bodies (`[REDACTED CODE]`), strips
+  ANSI/OSC control characters, removes URL fragments, and redacts camelCase
+  secret assignments such as `dbPassword = "…"`.
+- MCP findings report the real source line instead of a synthesized offset, and
+  repeated reports of the same rule on one line are collapsed instead of
+  deducting score twice.
+- The GitHub Action no longer sends an implicit `--profile balanced`, which
+  silently downgraded a stricter policy committed in the repository config.
+
+### Security
+
+- `SEC-EXFIL-001` now honors the `allowedDomains` allowlist, matching the
+  documented behaviour of the other network rules.
+- `install`, `verify`, `audit`, and `policy` warn on stderr once per run when
+  `publishers.requireSignature` is enabled but `publishers.trustedKeys` is
+  empty, because that configuration accepts any valid signature and pins no
+  publisher identity. The warning never writes to stdout, so `--json` and
+  `--sarif` output stay machine-readable.
+- Lockfile validation rejects skill names containing path separators or
+  control characters.
+- Reading an installed package is bounded by file count, total bytes and
+  depth, and uses a file descriptor with an `fstat` identity check to close a
+  check-then-read race that a concurrent writer could exploit.
+- The release workflow now grants least privilege per job (`verify` only
+  reads), keeps no persisted git credentials while running third-party
+  installs, pins the npm version it installs, and floats the minor tag
+  (`v0.3`) instead of `v0`, which for a 0.x project would have delivered
+  breaking changes to anyone pinning `@v0`.
+- Every third-party GitHub Action reference is pinned to a full commit SHA
+  (resolved from its release tag and recorded in a trailing comment), in the
+  composite Action, both workflows, and the workflow that `init` generates.
+  The generated SARIF upload step moves to `github/codeql-action` v4, whose
+  `upload-sarif` action still accepts the same `sarif_file` input.
+
+### Changed
+
+- Ordering in lockfiles, baselines, CycloneDX documents, discovery results and
+  reports uses a locale-independent comparator, so generated artifacts are
+  stable across machines and locales.
+- `tsconfig.json` enables `noUnusedLocals`, `noUnusedParameters`,
+  `noImplicitOverride` and `noFallthroughCasesInSwitch`; the dead
+  `parseConfigFile` helper, an unused `EXIT_OK` constant, a redundant import,
+  and an unused `options` parameter were removed to satisfy them.
+- Aborting a risky install now sets the exit code and returns instead of
+  calling `process.exit()`, so the scan report printed immediately before the
+  abort cannot be truncated. `scan`, `audit`, `rules`, `policy diff`,
+  `policy guard` and `baseline status` already did this.
+- Added `tests/cli.test.ts`: the CLI entry point now has direct unit coverage
+  for exit codes (0/1/2), JSON and SARIF output validity, unsupported-option
+  rejection, strict config failures, multi-file report completeness and
+  determinism, and the unpinned-publisher warning. This closes the largest
+  remaining gap from the audit, where ~2 200 lines of CLI code were only
+  exercised by the end-to-end smoke script.
+- `FORCE_COLOR` is honored as an explicit override instead of disabling color.
+- Scanning an empty scope now exits with code `2` (usage/file error) rather
+  than `1`, which is reserved for security failures.
+- Commands reject options that do not apply to them (for example
+  `scan --output`, `audit --sarif`, `scan --fail-on-diff`) with exit code `2`
+  instead of silently ignoring them.
+- Baselines are read once per unchanged file during a scan, and discovery
+  globs are compiled once, removing repeated I/O and regex compilation in
+  multi-file scans.
+
+### Notes
+
+- `release/agentwarden-cli-0.3.6.tgz` replaces the previous artifact, matching
+  the repository convention of carrying only the current release tarball;
+  earlier versions remain available on npm and in GitHub Releases.
 
 ## [0.3.5] - 2026-09-30
 
@@ -173,7 +266,8 @@ versioning.
 - Publisher policy can require signatures and reject revoked keys.
 - Package publishing excludes the repository `skills.lock`.
 
-[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/juangh123/AgentWarden/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.6
 [0.3.5]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.5
 [0.3.4]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.4
 [0.3.3]: https://github.com/juangh123/AgentWarden/releases/tag/v0.3.3

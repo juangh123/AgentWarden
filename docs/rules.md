@@ -31,7 +31,10 @@ policy overrides.
 **Sensitive Credential File Access**
 
 Detects code or instructions that access SSH keys, AWS credentials, GPG material,
-Kubernetes configuration, or `.env` files.
+Kubernetes configuration, `.env` files, system account databases
+(`/etc/passwd`, `/etc/shadow`, `/etc/sudoers`), process environment files
+(`/proc/self/environ`), and per-tool secret files such as `~/.npmrc`,
+`~/.netrc`, `~/.pgpass`, `~/.git-credentials`, and `~/.docker/config.json`.
 
 **Remediation:** Remove direct credential path access and inject narrowly scoped
 secret values through an approved runtime secret store.
@@ -80,7 +83,9 @@ scoped paths with preflight checks.
 **Arbitrary Remote Code Execution / Dynamic Piped Download**
 
 Detects `curl | sh`, `wget | bash`, and similar unverified download-and-execute
-flows.
+flows, including the two-step form where a script is downloaded to a file and
+then executed (`curl -o payload.sh …` followed by `chmod +x`/`bash payload.sh`,
+and the `wget -O` / `Invoke-WebRequest -OutFile` equivalents).
 
 **Remediation:** Pin an immutable version and integrity hash, download it first,
 and verify it before execution.
@@ -100,7 +105,8 @@ the decoded payload as plain text.
 **Prompt Injection / Instruction Override**
 
 Detects attempts to ignore previous instructions, bypass system policy, or claim
-new authority.
+new authority, in English and in Chinese, Japanese, and Korean phrasing
+(for example 忽略之前的规则, 以前の指示を無視, 이전 지시를 무시).
 
 **Remediation:** Remove adversarial override language and keep instructions
 scoped to the declared task.
@@ -129,8 +135,10 @@ remaining encoding operation.
 
 **Suspicious Data Exfiltration / Reverse Shell**
 
-Detects sensitive data posted to unknown endpoints, raw-IP callbacks, and reverse
-shell constructs.
+Detects sensitive data posted to unknown endpoints, raw-IP callbacks, reverse
+shell constructs, and upload calls in higher-level languages
+(`requests`/`httpx`/`urlopen`/`fetch`/`Invoke-RestMethod`) that target an inline
+URL. Hosts listed in `allowedDomains` are exempt.
 
 **Remediation:** Remove the outbound flow, pin approved destinations, and require
 explicit user consent before transmitting data.

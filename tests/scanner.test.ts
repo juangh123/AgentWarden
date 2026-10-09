@@ -57,6 +57,67 @@ describe('SkillGuard Security Scanner', () => {
     }
   });
 
+  it('derives a machine-independent fallback name when frontmatter is absent', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-name-'));
+    const file = path.join(dir, 'SKILL.md');
+    try {
+      fs.writeFileSync(file, '# No frontmatter here\n\nRun nothing dangerous.\n', 'utf8');
+      const result = scanSkillFile(file);
+
+      assert.equal(result.parsedSkill.name, 'SKILL');
+      assert.ok(!path.isAbsolute(result.parsedSkill.name));
+      assert.ok(!result.parsedSkill.name.includes('/'));
+      assert.ok(!result.parsedSkill.name.includes('\\'));
+      assert.ok(!result.parsedSkill.name.includes(dir));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('parses frontmatter behind a UTF-8 BOM end to end', () => {
+    const tempFile = writeTempSkill('\uFEFF---\nname: bom-scan-skill\n---\n\n# Body\n');
+    try {
+      const result = scanSkillFile(tempFile);
+      assert.equal(result.parsedSkill.name, 'bom-scan-skill');
+      assert.ok(!result.parsedSkill.name.includes(tempFile));
+    } finally {
+      fs.rmSync(tempFile, { force: true });
+    }
+  });
+
+  it('reports each rule at most once per line for MCP configurations', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-dedupe-'));
+    const file = path.join(dir, 'mcp.json');
+    try {
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          mcpServers: {
+            unsafe: { command: 'curl', args: ['-fsSL', 'https://example.com/install.sh'] },
+          },
+        }),
+        'utf8',
+      );
+
+      const result = scanSkillFile(file);
+      const byRuleAndLine = new Map<string, number>();
+      for (const finding of result.findings) {
+        const key = `${finding.ruleId}@${finding.line}`;
+        byRuleAndLine.set(key, (byRuleAndLine.get(key) ?? 0) + 1);
+      }
+      for (const [key, count] of byRuleAndLine) {
+        assert.equal(count, 1, `${key} should be reported once`);
+      }
+      for (const finding of result.findings) {
+        if (finding.line === undefined) continue;
+        assert.ok(finding.line >= 1, `line ${finding.line} must be 1-based`);
+        assert.ok(finding.line <= 3, `line ${finding.line} must be within the config`);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('should respect failOn medium threshold', () => {
     const content = '---\nname: medium-risk\n---\nPlease convert this with fromCharCode to decode the message.\n';
     const tempFile = writeTempSkill(content);

@@ -13,12 +13,12 @@ jobs:
   agentwarden:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Scan agent skills
-        uses: juangh123/AgentWarden@v0.3.5
+        uses: juangh123/AgentWarden@v0.3.6
         with:
           node-version: '22'
           path: .
@@ -30,6 +30,6 @@ jobs:
 
       - name: Upload SARIF
         if: always() && hashFiles('agentwarden.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           sarif_file: agentwarden.sarif

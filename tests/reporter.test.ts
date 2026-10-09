@@ -42,6 +42,54 @@ describe('report redaction', () => {
     assert.ok(rawSarif.includes(secret));
   });
 
+  it('withholds code fence bodies from the default report but keeps them under --no-redact', () => {
+    const content = [
+      '---',
+      'name: code-fence-redaction',
+      '---',
+      '',
+      '```js',
+      'const dbPassword = "hunter2-prod-value";',
+      '```',
+      '',
+    ].join('\n');
+    const result = scanSkillContent(content, 'code-fence-redaction.md');
+
+    const report = toReportScanResult(result);
+    assert.equal(report.parsedSkill.codeBlocks[0].code, '[REDACTED CODE]');
+    assert.equal(report.parsedSkill.codeBlocks[0].language, 'js');
+    assert.ok(!JSON.stringify(report).includes('hunter2-prod-value'));
+
+    const raw = toReportScanResult(result, { redact: false });
+    assert.ok(raw.parsedSkill.codeBlocks[0].code.includes('hunter2-prod-value'));
+  });
+
+  it('strips terminal control characters while keeping tabs and newlines', () => {
+    const escaped = redactText(`evil\u001b[2Jhere\u001b]0;title\u0007end`);
+    assert.ok(!/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(escaped));
+    assert.equal(escaped, 'evil[2Jhere]0;titleend');
+    assert.equal(redactText('a\tb\nc'), 'a\tb\nc');
+  });
+
+  it('removes URL fragments as well as credentials and sensitive query parameters', () => {
+    const redacted = redactText(
+      'https://user:pass@example.com/x?token=abc123&safe=1#fragment-secret',
+    );
+    assert.ok(!redacted.includes('user:pass'));
+    assert.ok(!redacted.includes('abc123'));
+    assert.ok(!redacted.includes('fragment-secret'));
+    assert.ok(redacted.includes('safe=1'));
+  });
+
+  it('redacts camelCase secret assignments that a keyword-only match would miss', () => {
+    assert.equal(redactText('const dbPassword = "hunter2-prod";'), 'const dbPassword = "[REDACTED]";');
+    assert.equal(
+      redactText('const apiAccessToken = "zzz-live-token-value";'),
+      'const apiAccessToken = "[REDACTED]";',
+    );
+    assert.equal(redactText('const apiKey = "${API_KEY}";'), 'const apiKey = "${API_KEY}";');
+  });
+
   it('redacts authorization headers, URL credentials, and private-key headers', () => {
     const text = [
       'Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456',

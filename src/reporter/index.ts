@@ -5,11 +5,7 @@ import {
 } from '../fingerprint.ts';
 import type { ScanResult } from '../rules/types.ts';
 import { readPackageVersion } from '../version.ts';
-import {
-  toReportScanResult,
-  toReportScanResults,
-  type ReportOptions,
-} from './redaction.ts';
+import { toReportScanResults, type ReportOptions } from './redaction.ts';
 
 export type ReportFormat = 'pretty' | 'json' | 'sarif';
 export {

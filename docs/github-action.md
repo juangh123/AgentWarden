@@ -9,18 +9,19 @@ AgentWarden Action 在 CI 中扫描 Skill、Tool 和 MCP 配置，把结果写�
 可直接从 Marketplace 添加；仓库内也可以显式引用：
 
 ```yaml
-- uses: juangh123/AgentWarden@v0.3.5
+- uses: juangh123/AgentWarden@v0.3.6
 ```
 
 版本选择建议：
 
 | 引用方式 | 适用场景 |
 | :--- | :--- |
-| `@v0.3.5` | 推荐；版本固定，升级可控 |
-| `@v0` | 自动接收兼容的 v0.x 修复；执行前应检查 Release Notes |
+| `@v0.3.6` | 推荐；版本固定，升级可控 |
+| `@v0.3` | 自动接收同一 minor 系列的修复；执行前应检查 Release Notes |
 | `@<commit-sha>` | 高安全环境；最严格的可重复与防篡改方式 |
 
-不要在受保护的生产仓库中长期使用 `@main`。
+项目按 0.x 语义发布，每个 minor 版本都可能包含破坏性变更，因此发布流程只浮动到
+minor 标签（`v0.3`），不提供 `@v0`。不要在受保护的生产仓库中长期使用 `@main`。
 
 Action 直接从固定版本中运行 `src/cli.ts`，不执行 `npm install`，也不要求
 `agentwarden-cli` 已发布到 npm。`node-version` 必须为 22.6 或更高版本。
@@ -30,7 +31,7 @@ Action 直接从固定版本中运行 `src/cli.ts`，不执行 `npm install`，�
 在仓库根目录执行：
 
 ```bash
-npx --yes agentwarden-cli@0.3.5 init
+npx --yes agentwarden-cli@0.3.6 init
 ```
 
 该命令会生成：
@@ -45,7 +46,7 @@ npx --yes agentwarden-cli@0.3.5 init
 | :--- | :--- |
 | `--profile <name>` | 写入策略文件的档位：`legacy` / `balanced` / `strict`，默认 `balanced` |
 | `--workflow-path <file>` | 自定义工作流输出路径；必须位于仓库内且扩展名为 `.yml` / `.yaml` |
-| `--action-ref <ref>` | 生成的 `uses:` 引用，默认为当前 CLI 版本；可改为 `@v0` 或固定 commit SHA |
+| `--action-ref <ref>` | 生成的 `uses:` 引用，默认为当前 CLI 版本；可改为 `@v0.3` 或固定 commit SHA |
 | `--dry-run` | 只输出将要创建或替换的文件，不写入磁盘 |
 | `--no-workflow` | 不生成工作流，只写策略文件 |
 | `--json` | 以 JSON 输出初始化结果 |
@@ -69,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: juangh123/AgentWarden@v0.3.5
+      - uses: juangh123/AgentWarden@v0.3.6
         with:
           path: skills/
           profile: strict
@@ -95,7 +96,7 @@ steps:
   - uses: actions/checkout@v7
 
   - name: Run AgentWarden
-    uses: juangh123/AgentWarden@v0.3.5
+    uses: juangh123/AgentWarden@v0.3.6
     with:
       path: .
       profile: strict
@@ -119,7 +120,7 @@ steps:
   with:
     fetch-depth: 0
 
-- uses: juangh123/AgentWarden@v0.3.5
+- uses: juangh123/AgentWarden@v0.3.6
   with:
     path: .
     changed: 'true'
@@ -133,7 +134,7 @@ steps:
 对已经审核并接受的历史发现，可以保存稳定指纹基线，并强制所有例外在指定日期前重新检查：
 
 ```yaml
-- uses: juangh123/AgentWarden@v0.3.5
+- uses: juangh123/AgentWarden@v0.3.6
   with:
     path: skills/
     baseline: .agentwarden-baseline.json
@@ -154,7 +155,7 @@ PR 可能在同一提交里既加入有风险的 Skill，又通过 `ignoreRules`
   with:
     fetch-depth: 0
 
-- uses: juangh123/AgentWarden@v0.3.5
+- uses: juangh123/AgentWarden@v0.3.6
   with:
     path: .
     config: .agentwarden/policy.json
