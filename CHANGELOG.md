@@ -92,6 +92,11 @@ versioning.
 - Baselines are read once per unchanged file during a scan, and discovery
   globs are compiled once, removing repeated I/O and regex compilation in
   multi-file scans.
+- The 2 598-line `src/cli.ts` entry point is split into focused modules under
+  `src/cli/`: `args.ts`, `config.ts`, `shared.ts`, `help.ts`, `main.ts` (command
+  dispatch) and one module per command group under `src/cli/commands/`.
+  `src/cli.ts` is now a 22-line entry point. Behaviour is unchanged: the CLI
+  contract tests and the 140-check end-to-end suite pass unmodified.
 
 ### Notes
 

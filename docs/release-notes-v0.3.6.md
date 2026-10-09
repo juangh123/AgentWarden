@@ -65,6 +65,11 @@ downgrades, and removes a destructive install path.
   truncated.
 - Baselines are read once per unchanged file and discovery globs are compiled
   once, removing repeated I/O and regex compilation in multi-file scans.
+- The 2 598-line CLI entry point is split into focused modules under
+  `src/cli/` (argument parsing, config resolution, shared helpers, help text,
+  command dispatch, and one module per command group). `src/cli.ts` is now a
+  22-line entry point, and the CLI contract tests plus the 140-check end-to-end
+  suite pass unchanged.
 
 ## Install Today
 
