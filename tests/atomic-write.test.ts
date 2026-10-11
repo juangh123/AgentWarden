@@ -63,4 +63,55 @@ describe('atomic writes', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('completes the Windows fallback replacement and clears its backup', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-atomic-fallback-'));
+    const filePath = path.join(root, 'output.json');
+    fs.writeFileSync(filePath, 'previous', 'utf8');
+
+    let renameCalls = 0;
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+      fs.renameSync = ((...args: Parameters<typeof fs.renameSync>) => {
+        renameCalls++;
+        if (renameCalls === 1) {
+          const error = new Error('target is locked') as NodeJS.ErrnoException;
+          error.code = 'EPERM';
+          throw error;
+        }
+        return originalRename(...args);
+      }) as typeof fs.renameSync;
+      syncBuiltinESMExports();
+
+      writeFileAtomic(filePath, 'replacement');
+
+      assert.equal(fs.readFileSync(filePath, 'utf8'), 'replacement');
+      assert.deepEqual(fs.readdirSync(root).filter((entry) => entry !== 'output.json'), []);
+    } finally {
+      restoreFs();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('propagates a replacement failure on non-Windows platforms', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-atomic-posix-'));
+    const filePath = path.join(root, 'output.json');
+    fs.writeFileSync(filePath, 'previous', 'utf8');
+
+    try {
+      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+      fs.renameSync = (() => {
+        const error = new Error('disk failure') as NodeJS.ErrnoException;
+        error.code = 'EIO';
+        throw error;
+      }) as typeof fs.renameSync;
+      syncBuiltinESMExports();
+
+      assert.throws(() => writeFileAtomic(filePath, 'replacement'), /disk failure/);
+      assert.equal(fs.readFileSync(filePath, 'utf8'), 'previous');
+    } finally {
+      restoreFs();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

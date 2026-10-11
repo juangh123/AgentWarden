@@ -10,6 +10,9 @@ import {
   updateLockfileSkill,
   removeLockfileSkill,
   findSkillKey,
+  normalizePath,
+  resolveFromRoot,
+  toRelativePosix,
   type LockfileSchema,
 } from '../src/manifest/lockfile.ts';
 
@@ -401,5 +404,163 @@ describe('lockfile', () => {
     );
 
     assert.throws(() => readLockfile(dir), /invalid signatureVerified/);
+  });
+});
+
+describe('lockfile validation branches', () => {
+  const base = () => ({
+    name: 'demo',
+    version: '1.0.0',
+    source: 'demo.md',
+    sha256: 'a'.repeat(64),
+    installedAt: new Date().toISOString(),
+    verifiedScore: 100,
+  });
+  const packageFile = { path: 'SKILL.md', sha256: 'b'.repeat(64), size: 12 };
+  const packageEntry = () => ({
+    ...base(),
+    packageFormat: 'tar.gz',
+    packageSha256: 'c'.repeat(64),
+    packageEntry: 'SKILL.md',
+    packageFiles: [packageFile],
+  });
+
+  function readRaw(dir: string, payload: unknown): void {
+    fs.writeFileSync(path.join(dir, LOCKFILE_NAME), JSON.stringify(payload), 'utf8');
+    readLockfile(dir);
+  }
+
+  it('rejects every malformed optional source field', () => {
+    const dir = tempDir();
+    try {
+      const cases: Array<[Record<string, unknown>, RegExp]> = [
+        [{ ...base(), sourceType: 'ftp' }, /invalid sourceType/],
+        [{ ...base(), remoteUrl: 42 }, /invalid remoteUrl/],
+        [{ ...base(), resolvedUrl: { href: 'x' } }, /invalid resolvedUrl/],
+        [{ ...base(), downloadSha256: 7 }, /invalid downloadSha256/],
+        [{ ...base(), digestVerified: 'yes' }, /invalid digestVerified/],
+      ];
+      for (const [entry, pattern] of cases) {
+        assert.throws(() => readRaw(dir, { lockfileVersion: 1, skills: { demo: entry } }), pattern);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects malformed package metadata', () => {
+    const dir = tempDir();
+    try {
+      const cases: Array<[Record<string, unknown>, RegExp]> = [
+        [{ ...packageEntry(), packageFormat: 'zip' }, /invalid packageFormat/],
+        [{ ...packageEntry(), packageSha256: 'short' }, /invalid packageSha256/],
+        [{ ...packageEntry(), packageEntry: '../SKILL.md' }, /invalid packageEntry/],
+        [{ ...packageEntry(), packageEntry: 'notes.md' }, /invalid packageEntry/],
+        [{ ...packageEntry(), packageFiles: [] }, /invalid packageFiles/],
+        [
+          { ...packageEntry(), packageFiles: Array.from({ length: 257 }, () => packageFile) },
+          /too many packageFiles/,
+        ],
+        [{ ...packageEntry(), packageFiles: ['SKILL.md'] }, /invalid package file metadata/],
+        [
+          { ...packageEntry(), packageFiles: [{ path: '/etc/SKILL.md', sha256: 'b'.repeat(64), size: 1 }] },
+          /invalid package file metadata/,
+        ],
+        [
+          { ...packageEntry(), packageFiles: [{ path: 'SKILL.md', sha256: 'nope', size: 1 }] },
+          /invalid package file metadata/,
+        ],
+        [
+          { ...packageEntry(), packageFiles: [{ path: 'SKILL.md', sha256: 'b'.repeat(64), size: -1 }] },
+          /invalid package file metadata/,
+        ],
+        [
+          { ...packageEntry(), packageFiles: [packageFile, { ...packageFile, path: 'skill.md' }] },
+          /duplicate package file paths/,
+        ],
+      ];
+      for (const [entry, pattern] of cases) {
+        assert.throws(() => readRaw(dir, { lockfileVersion: 1, skills: { demo: entry } }), pattern);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects malformed lockfile documents and entries', () => {
+    const dir = tempDir();
+    try {
+      assert.throws(() => readRaw(dir, []), /expected a top-level object/);
+      assert.throws(() => readRaw(dir, { lockfileVersion: 1 }), /missing "skills" object/);
+      assert.throws(
+        () => readRaw(dir, { lockfileVersion: 1, skills: 'nope' }),
+        /missing "skills" object/,
+      );
+      assert.throws(
+        () => readRaw(dir, { lockfileVersion: 1, skills: { demo: 'not-an-object' } }),
+        /must be an object/,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to write a lockfile whose entry vanished', () => {
+    const dir = tempDir();
+    try {
+      const lock = { lockfileVersion: 1 as const, skills: { ghost: undefined } };
+      assert.throws(
+        () => writeLockfile(lock as unknown as LockfileSchema, dir),
+        /entry "ghost" is missing/,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('normalizes and resolves portable paths', () => {
+    assert.equal(normalizePath('a\\b\\c'), 'a/b/c');
+    assert.equal(toRelativePosix(path.join(process.cwd(), 'sub', 'x.md'), process.cwd()), 'sub/x.md');
+    assert.equal(resolveFromRoot('sub/x.md', process.cwd()), path.resolve(process.cwd(), 'sub/x.md'));
+  });
+});
+
+describe('lockfile field validation', () => {
+  function readEntry(dir: string, entry: Record<string, unknown>): void {
+    fs.writeFileSync(
+      path.join(dir, LOCKFILE_NAME),
+      JSON.stringify({ lockfileVersion: 1, skills: { demo: entry } }),
+      'utf8',
+    );
+    readLockfile(dir);
+  }
+
+  it('rejects a broken name, version, source, hash, timestamp, or score individually', () => {
+    const dir = tempDir();
+    const valid = {
+      name: 'demo',
+      version: '1.0.0',
+      source: 'demo.md',
+      sha256: 'a'.repeat(64),
+      installedAt: new Date().toISOString(),
+      verifiedScore: 100,
+    };
+    try {
+      const cases: Array<Record<string, unknown>> = [
+        { ...valid, name: '' },
+        { ...valid, name: 'demo\\nested' },
+        { ...valid, version: '' },
+        { ...valid, source: '' },
+        { ...valid, source: ' ../outside.md' },
+        { ...valid, sha256: 'x'.repeat(63) },
+        { ...valid, installedAt: 'not-a-date' },
+        { ...valid, verifiedScore: 100.5 },
+      ];
+      for (const entry of cases) {
+        assert.throws(() => readEntry(dir, entry), /missing or invalid fields/);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

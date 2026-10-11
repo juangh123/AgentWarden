@@ -4,7 +4,9 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { updateLockfileSkill } from '../src/manifest/lockfile.ts';
+import { toRelativePosix, updateLockfileSkill } from '../src/manifest/lockfile.ts';
+import { extractSkillPackage, writeSkillPackage } from '../src/source/package.ts';
+import { createTarGz } from './helpers/tar.ts';
 import { buildCycloneDxSbom } from '../src/sbom/index.ts';
 import { scanSkillContent } from '../src/scanner/index.ts';
 import { createSignatureProof } from '../src/source/proof.ts';
@@ -153,6 +155,93 @@ describe('CycloneDX SBOM export', () => {
         )?.value,
         'false',
       );
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('SBOM package and skip-inspection paths', () => {
+  it('inspects an installed package and exports its per-file components', () => {
+    const cwd = tempDir();
+    try {
+      const content = '---\nname: packaged-skill\nversion: 2.0.0\n---\n# Packaged\n';
+      const archive = createTarGz([
+        { path: 'SKILL.md', content },
+        { path: 'scripts/run.sh', content: 'echo hi\n' },
+      ]);
+      const skillPackage = extractSkillPackage(archive);
+      const destination = path.join(cwd, '.agentwarden', 'skills', 'packaged-skill');
+      writeSkillPackage(skillPackage, destination);
+
+      updateLockfileSkill(
+        {
+          name: 'packaged-skill',
+          version: '2.0.0',
+          source: toRelativePosix(path.join(destination, 'SKILL.md'), cwd),
+          sha256: crypto.createHash('sha256').update(content.replace(/\r\n/g, '\n')).digest('hex'),
+          installedAt: '2026-10-11T00:00:00.000Z',
+          verifiedScore: 100,
+          sourceType: 'local',
+          packageFormat: 'tar.gz',
+          packageSha256: skillPackage.sha256,
+          packageEntry: skillPackage.entryPath,
+          packageFiles: skillPackage.manifest,
+        },
+        cwd,
+      );
+
+      const result = buildCycloneDxSbom({ cwd, inspect: true });
+
+      assert.equal(result.passed, true);
+      assert.equal(result.inspections[0].integrityPassed, true);
+      assert.equal(result.inspections[0].packageFileCount, 2);
+      assert.equal(result.inspections[0].missingFiles.length, 0);
+      assert.equal(result.componentCount, 1);
+      assert.equal(
+        result.bom.components[0].properties?.find(
+          (property) => property.name === 'agentwarden:packageFileCount',
+        )?.value,
+        '2',
+      );
+      // Package files are exported as content-addressed dependency references.
+      const skillDependency = result.bom.dependencies.find((entry) => entry.dependsOn.length === 2);
+      assert.ok(skillDependency, 'expected the skill to depend on its two package files');
+      assert.ok(
+        skillDependency.dependsOn.every((reference) => reference.startsWith('urn:agentwarden:file:')),
+        'expected content-addressed file references',
+      );
+      assert.match(result.documentSha256, /^[a-f0-9]{64}$/);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('skips on-disk inspection when asked and reports null integrity', () => {
+    const cwd = tempDir();
+    try {
+      const source = 'uninspected.md';
+      const content = '---\nname: uninspected\nversion: 1.0.0\n---\n# Uninspected\n';
+      fs.writeFileSync(path.join(cwd, source), content, 'utf8');
+      const scan = scanSkillContent(content, source);
+      updateLockfileSkill(
+        {
+          name: 'uninspected',
+          version: '1.0.0',
+          source,
+          sha256: scan.sha256,
+          installedAt: '2026-10-11T00:00:00.000Z',
+          verifiedScore: 100,
+          sourceType: 'local',
+        },
+        cwd,
+      );
+
+      const result = buildCycloneDxSbom({ cwd, inspect: false });
+
+      assert.equal(result.inspections[0].integrityPassed, null);
+      assert.equal(result.inspections[0].observedSha256, null);
+      assert.equal(result.inspections[0].missingFiles.length, 0);
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true });
     }

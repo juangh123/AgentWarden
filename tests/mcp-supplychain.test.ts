@@ -1,6 +1,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { scanSkillContent } from '../src/scanner/index.ts';
+import { parseSkillMarkdown } from '../src/parser/skillParser.ts';
+import { mcpRules } from '../src/rules/mcp.ts';
 
 describe('Phase 2: MCP & Supply Chain Security Rules', () => {
   test('should detect unsafe MCP command executing npx with unpinned package', () => {
@@ -169,5 +171,30 @@ pip install --extra-index-url http://untrusted-registry.internal/packages hackpk
     assert.strictEqual(result.passed, false);
     const pipeFinding = result.findings.find(f => f.ruleId === 'SEC-CMD-001' || f.ruleId === 'SEC-SUPPLY-001');
     assert.ok(pipeFinding, 'Expected untrusted execution finding');
+  });
+});
+
+describe('MCP package runner argument forms', () => {
+  test('reads packages after a positional separator and from --package=', () => {
+    for (const args of [['--', 'unpinned-tool'], ['--package=unpinned-tool'], ['-p', 'unpinned-tool']]) {
+      const parsed = parseSkillMarkdown(
+        JSON.stringify({ mcpServers: { runner: { command: 'npx', args } } }),
+        '.mcp.json',
+      );
+      const findings = mcpRules.find((rule) => rule.id === 'SEC-MCP-001')!.check(parsed);
+      assert.equal(findings.length, 1, `expected one finding for ${JSON.stringify(args)}`);
+    }
+  });
+
+  test('flags an unparsable remote URL instead of throwing', () => {
+    const parsed = parseSkillMarkdown(
+      JSON.stringify({ mcpServers: { remote: { type: 'http', url: 'not a url' } } }),
+      '.mcp.json',
+    );
+    const findings = mcpRules.find((rule) => rule.id === 'SEC-MCP-004')!.check(parsed);
+
+    assert.equal(findings.length, 1);
+    assert.match(findings[0].description, /invalid remote URL/);
+    assert.equal(findings[0].line, 1);
   });
 });
