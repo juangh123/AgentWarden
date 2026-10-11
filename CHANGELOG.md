@@ -80,6 +80,13 @@ versioning.
   explicit `undefined`, while serialized records (baseline entries, findings,
   scan results, package entry metadata) omit absent fields instead of writing
   `undefined` into them.
+- Duplicated logic the audit flagged is now shared: `runGit` and the
+  filesystem `canonicalPath` live in `src/utils/git.ts`, and every plain
+  SHA-256 digest goes through `src/utils/hash.ts`. The normalising content
+  hashes stay separate because their BOM and line-ending rules differ by
+  design, and the string-normalising helper in `proof.ts` is renamed
+  `normalizeRecordPath` so it can no longer be confused with the filesystem
+  one.
 - Aborting a risky install now sets the exit code and returns instead of
   calling `process.exit()`, so the scan report printed immediately before the
   abort cannot be truncated. `scan`, `audit`, `rules`, `policy diff`,

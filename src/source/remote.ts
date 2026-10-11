@@ -1,5 +1,6 @@
-import * as crypto from 'node:crypto';
 import * as path from 'node:path';
+import { sha256 } from '../utils/hash.ts';
+
 
 export const DEFAULT_MAX_REMOTE_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
@@ -185,11 +186,11 @@ export async function fetchRemoteSkill(
       throw new RemoteSkillError('EMPTY_CONTENT', 'Remote skill content is empty');
     }
 
-    const sha256 = crypto.createHash('sha256').update(contentBuffer).digest('hex');
-    if (expectedSha256 && sha256 !== expectedSha256) {
+    const digest = sha256(contentBuffer);
+    if (expectedSha256 && digest !== expectedSha256) {
       throw new RemoteSkillError(
         'DIGEST_MISMATCH',
-        `Remote SHA-256 mismatch: expected ${expectedSha256}, received ${sha256}`,
+        `Remote SHA-256 mismatch: expected ${expectedSha256}, received ${digest}`,
       );
     }
 
@@ -202,7 +203,7 @@ export async function fetchRemoteSkill(
       ...(contentType ? { contentType } : {}),
       bytes: contentBuffer,
       content,
-      sha256,
+      sha256: digest,
       size: contentBuffer.byteLength,
       digestVerified: expectedSha256 !== undefined,
     };

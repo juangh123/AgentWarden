@@ -1,5 +1,6 @@
-import * as crypto from 'node:crypto';
 import * as path from 'node:path';
+import { sha256 } from './utils/hash.ts';
+
 import type { Finding } from './rules/types.ts';
 
 export function normalizeFindingPath(filePath: string, cwd: string = process.cwd()): string {
@@ -28,10 +29,7 @@ function findingFingerprintMaterial(
 }
 
 function fingerprintWithOccurrence(material: string, occurrence: number): string {
-  return crypto
-    .createHash('sha256')
-    .update(`${material}\n${occurrence}`, 'utf8')
-    .digest('hex');
+  return sha256(`${material}\n${occurrence}`);
 }
 
 /**

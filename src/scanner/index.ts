@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
-import * as crypto from 'node:crypto';
 import * as path from 'node:path';
+import { sha256 } from '../utils/hash.ts';
+
 import { parseSkillMarkdown } from '../parser/skillParser.ts';
 import { discoverSkillFiles } from './discovery.ts';
 import { allRules } from '../rules/index.ts';
@@ -131,7 +132,7 @@ export function scanSkillContent(
   const config = normalizeConfig(customConfig || loadConfig(cwd));
 
   const normalizedForHash = content.replace(/\r\n/g, '\n');
-  const sha256 = crypto.createHash('sha256').update(normalizedForHash, 'utf8').digest('hex');
+  const digest = sha256(normalizedForHash);
 
   const allFindings: Finding[] = [];
   const ignored = new Set(config.ignoreRules || []);
@@ -149,7 +150,7 @@ export function scanSkillContent(
     );
   }
 
-  const result = evaluateFindings(dedupeFindings(allFindings), config, virtualPath, parsed, sha256);
+  const result = evaluateFindings(dedupeFindings(allFindings), config, virtualPath, parsed, digest);
   if (!config.baseline) return result;
 
   return applyBaseline(result, loadBaselineCached(config.baseline, cwd), {

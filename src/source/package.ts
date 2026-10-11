@@ -1,4 +1,5 @@
 import * as crypto from 'node:crypto';
+import { sha256 } from '../utils/hash.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
@@ -432,10 +433,6 @@ export function isManagedSkillDirectory(root: string): boolean {
     return false;
   }
   return readSkillPackageMarker(root) !== undefined;
-}
-
-function sha256(data: Uint8Array): string {
-  return crypto.createHash('sha256').update(data).digest('hex');
 }
 
 function calculatePackageSha256(files: SkillPackageFile[]): string {

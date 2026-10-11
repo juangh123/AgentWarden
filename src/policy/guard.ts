@@ -1,6 +1,6 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { canonicalPath, runGit as runGitShared } from '../utils/git.ts';
 import { compareStrings } from '../utils/compare.ts';
 import {
   CONFIG_FILE_NAMES,
@@ -77,31 +77,9 @@ export interface PolicyGuardResult {
   baseline?: BaselineGuardResult;
 }
 
+// Keep this module's error type while sharing the git invocation.
 function runGit(cwd: string, args: string[], allowFailure = false): string {
-  const result = spawnSync('git', ['-C', cwd, ...args], {
-    encoding: 'utf8',
-    windowsHide: true,
-    maxBuffer: 10 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw new PolicyGuardError(`Unable to run git: ${result.error.message}`);
-  }
-  if (!allowFailure && result.status !== 0) {
-    const detail = (result.stderr || result.stdout || '').trim();
-    throw new PolicyGuardError(
-      `Git command failed (${args.join(' ')}): ${detail || `exit ${String(result.status)}`}`,
-    );
-  }
-  return result.stdout ?? '';
-}
-
-function canonicalPath(filePath: string): string {
-  const resolved = path.resolve(filePath);
-  try {
-    return fs.realpathSync.native(resolved);
-  } catch {
-    return resolved;
-  }
+  return runGitShared(cwd, args, { allowFailure, wrap: (message) => new PolicyGuardError(message) });
 }
 
 function repositoryRootFor(cwd: string): string {

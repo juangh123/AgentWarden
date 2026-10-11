@@ -1,4 +1,5 @@
 import * as crypto from 'node:crypto';
+import { sha256 } from '../utils/hash.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { PublisherPolicy } from '../config/index.ts';
@@ -24,17 +25,13 @@ interface SignatureAttestationReadResult {
   error?: string;
 }
 
-function sha256(value: string | Uint8Array): string {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
-
 function normalizedContentSha256(value: Uint8Array, stripBom = false): string {
   let content = Buffer.from(value).toString('utf8');
   if (stripBom) content = content.replace(/^\uFEFF/, '');
   return sha256(content.replace(/\r\n/g, '\n'));
 }
 
-function canonicalPath(value: string): string {
+function normalizeRecordPath(value: string): string {
   return value.replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
@@ -43,13 +40,13 @@ function packageManifestMatches(
   expected: Array<{ path: string; sha256: string; size: number }>,
 ): boolean {
   if (actual.length !== expected.length) return false;
-  const actualPaths = new Set(actual.map((entry) => canonicalPath(entry.path)));
+  const actualPaths = new Set(actual.map((entry) => normalizeRecordPath(entry.path)));
   return expected.every((entry) => {
-    const normalized = canonicalPath(entry.path);
+    const normalized = normalizeRecordPath(entry.path);
     if (!actualPaths.has(normalized)) return false;
     return actual.some(
       (candidate) =>
-        canonicalPath(candidate.path) === normalized &&
+        normalizeRecordPath(candidate.path) === normalized &&
         candidate.sha256.toLowerCase() === entry.sha256.toLowerCase() &&
         candidate.size === entry.size,
     );
@@ -194,11 +191,11 @@ function proofBindsToEntry(
       if (packaged.sha256 !== entry.packageSha256.toLowerCase()) {
         return 'Signed package content does not match the lockfile package hash';
       }
-      if (canonicalPath(packaged.entryPath) !== canonicalPath(entry.packageEntry)) {
+      if (normalizeRecordPath(packaged.entryPath) !== normalizeRecordPath(entry.packageEntry)) {
         return 'Signed package entry path does not match the lockfile';
       }
       const packagedEntry = packaged.files.find(
-        (file) => canonicalPath(file.path) === canonicalPath(packaged.entryPath),
+        (file) => normalizeRecordPath(file.path) === normalizeRecordPath(packaged.entryPath),
       );
       if (
         !packagedEntry ||
