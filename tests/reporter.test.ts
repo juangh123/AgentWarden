@@ -229,7 +229,9 @@ describe('pretty report rendering', () => {
     } finally {
       console.log = original;
     }
-    return lines.join('\n');
+    // Strip ANSI so these assertions do not depend on the ambient colour state,
+    // which differs between a developer shell and CI.
+    return lines.join('\n').replace(/\u001b\[[0-9;]*m/g, '');
   }
 
   function baseResult(overrides: Partial<ScanResult> = {}): ScanResult {
