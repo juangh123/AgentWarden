@@ -89,7 +89,7 @@ jobs:
           config: 'examples/github-action-project/.agentwarden/policy.json'
           sarif: 'integration-example.sarif'
       - name: Run published Action against integration example
-        uses: juangh123/AgentWarden@v0.3.5
+        uses: juangh123/AgentWarden@v0.3.6
         with:
           node-version: '22'
           path: 'examples/github-action-project'
