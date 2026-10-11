@@ -240,7 +240,7 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 | DEV | [`agentwarden`](https://dev.to/agentwarden) | 已注册并完成资料；2026-09-19 发布英文长帖，公开主页现有 1 篇文章 | 监控阅读、收藏、评论和转发；收到技术问题时由维护者本人回复 |
 | Discord | `agentwarden_cli` | 2026-09-20 已加入 MCP Contributor Discord 并完成规则确认；已加入 Model Context Protocol 社区并通过 MEE6 验证；已在 `showcase` 发布项目主题；OpenAI 验证受地区限制不可用 | MCP Contributor 只由维护者本人参与，不发送 AI 生成内容；监控 `showcase` 回复，不重复发帖 |
 | Hacker News | `agentwarden` | 已注册，about 已完善；`Show HN` 限制已解除；2026-10-01 当前会话没有可用密码 | 先找回或重置账号凭据，再选择能够持续跟进的时段按[事实清单](launch-hacker-news.md)亲自提交并预留 2 至 3 小时互动 |
-| Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册并在 `r/mcp` 发布首帖；2026-10-01 已登录复核并将正文更新到 `v0.3.5` | 监控并人工回复新评论；不再重复投放；继续参与相关讨论后再扩展 |
+| Reddit | [`u/Basic_Support_9438`](https://www.reddit.com/user/Basic_Support_9438/) | 已注册并在 `r/mcp` 发布首帖；2026-10-01 已登录复核并将正文更新到 `v0.3.5`；2026-10-11 再次登录并同步到 `v0.3.6` | 监控并人工回复新评论；不再重复投放；继续参与相关讨论后再扩展 |
 | 掘金 | [`AgentWarden`](https://juejin.cn/user/252246275414937) | 已注册并完成资料；2026-09-16 发布中文长帖；2026-09-23 增至 20 阅读、1 点赞、1 收藏 | 监控阅读、收藏和评论；收到技术问题时由维护者本人回复 |
 | V2EX | 待激活 | 已就绪[分享创造草稿](launch-v2ex.md)与技术事实清单；2026-10-01 账号停在邀请码激活页 | 先获得邀请码并完成账号激活，再按规范在 `create` 节点发布并亲自跟进回复 |
 | 即刻 | 待注册 | 未注册，优先级低于掘金 | 掘金账号可用后再推进，按移动端社区习惯参与 |
@@ -270,6 +270,7 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；2026-09-23 为阅读 20、点赞 1、收藏 1、评论 0 |
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
 | 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；2026-10-01 登录复核仅原帖 1 条、0 条回复 |
+| 2026-10-11 | Reddit `r/mcp` / Discord `showcase` | [Reddit 首帖](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) / [Discord 主题](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | v0.3.6 发布后按最小改动同步正文版本引用：Reddit `v0.3.5`→`v0.3.6` 两处、Discord `v0.3.2`→`v0.3.6` 两处；经公开 RSS 与整页刷新复核通过；两处均无新评论/回复 |
 
 ### 开源目录收录 PR
 
