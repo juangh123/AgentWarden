@@ -170,6 +170,14 @@ https://discord.com/channels/1312302100125843476/1544674994423074867/threads/155
 | `raw.githubusercontent.com/juangh123/AgentWarden/v<旧版本>/` | `.../v0.3.6/` |
 | `uses: juangh123/AgentWarden@v<旧版本>` | `@v0.3.6` |
 
+机械操作要点（2026-10-11 实操记录，替换完成后都要复核）：
+
+- Reddit：在 `old.reddit.com` 首帖点 `edit` 打开行内编辑框，只替换版本号后
+  `save`；随后用 `https://www.reddit.com/r/mcp/comments/1wh2kyb/.rss`
+  复核旧版本号已消失。
+- Discord：打开主题后在底部输入框按 `↑` 进入原帖编辑，替换后点提示条上的
+  “保存”链接提交；整页刷新确认改动已持久化。
+
 ### v0.3.6（2026-10-11）逐渠道状态
 
 | 渠道 | 需要的动作 | 2026-10-11 复核结果 |
