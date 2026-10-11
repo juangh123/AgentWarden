@@ -71,7 +71,7 @@ export async function main(): Promise<void> {
   if (command === 'verify') {
     const target = positionals[1];
     if (!target) usageError(`Missing skill path to verify. Usage: agentwarden verify <path/to/SKILL.md>`);
-    cmdVerify(target, buildConfig(options));
+    cmdVerify(target, buildConfig(options), resolveFormat(options));
     return;
   }
 

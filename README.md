@@ -181,6 +181,8 @@ agentwarden verify .agentwarden/skills/weather
 agentwarden verify fixtures/safe-skill.md
 agentwarden verify .agentwarden/skills/weather.md
 
+`verify` 支持 `--json`，输出 `verified`、`key`、`score`、`expectedSha256`、`actualSha256`、发布者策略状态，以及失败时的 `reason`（篡改、包元数据缺失、发布者策略、未登记技能），便于 CI 直接消费。
+
 # 审计所有已安装技能的本地完整性，并按当前策略重新扫描
 agentwarden audit
 

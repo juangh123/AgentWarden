@@ -147,4 +147,61 @@ describe('CLI contract', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('verifies a locked skill and reports a machine-readable verdict', () => {
+    const dir = tempDir('agentwarden-cli-verify-');
+    try {
+      fs.copyFileSync(
+        path.join(PROJECT_ROOT, 'fixtures', 'safe-skill.md'),
+        path.join(dir, 'safe-skill.md'),
+      );
+      const installed = runCli(['-C', dir, 'install', 'safe-skill.md', '--json'], PROJECT_ROOT);
+      assert.equal(installed.status, 0, installed.stderr);
+
+      const verified = runCli(['-C', dir, 'verify', 'safe-skill.md', '--json'], PROJECT_ROOT);
+      assert.equal(verified.status, 0);
+      const verdict = JSON.parse(verified.stdout) as {
+        verified: boolean;
+        key: string;
+        score: number;
+        expectedSha256: string;
+        actualSha256: string;
+        publisherPolicyPassed: boolean;
+      };
+      assert.equal(verdict.verified, true);
+      assert.equal(verdict.key, 'safe-weather-reporter');
+      assert.equal(verdict.score, 100);
+      assert.equal(verdict.expectedSha256, verdict.actualSha256);
+      assert.equal(verdict.publisherPolicyPassed, true);
+
+      fs.appendFileSync(path.join(dir, 'safe-skill.md'), '\n<!-- tampered -->\n');
+      const tampered = runCli(['-C', dir, 'verify', 'safe-skill.md', '--json'], PROJECT_ROOT);
+      assert.equal(tampered.status, 1);
+      const tamperedVerdict = JSON.parse(tampered.stdout) as {
+        verified: boolean;
+        reason: string;
+        expectedSha256: string;
+        actualSha256: string;
+      };
+      assert.equal(tamperedVerdict.verified, false);
+      assert.equal(tamperedVerdict.reason, 'tampered');
+      assert.notEqual(tamperedVerdict.expectedSha256, tamperedVerdict.actualSha256);
+
+      const missingPath = runCli(['-C', dir, 'verify', 'does-not-exist.md', '--json'], PROJECT_ROOT);
+      assert.equal(missingPath.status, 2);
+
+      fs.writeFileSync(
+        path.join(dir, 'unregistered.md'),
+        '---\nname: unregistered-skill\nversion: 1.0.0\n---\n# U\n',
+        'utf8',
+      );
+      const unregistered = runCli(['-C', dir, 'verify', 'unregistered.md', '--json'], PROJECT_ROOT);
+      assert.equal(unregistered.status, 1);
+      const unregisteredVerdict = JSON.parse(unregistered.stdout) as { verified: boolean; reason: string };
+      assert.equal(unregisteredVerdict.verified, false);
+      assert.equal(unregisteredVerdict.reason, 'not-registered');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

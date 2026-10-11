@@ -66,6 +66,11 @@ versioning.
 
 ### Changed
 
+- `verify` honours `--format`/`--json` instead of silently printing the pretty
+  report. It now emits a machine-readable verdict with `verified`, `key`,
+  `score`, `expectedSha256`, `actualSha256`, publisher-policy status, and a
+  failure `reason` covering tampered content, tampered packages, invalid
+  package metadata, publisher policy, and unregistered skills.
 - Ordering in lockfiles, baselines, CycloneDX documents, discovery results and
   reports uses a locale-independent comparator, so generated artifacts are
   stable across machines and locales.
