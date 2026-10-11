@@ -630,12 +630,14 @@ npm run typecheck
 npm test
 npm run smoke
 npm run test:package
+npm run test:mvp
 npm run test:git-install
 ```
 
 ```text
 src/
-  cli.ts               CLI 入口与参数解析（命令、选项、退出码）
+  cli.ts               可执行入口：shebang 与顶层错误映射（22 行）
+  cli/                 命令实现：args / config / shared / help / main 与 commands/*
   baseline/            发现基线生成、校验、应用与稳定指纹
   git/                 Git 变更集解析与增量扫描范围
   source/              远程下载、Ed25519 验签、安全 tar.gz 解包与整包指纹
