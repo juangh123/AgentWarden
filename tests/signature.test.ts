@@ -5,9 +5,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
+  DEFAULT_MAX_PUBLIC_KEY_BYTES,
+  DEFAULT_MAX_SIGNATURE_BYTES,
   SignatureError,
   loadEd25519PublicKey,
   resolveSignatureBytes,
+  verifyEd25519Signature,
   verifyPayloadSignature,
   type SignatureErrorCode,
 } from '../src/source/signature.ts';
@@ -140,5 +143,142 @@ describe('Ed25519 signature verification', () => {
       fetchImpl: async () => new Response(signature.toString('base64')),
     });
     assert.equal(result.signatureSource, 'http://127.0.0.1:8080/payload.sig');
+  });
+});
+
+describe('signature reference handling', () => {
+  it('reads a bare base64 key file and prefixed signature references', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'skillguard-signature-refs-'));
+    try {
+      const { publicDerBase64, privateKey } = createSigningMaterial();
+      const payload = Buffer.from('prefixed payload', 'utf8');
+      const signature = crypto.sign(null, payload, privateKey);
+
+      // A .pub file holding the base64 text of a SPKI DER key, with no prefix.
+      const bareKey = path.join(directory, 'publisher-bare.pub');
+      fs.writeFileSync(bareKey, publicDerBase64, 'utf8');
+      const loaded = loadEd25519PublicKey(bareKey, directory);
+      assert.equal(loaded.key.asymmetricKeyType, 'ed25519');
+      assert.equal(loaded.sha256.length, 64);
+
+      const viaHex = await resolveSignatureBytes(`hex:${signature.toString('hex')}`);
+      assert.equal(viaHex.bytes.byteLength, 64);
+      const viaBase64 = await resolveSignatureBytes(`base64:${signature.toString('base64')}`);
+      assert.equal(viaBase64.bytes.byteLength, 64);
+
+      const verified = await verifyPayloadSignature(payload, {
+        publicKey: bareKey,
+        signature: `hex:${signature.toString('hex')}`,
+        cwd: directory,
+      });
+      assert.equal(verified.signatureSha256.length, 64);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects signature text that is not raw, hex, or canonical base64', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'skillguard-signature-text-'));
+    try {
+      const cases: Array<[string, string, RegExp]> = [
+        ['base64 text of the wrong length', 'AAAAA', /raw 64-byte Ed25519 signature, hex, or base64/],
+        ['non-canonical base64', 'QR==', /canonical base64/],
+        ['unparseable text', 'zz!!not-a-signature', /raw 64-byte Ed25519 signature, hex, or base64/],
+      ];
+      for (const [label, content, pattern] of cases) {
+        const file = path.join(directory, `${label.replace(/\s+/g, '-')}.sig`);
+        fs.writeFileSync(file, content, 'utf8');
+        await assert.rejects(
+          resolveSignatureBytes(file, { cwd: directory }),
+          (error: unknown) => {
+            assert.ok(error instanceof SignatureError, `${label} should raise SignatureError`);
+            assert.equal(error.code, 'INVALID_SIGNATURE', label);
+            assert.match(error.message, pattern, label);
+            return true;
+          },
+        );
+      }
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects inline key references that are unusable or oversized', () => {
+    expectSignatureError(
+      () => loadEd25519PublicKey('base64:!!!not-base64!!!'),
+      'INVALID_PUBLIC_KEY',
+      /not valid base64 data/,
+    );
+    expectSignatureError(
+      () =>
+        loadEd25519PublicKey(
+          `base64:${Buffer.alloc(DEFAULT_MAX_PUBLIC_KEY_BYTES + 1).toString('base64')}`,
+        ),
+      'INVALID_PUBLIC_KEY',
+      /exceeds the 16384-byte limit/,
+    );
+  });
+
+  it('rejects signature files that are too large or unreadable', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'skillguard-signature-files-'));
+    try {
+      const asDirectory = path.join(directory, 'folder.sig');
+      fs.mkdirSync(asDirectory);
+      await assert.rejects(
+        resolveSignatureBytes(asDirectory, { cwd: directory }),
+        (error: unknown) =>
+          error instanceof SignatureError &&
+          error.code === 'INVALID_SIGNATURE' &&
+          /not a file/.test(error.message),
+      );
+
+      const oversized = path.join(directory, 'oversized.sig');
+      fs.writeFileSync(oversized, 'x');
+      fs.truncateSync(oversized, DEFAULT_MAX_SIGNATURE_BYTES + 1);
+      await assert.rejects(
+        resolveSignatureBytes(oversized, { cwd: directory }),
+        (error: unknown) =>
+          error instanceof SignatureError &&
+          error.code === 'INVALID_SIGNATURE' &&
+          /exceeds the 4096-byte limit/.test(error.message),
+      );
+
+      await assert.rejects(
+        resolveSignatureBytes(path.join(directory, 'missing.sig'), { cwd: directory }),
+        (error: unknown) =>
+          error instanceof SignatureError &&
+          error.code === 'READ_FAILED' &&
+          /Unable to read signature/.test(error.message),
+      );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a 32-byte signature when verifying directly', () => {
+    const { publicDerBase64 } = createSigningMaterial();
+    const loaded = loadEd25519PublicKey(`base64:${publicDerBase64}`);
+    expectSignatureError(
+      () => verifyEd25519Signature(Buffer.from('payload', 'utf8'), Buffer.alloc(32, 1), loaded),
+      'INVALID_SIGNATURE',
+      /must be 64 bytes/,
+    );
+  });
+
+  it('maps a failed remote signature download to a read error', async () => {
+    const { publicDerBase64 } = createSigningMaterial();
+    await assert.rejects(
+      verifyPayloadSignature(Buffer.from('payload', 'utf8'), {
+        publicKey: `base64:${publicDerBase64}`,
+        signature: 'https://publisher.example/weather.md.sig',
+        fetchImpl: async () => {
+          throw new Error('network unreachable');
+        },
+      }),
+      (error: unknown) =>
+        error instanceof SignatureError &&
+        error.code === 'READ_FAILED' &&
+        /Unable to download signature/.test(error.message),
+    );
   });
 });

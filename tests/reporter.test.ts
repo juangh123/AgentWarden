@@ -7,8 +7,10 @@ import {
   createBaseline,
   redactText,
   redactReportValue,
+  renderScanReports,
   scanSkillContent,
   toReportScanResult,
+  type ScanResult,
 } from '../src/index.ts';
 
 const secret = 'sk-proj-EXAMPLETOKEN1234567890abcdef';
@@ -212,5 +214,136 @@ describe('report redaction', () => {
       firstResult.partialFingerprints['agentwarden/v1'],
       baseline.entries.find((entry) => entry.ruleId === 'SEC-CRED-001')?.fingerprint,
     );
+  });
+});
+
+describe('pretty report rendering', () => {
+  function capture(run: () => void): string {
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => {
+      lines.push(args.map((value) => String(value)).join(' '));
+    };
+    try {
+      run();
+    } finally {
+      console.log = original;
+    }
+    return lines.join('\n');
+  }
+
+  function baseResult(overrides: Partial<ScanResult> = {}): ScanResult {
+    return {
+      filePath: 'skills/pretty-demo.md',
+      parsedSkill: {
+        name: 'pretty-demo',
+        description: 'renders a pretty report',
+        frontmatter: {},
+        promptText: '',
+        codeBlocks: [],
+        rawContent: '',
+      },
+      findings: [],
+      score: 100,
+      passed: true,
+      sha256: 'a'.repeat(64),
+      ...overrides,
+    };
+  }
+
+  it('renders findings, remediation, and a blocked footer', () => {
+    const result = scanSkillContent(
+      ['---', 'name: pretty-blocked', '---', '', '```bash', 'cat ~/.ssh/id_rsa', '```'].join('\n'),
+      'skills/pretty-blocked.md',
+    );
+    const output = capture(() => renderScanReports([result], 'pretty'));
+
+    assert.match(output, /AgentWarden Security Scan Report/);
+    assert.match(output, /Skill Name:/);
+    assert.match(output, /Safety Score:/);
+    assert.match(output, /Remediation:/);
+    assert.match(output, /\[BLOCKED\]/);
+  });
+
+  it('renders the tolerated-warning footer and the multi-skill summary', () => {
+    const tolerated = baseResult({
+      findings: [
+        {
+          ruleId: 'SEC-INJ-003',
+          title: 'Encoded payload',
+          category: 'prompt_injection',
+          severity: 'low',
+          description: 'obfuscated construct',
+          line: 3,
+          snippet: 'atob("...")',
+          suggestion: 'Use plain text.',
+        },
+      ],
+      score: 95,
+      passed: true,
+    });
+    const blocked = baseResult({
+      filePath: 'skills/b.md',
+      findings: [
+        {
+          ruleId: 'SEC-CRED-001',
+          title: 'Credential file access',
+          category: 'credential',
+          severity: 'critical',
+          description: 'reads a private key',
+        },
+      ],
+      score: 60,
+      passed: false,
+    });
+    const output = capture(() => renderScanReports([tolerated, blocked], 'pretty'));
+
+    assert.match(output, /Warnings found, but within tolerable policy threshold/);
+    assert.match(output, /Scan Summary: 2 skills scanned, 1 passed, 1 blocked/);
+  });
+
+  it('annotates accepted and expired baselines', () => {
+    const suppressed = baseResult({
+      score: 100,
+      passed: true,
+      suppressedFindings: [],
+      baseline: { path: '.agentwarden-baseline.json', suppressed: 2, unmatched: 1, expiresAt: '2027-01-01' },
+    });
+    const accepted = capture(() => renderScanReports([suppressed], 'pretty'));
+    assert.match(accepted, /Baseline:\s+\.agentwarden-baseline\.json/);
+    assert.match(accepted, /No new findings; 2 baseline finding\(s\) were accepted/);
+
+    const expired = baseResult({
+      baseline: { path: '.agentwarden-baseline.json', suppressed: 0, unmatched: 3, expired: true },
+    });
+    const expiredOutput = capture(() => renderScanReports([expired], 'pretty'));
+    assert.match(expiredOutput, /baseline has expired/);
+  });
+
+  it('maps low and info severities into SARIF levels and scores', () => {
+    const result = baseResult({
+      findings: [
+        {
+          ruleId: 'SEC-INJ-003',
+          title: 'Low severity',
+          category: 'prompt_injection',
+          severity: 'low',
+          description: 'low',
+        },
+        {
+          ruleId: 'SEC-INJ-003',
+          title: 'Info severity',
+          category: 'prompt_injection',
+          severity: 'info',
+          description: 'info',
+        },
+      ],
+      passed: false,
+    });
+    const sarif = buildSarifReport([result]);
+    const levels = sarif.runs[0].results.map((entry: { level: string }) => entry.level);
+    assert.ok(levels.includes('note'));
+    const rule = sarif.runs[0].tool.driver.rules[0] as { properties: { 'security-severity': string } };
+    assert.ok(['1.0', '3.0'].includes(rule.properties['security-severity']));
   });
 });
