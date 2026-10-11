@@ -1,5 +1,26 @@
 # AgentWarden 冷启动执行清单
 
+> 状态更新（2026-10-11）：`v0.3.6` 已正式发布。npm `agentwarden-cli@0.3.6`
+> 为 `latest`，由 Trusted Publisher 通过 OIDC 生成 provenance；GitHub Release
+> `v0.3.6` 附带 `agentwarden-cli-0.3.6.tgz` 与 `SHA256SUMS`，浮动标签 `v0.3`
+> 指向发布提交 `6a9136d`。npm 返回的 `sha512` 与仓库内提交的 tarball 逐字节一致，
+> 即发布的确实是门禁校验过的同一份产物；消费者侧在临时目录安装后 `--version`
+> 与四个 bin 别名均正常。发布后 CI 全绿（Node 22/24 单测、action-smoke、三平台
+> package-smoke、mvp-packaging、git-install-smoke），其中 `action-smoke` 已改为运行
+> **已发布**的 `juangh123/AgentWarden@v0.3.6`。
+> 首次打 tag 的发布在 `npm test` 阶段失败：新增的 pretty 报告断言假定文本连续，
+> 而未设置 `NO_COLOR` 的环境（即 CI）里 chalk 会插入 ANSI 转义导致失配，本地
+> shell 恰好设置了 `NO_COLOR` 所以未暴露。修复为断言前剥离 ANSI，并在着色开/关
+> 与 Node 22/24 下分别验证；随后先让 Linux CI 全绿，再确认 npm 与 GitHub 上
+> `0.3.6` 均为 404（首次失败没有发布任何产物），才把从未发布的 tag 移到修复后的
+> 提交并重发。
+> 本次内容：检测覆盖（中日韩指令覆盖、下载到文件再执行链、通用外传调用、敏感系统
+> 路径）、配置与报告失败关闭、安装目录事务化（不得删除非受管目录）、发布者与供应链
+> 加固（Actions 固定 SHA、作业级最小权限、`v0.3` 浮动标签）、CLI 从 2598 行拆为模块
+> （入口 22 行）、`verify --json`、`strict` 外加 6 项编译开关、整仓行覆盖率 72%→79%。
+> 遗留：历史 `v0` 标签仍停在 `v0.3.5` 提交且不再前进（是否删除由维护者决定）；
+> 合并后的 `codex/release-v0.3.6` 分支仍在远端，可删除。
+
 > 状态更新（2026-10-01）：`agentwarden-cli@0.3.5` 与 GitHub Release `v0.3.5`
 > 已完成发布。仓库外干净目录复核 `--version`、安全样例退出码 `0`、恶意样例退出码
 > `1` 均通过，浮动的 `v0` 标签也已指向 `v0.3.5` 发布提交。

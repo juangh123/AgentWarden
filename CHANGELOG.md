@@ -4,7 +4,7 @@ All notable changes to AgentWarden are documented here. The project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic
 versioning.
 
-## [0.3.6] - 2026-10-10
+## [0.3.6] - 2026-10-11
 
 ### Fixed
 
