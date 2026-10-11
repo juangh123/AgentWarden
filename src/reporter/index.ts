@@ -89,7 +89,8 @@ export function buildSarifReport(results: ScanResult[], options: ReportOptions =
         },
         results: reportResults.flatMap((result, resultIndex) => {
           return result.findings.map((finding, findingIndex) => {
-            const fingerprint = fingerprintsByResult[resultIndex][findingIndex];
+            // fingerprintsByResult holds one fingerprint list per result, in order.
+            const fingerprint = fingerprintsByResult[resultIndex]![findingIndex]!;
             return {
               ruleId: finding.ruleId,
               ruleIndex: ruleIndexById.get(finding.ruleId) ?? 0,

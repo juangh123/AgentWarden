@@ -484,7 +484,7 @@ function finalizePackage(files: SkillPackageFile[]): SkillPackage {
     );
   }
 
-  const entry = entries[0];
+  const entry = entries[0]!;
   const entryDirectory = path.posix.dirname(entry.path);
   const rootPrefix = entryDirectory === '.' ? '' : `${entryDirectory}/`;
   const normalizedFiles = files.map((file) => {
@@ -535,7 +535,8 @@ function parseTar(
     }
     verifyTarChecksum(header);
 
-    const typeFlag = header[156] === 0 ? '0' : String.fromCharCode(header[156]);
+    const typeFlagByte = header[156] ?? 0;
+    const typeFlag = typeFlagByte === 0 ? '0' : String.fromCharCode(typeFlagByte);
     const headerSize = parseTarNumber(header.subarray(124, 136), 'size');
     const effectiveSize = pendingMetadata?.size ?? headerSize;
     const paddedSize = Math.ceil(effectiveSize / 512) * 512;

@@ -15,6 +15,7 @@ export function cmdVerify(target: string, config: SkillGuardConfig): void {
   const lock = readLockfile();
   const packageKey = Object.keys(lock.skills).find((candidate) => {
     const item = lock.skills[candidate];
+    if (item === undefined) return false;
     if (!item.packageFormat) return false;
     const packageRoot = path.dirname(resolveFromRoot(item.source));
     const relative = path.relative(packageRoot, fullPath);
@@ -23,6 +24,10 @@ export function cmdVerify(target: string, config: SkillGuardConfig): void {
 
   if (packageKey) {
     const lockedEntry = lock.skills[packageKey];
+    if (lockedEntry === undefined) {
+      console.error(chalk.red(`Skill "${packageKey}" is missing from skills.lock.`));
+      process.exit(EXIT_FAIL);
+    }
     if (
       !lockedEntry.packageSha256 ||
       !lockedEntry.packageEntry ||

@@ -53,6 +53,7 @@ function globToRegExp(pattern: string): RegExp {
 
   for (let index = 0; index < normalized.length; index++) {
     const char = normalized[index];
+    if (char === undefined) break;
     if (char === '*') {
       if (normalized[index + 1] === '*') {
         index++;

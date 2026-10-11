@@ -19,6 +19,9 @@ export function cmdList(lock: LockfileSchema, format: ReportFormat): void {
   if (format === 'json') {
     const skills = names.map((name): LockedSkill => {
       const entry = lock.skills[name];
+      if (entry === undefined) {
+        throw new Error(`skills.lock entry "${name}" is missing.`);
+      }
       return {
         ...entry,
         ...(entry.remoteUrl ? { remoteUrl: redactText(entry.remoteUrl) } : {}),
@@ -38,6 +41,7 @@ export function cmdList(lock: LockfileSchema, format: ReportFormat): void {
   console.log(chalk.gray('─'.repeat(78)));
   for (const name of names) {
     const item = lock.skills[name];
+    if (item === undefined) continue;
     const src = normalizePath(item.source);
     console.log(
       `  ${chalk.bold.white(name.padEnd(28))} ${chalk.gray('v' + String(item.version).padEnd(8))} ` +

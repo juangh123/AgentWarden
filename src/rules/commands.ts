@@ -27,7 +27,9 @@ function detectDownloadAndExecuteChains(parsed: ParsedSkill): Finding[] {
     const lines = block.code.split(/\r?\n/);
 
     for (let index = 0; index < lines.length; index++) {
-      const target = lines[index].match(DOWNLOAD_TO_FILE)?.[1]?.trim();
+      const line = lines[index];
+      if (line === undefined) continue;
+      const target = line.match(DOWNLOAD_TO_FILE)?.[1]?.trim();
       if (!target) continue;
 
       const escaped = escapeRegExp(target);
@@ -37,6 +39,7 @@ function detectDownloadAndExecuteChains(parsed: ParsedSkill): Finding[] {
       const lastIndex = Math.min(index + CHAIN_WINDOW, lines.length - 1);
       for (let lookahead = index; lookahead <= lastIndex; lookahead++) {
         const candidate = lines[lookahead];
+        if (candidate === undefined) continue;
         if (lookahead === index && !/[;&|]/.test(candidate)) continue;
         if (!executes.test(candidate) && !chmods.test(candidate)) continue;
 

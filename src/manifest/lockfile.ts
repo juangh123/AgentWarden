@@ -414,7 +414,11 @@ export function writeLockfile(data: LockfileSchema, cwd: string = process.cwd())
     skills: createSkillMap(),
   };
   for (const key of Object.keys(data.skills).sort(compareStrings)) {
-    sorted.skills[key] = data.skills[key];
+    const entry = data.skills[key];
+    if (entry === undefined) {
+      throw new Error(`Cannot write ${LOCKFILE_NAME}: entry "${key}" is missing.`);
+    }
+    sorted.skills[key] = entry;
   }
   const serialized = JSON.stringify(sorted, null, 2) + '\n';
   parseLockfile(serialized, lockPath);

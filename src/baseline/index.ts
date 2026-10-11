@@ -146,7 +146,8 @@ export function createBaseline(
     const fingerprints = fingerprintsForResult(result, cwd);
     result.findings.forEach((finding, index) => {
       entries.push({
-        fingerprint: fingerprints[index],
+        // fingerprintsForResult returns exactly one fingerprint per finding.
+        fingerprint: fingerprints[index]!,
         ruleId: finding.ruleId,
         file: normalizeFindingPath(result.filePath, cwd),
         line: finding.line,
@@ -296,7 +297,7 @@ export function applyBaseline(
   const matched = new Set<string>();
 
   result.findings.forEach((finding, index) => {
-    const fingerprint = currentFingerprints[index];
+    const fingerprint = currentFingerprints[index]!;
     if (fingerprints.has(fingerprint)) {
       suppressedFindings.push(finding);
       matched.add(fingerprint);
@@ -465,7 +466,7 @@ function maintainBaseline(
   for (const result of results) {
     const fingerprints = fingerprintsForResult(result, cwd);
     result.findings.forEach((finding, index) => {
-      const fingerprint = fingerprints[index];
+      const fingerprint = fingerprints[index]!;
       const bucket = remaining.get(fingerprint);
       if (bucket && bucket.length > 0) {
         kept.push(bucket.shift()!);

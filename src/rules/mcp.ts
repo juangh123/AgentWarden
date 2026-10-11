@@ -46,8 +46,10 @@ function packageSpecsForRunner(args: string[]): string[] {
 
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
+    if (arg === undefined) break;
     if (arg === '--') {
-      if (args[index + 1]) positional.push(args[index + 1]);
+      const next = args[index + 1];
+      if (next) positional.push(next);
       break;
     }
     if (arg === '-p' || arg === '--package' || arg === '--from') {

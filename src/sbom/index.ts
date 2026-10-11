@@ -106,8 +106,8 @@ function canonicalJson(value: unknown): string {
 
 function deterministicUuid(seed: string): string {
   const bytes = Buffer.from(sha256(seed), 'hex');
-  bytes[6] = (bytes[6] & 0x0f) | 0x50;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
   const hex = bytes.toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(
     16,
@@ -337,9 +337,12 @@ function skillComponent(
 }
 
 function sortedEntries(lock: LockfileSchema): LockedSkill[] {
-  return Object.keys(lock.skills)
-    .sort(compareStrings)
-    .map((key) => lock.skills[key]);
+  const entries: LockedSkill[] = [];
+  for (const key of Object.keys(lock.skills).sort(compareStrings)) {
+    const entry = lock.skills[key];
+    if (entry !== undefined) entries.push(entry);
+  }
+  return entries;
 }
 
 /**

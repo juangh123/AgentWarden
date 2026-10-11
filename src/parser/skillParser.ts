@@ -39,7 +39,8 @@ function lineNumberAt(starts: number[], index: number): number {
   let high = starts.length - 1;
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
-    if (starts[mid] <= index) low = mid;
+    const midValue = starts[mid];
+    if (midValue !== undefined && midValue <= index) low = mid;
     else high = mid - 1;
   }
   return low + 1;
@@ -179,12 +180,12 @@ export function parseSkillMarkdown(content: string, defaultName: string = 'Unnam
   // Simple YAML Frontmatter extraction
   const fmMatch = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (fmMatch) {
-    const yamlContent = fmMatch[1];
+    const yamlContent = fmMatch[1] ?? '';
     body = source.slice(fmMatch[0].length);
     yamlContent.split(/\r?\n/).forEach(line => {
       const parts = line.split(':');
       if (parts.length >= 2) {
-        const key = parts[0].trim();
+        const key = (parts[0] ?? '').trim();
         const val = parts.slice(1).join(':').trim().replace(/^['"](.*)['"]$/, '$1');
         frontmatter[key] = val;
       }
@@ -199,7 +200,7 @@ export function parseSkillMarkdown(content: string, defaultName: string = 'Unnam
   let startLine = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i] ?? '';
     const fenceMatch = line.match(/^```(\w+)?/);
 
     if (fenceMatch) {

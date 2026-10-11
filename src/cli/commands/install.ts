@@ -206,6 +206,9 @@ export function scanSkillPackage(skillPackage: SkillPackage, config: SkillGuardC
     })),
   );
   const entryResult = results[entryIndex];
+  if (entryResult === undefined) {
+    throw new SkillPackageError('MISSING_ENTRY', 'Skill package entry file could not be scanned');
+  }
 
   return {
     result: {

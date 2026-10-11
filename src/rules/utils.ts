@@ -104,13 +104,8 @@ export function isAllowedUrl(text: string, allowedDomains: string[]): boolean {
   if (allowed.length === 0) return false;
 
   return urls.every((url) => {
-    const host = url
-      .replace(/^https?:\/\//i, '')
-      .split('/')[0]
-      .split('@')
-      .pop() ?? ''
-      .split(':')[0]
-      .toLowerCase();
+    const authority = url.replace(/^https?:\/\//i, '').split('/')[0] ?? '';
+    const host = (authority.split('@').pop() ?? '').split(':')[0]?.toLowerCase() ?? '';
     return allowed.some((domain) => host === domain || host.endsWith('.' + domain));
   });
 }

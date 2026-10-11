@@ -123,6 +123,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let i = 0;
   while (i < argv.length) {
     const arg = argv[i];
+    if (arg === undefined) break;
     if (arg === '--') {
       positionals.push(...argv.slice(i + 1));
       break;

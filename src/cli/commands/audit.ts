@@ -44,6 +44,7 @@ export function cmdAudit(
 
   for (const name of keys) {
     const item = lock.skills[name];
+    if (item === undefined) continue;
     const resolvedPath = resolveFromRoot(item.source);
     const exists = fs.existsSync(item.packageFormat ? path.dirname(resolvedPath) : resolvedPath);
     let hashMatch = false;
@@ -130,6 +131,7 @@ export function cmdAudit(
 
   for (const name of keys) {
     const entry = auditResult.skills[name];
+    if (entry === undefined) continue;
     console.log(`\n• Skill: ${chalk.bold.white(name)} (${chalk.gray('v' + entry.version)})`);
     console.log(`  Source: ${entry.source}`);
     console.log(`  Locked Hash: ${chalk.gray(entry.sha256.slice(0, 16))}...`);
