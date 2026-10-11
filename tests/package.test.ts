@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createTarGz } from './helpers/tar.ts';
+import { createTarGz, paxRecords } from './helpers/tar.ts';
 import {
   SkillPackageError,
   extractSkillPackage,
@@ -319,5 +319,184 @@ describe('skill packages', () => {
     });
     assert.equal(inspection.packageMatch, false);
     assert.deepEqual(inspection.unsafePaths, ['link.txt']);
+  });
+});
+
+describe('tar reader hardening', () => {
+  const skillContent = '---\nname: tar-fixture\nversion: 1.0.0\n---\n# Fixture\n';
+  const skillEntry = (content = skillContent) => ({ path: 'SKILL.md', content });
+  const paxEntry = (records: Record<string, string>) => ({
+    path: 'pax-header-entry',
+    content: paxRecords(records),
+    typeFlag: 'x',
+  });
+
+  it('applies a PAX path header to the following entry', () => {
+    // The sibling file only lands inside the package root when the PAX path is honoured:
+    // otherwise the entry would sit at the archive root and "nested/extra.md" would be outside it.
+    const pkg = extractSkillPackage(
+      createTarGz([
+        paxEntry({ path: 'nested/SKILL.md' }),
+        skillEntry(),
+        { path: 'nested/extra.md', content: 'extra\n' },
+      ]),
+    );
+
+    assert.equal(pkg.entryPath, 'SKILL.md');
+    assert.deepEqual(pkg.files.map((file) => file.path), ['SKILL.md', 'extra.md']);
+  });
+
+  it('honours a PAX size record over the header size field', () => {
+    const content = '---\nname: pax-size\nversion: 1.0.0\n---\n# Size\n';
+    const archive = createTarGz([
+      paxEntry({ size: String(Buffer.byteLength(content, 'utf8')) }),
+      { path: 'SKILL.md', content, declaredSize: 0 },
+    ]);
+
+    const pkg = extractSkillPackage(archive);
+    assert.equal(pkg.files[0].data.toString('utf8'), content);
+  });
+
+  it('applies a GNU long-name header to the following entry', () => {
+    const pkg = extractSkillPackage(
+      createTarGz([
+        { path: 'long-name-entry', content: 'nested/SKILL.md\0', typeFlag: 'L' },
+        skillEntry(),
+        { path: 'nested/extra.md', content: 'extra\n' },
+      ]),
+    );
+
+    assert.equal(pkg.entryPath, 'SKILL.md');
+    assert.deepEqual(pkg.files.map((file) => file.path), ['SKILL.md', 'extra.md']);
+  });
+
+  it('rejects unsupported extended headers', () => {
+    const cases: Array<[string, RegExp]> = [
+      ['g', /Global PAX headers are not supported/],
+      ['K', /GNU long link names are not supported/],
+    ];
+    for (const [typeFlag, pattern] of cases) {
+      expectPackageError(
+        () => extractSkillPackage(createTarGz([{ path: 'extended', content: 'x\n', typeFlag }, skillEntry()])),
+        'UNSUPPORTED_ENTRY',
+        pattern,
+      );
+    }
+  });
+
+  it('rejects forged or truncated tar headers', () => {
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: 'SKILL.md', content: 'x', checksumOverride: '000000' }])),
+      'INVALID_ARCHIVE',
+      /checksum mismatch/,
+    );
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: 'SKILL.md', content: 'x', checksumOverride: 'zzzzzz' }])),
+      'INVALID_ARCHIVE',
+      /Invalid tar checksum/,
+    );
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: 'SKILL.md', content: 'x', declaredSize: 4096 }])),
+      'INVALID_ARCHIVE',
+      /truncated/,
+    );
+  });
+
+  it('rejects non-portable and over-long archive paths', () => {
+    const unsafe: Array<[string, RegExp]> = [
+      ['con/SKILL.md', /non-portable segment/],
+      ['trailing /SKILL.md', /non-portable segment/],
+      ['bad<>name/SKILL.md', /non-portable segment/],
+    ];
+    for (const [path, pattern] of unsafe) {
+      expectPackageError(
+        () => extractSkillPackage(createTarGz([{ path, content: 'x' }])),
+        'UNSAFE_PATH',
+        pattern,
+      );
+    }
+
+    expectPackageError(
+      () =>
+        extractSkillPackage(
+          createTarGz([
+            paxEntry({
+              path: `${Array.from({ length: 300 }, (_, index) => `d${index}`).join('/')}/SKILL.md`,
+            }),
+            skillEntry(),
+          ]),
+        ),
+      'UNSAFE_PATH',
+      /exceeds 1024 characters/,
+    );
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([paxEntry({ path: 'nested/SKILL\0.md' }), skillEntry()])),
+      'UNSAFE_PATH',
+      /NUL byte/,
+    );
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: 'a', content: 'x' }, { path: 'a/b', content: 'y' }])),
+      'UNSAFE_PATH',
+      /nested below another entry/,
+    );
+  });
+
+  it('enforces explicit file-count and unpacked-size caps', () => {
+    expectPackageError(
+      () =>
+        extractSkillPackage(
+          createTarGz([
+            { path: 'pkg/SKILL.md', content: 'x' },
+            { path: 'pkg/other.md', content: 'y' },
+          ]),
+          { maxFiles: 1 },
+        ),
+      'TOO_MANY_FILES',
+      /1-file limit/,
+    );
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: 'SKILL.md', content: '0123456789' }]), { maxUnpackedBytes: 4 }),
+      'PACKAGE_TOO_LARGE',
+      /4-byte limit/,
+    );
+  });
+
+  it('ignores absent, malformed, or foreign install markers', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-marker-'));
+    try {
+      assert.equal(readSkillPackageMarker(path.join(dir, 'missing')), undefined);
+      assert.equal(isManagedSkillDirectory(path.join(dir, 'missing')), false);
+
+      const filePath = path.join(dir, 'plain-file');
+      fs.writeFileSync(filePath, 'x', 'utf8');
+      assert.equal(isManagedSkillDirectory(filePath), false);
+
+      const markerPath = path.join(dir, '.agentwarden-skill.json');
+      const valid = {
+        schemaVersion: 1,
+        tool: 'agentwarden',
+        packageSha256: 'a'.repeat(64),
+        entryPath: 'SKILL.md',
+        installedAt: '2026-10-11T00:00:00.000Z',
+      };
+      const invalid = [
+        { ...valid, tool: 'someone-else' },
+        { ...valid, schemaVersion: 2 },
+        { ...valid, packageSha256: 'not-a-hash' },
+        { ...valid, entryPath: '../SKILL.md' },
+        { ...valid, installedAt: 'not-a-date' },
+      ];
+      for (const marker of invalid) {
+        fs.writeFileSync(markerPath, JSON.stringify(marker), 'utf8');
+        assert.equal(readSkillPackageMarker(dir), undefined, JSON.stringify(marker).slice(0, 60));
+        assert.equal(isManagedSkillDirectory(dir), false);
+      }
+
+      fs.writeFileSync(markerPath, JSON.stringify(valid), 'utf8');
+      assert.deepEqual(readSkillPackageMarker(dir), valid);
+      assert.equal(isManagedSkillDirectory(dir), true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
