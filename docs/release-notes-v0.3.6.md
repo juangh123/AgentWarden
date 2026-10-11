@@ -70,9 +70,11 @@ downgrades, and removes a destructive install path.
   command dispatch, and one module per command group). `src/cli.ts` is now a
   22-line entry point, and the CLI contract tests plus the 140-check end-to-end
   suite pass unchanged.
-- `noUncheckedIndexedAccess` is enabled, so unchecked array and
-  index-signature access is a compile error; every affected site now carries an
-  explicit guard or a provably in-range assertion.
+- `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` are enabled, so
+  unchecked index access and explicit `undefined` writes into optional fields
+  are compile errors. Every affected site now carries a guard, an omission, or
+  a provably in-range assertion, and the library's option bags document that
+  they accept an explicit `undefined`.
 
 ## Install Today
 

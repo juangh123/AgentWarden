@@ -8,12 +8,12 @@ export const INIT_CONFIG_PATH = '.agentwarden/policy.json';
 export const INIT_WORKFLOW_PATH = '.github/workflows/agentwarden.yml';
 
 export interface InitializeOptions {
-  profile?: PolicyProfileName;
-  workflow?: boolean;
-  force?: boolean;
-  actionRef?: string;
-  workflowPath?: string;
-  dryRun?: boolean;
+  profile?: PolicyProfileName | undefined;
+  workflow?: boolean | undefined;
+  force?: boolean | undefined;
+  actionRef?: string | undefined;
+  workflowPath?: string | undefined;
+  dryRun?: boolean | undefined;
 }
 
 export interface InitializeResult {

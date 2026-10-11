@@ -27,7 +27,7 @@ export interface ApprovedPolicyOptions {
   /** Git ref, branch, tag, or commit that carries the approved policy. */
   base: string;
   /** Repository-relative config path. Defaults to auto-discovery on the base ref. */
-  configPath?: string;
+  configPath?: string | undefined;
   /** Working directory used to locate the repository. */
   cwd?: string;
 }

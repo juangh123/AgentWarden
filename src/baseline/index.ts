@@ -36,18 +36,18 @@ export interface BaselineSchema {
 }
 
 export interface CreateBaselineOptions {
-  owner?: string;
-  expiresAt?: string | Date;
-  note?: string;
-  reviewedAt?: string | Date;
+  owner?: string | undefined;
+  expiresAt?: string | Date | undefined;
+  note?: string | undefined;
+  reviewedAt?: string | Date | undefined;
 }
 
 export interface ApplyBaselineOptions {
-  baselinePath?: string;
-  cwd?: string;
-  failOn?: Severity;
-  minScore?: number;
-  now?: string | Date;
+  baselinePath?: string | undefined;
+  cwd?: string | undefined;
+  failOn?: Severity | undefined;
+  minScore?: number | undefined;
+  now?: string | Date | undefined;
 }
 
 export interface InspectBaselineOptions {
@@ -76,10 +76,10 @@ export interface BaselineInspection {
 }
 
 export interface MaintainBaselineOptions extends InspectBaselineOptions {
-  owner?: string;
-  expiresAt?: string | Date;
-  note?: string;
-  reviewedAt?: string | Date;
+  owner?: string | undefined;
+  expiresAt?: string | Date | undefined;
+  note?: string | undefined;
+  reviewedAt?: string | Date | undefined;
 }
 
 export interface BaselineMaintenance {
@@ -150,7 +150,7 @@ export function createBaseline(
         fingerprint: fingerprints[index]!,
         ruleId: finding.ruleId,
         file: normalizeFindingPath(result.filePath, cwd),
-        line: finding.line,
+        ...(finding.line !== undefined ? { line: finding.line } : {}),
         severity: finding.severity,
         acceptedAt: createdAt,
       });
@@ -477,7 +477,7 @@ function maintainBaseline(
           fingerprint,
           ruleId: finding.ruleId,
           file: normalizeFindingPath(result.filePath, cwd),
-          line: finding.line,
+          ...(finding.line !== undefined ? { line: finding.line } : {}),
           severity: finding.severity,
           acceptedAt: now,
         });

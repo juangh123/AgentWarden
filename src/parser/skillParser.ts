@@ -158,9 +158,9 @@ function parseMcpJson(raw: string, defaultName: string): ParsedSkill {
     codeBlocks,
     rawContent: raw,
     kind: 'mcp',
-    parseError: hasServersObject
-      ? undefined
-      : 'MCP configuration must define a server object at a supported location.',
+    ...(hasServersObject
+      ? {}
+      : { parseError: 'MCP configuration must define a server object at a supported location.' }),
     mcpServers,
   };
 }

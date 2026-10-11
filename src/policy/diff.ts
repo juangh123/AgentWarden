@@ -63,7 +63,12 @@ function compareSeverityOverrides(
     const before = beforeValues[key];
     const after = afterValues[key];
     if (before === undefined) {
-      changes.push({ field: 'severityOverrides', key, kind: 'added', after });
+      changes.push({
+        field: 'severityOverrides',
+        key,
+        kind: 'added',
+        ...(after !== undefined ? { after } : {}),
+      });
     } else if (after === undefined) {
       changes.push({ field: 'severityOverrides', key, kind: 'removed', before });
     } else if (before !== after) {

@@ -70,12 +70,16 @@ versioning.
   reports uses a locale-independent comparator, so generated artifacts are
   stable across machines and locales.
 - `tsconfig.json` enables `noUnusedLocals`, `noUnusedParameters`,
-  `noImplicitOverride`, `noFallthroughCasesInSwitch` and
-  `noUncheckedIndexedAccess`; the dead `parseConfigFile` helper, an unused
-  `EXIT_OK` constant, a redundant import, and an unused `options` parameter
-  were removed to satisfy them. Unchecked index access is now a compile error:
-  object lookups gained explicit guards, and only provably in-range lockstep
-  array reads use assertions.
+  `noImplicitOverride`, `noFallthroughCasesInSwitch`,
+  `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`; the dead
+  `parseConfigFile` helper, an unused `EXIT_OK` constant, a redundant import,
+  and an unused `options` parameter were removed to satisfy them. Unchecked
+  index access is now a compile error: object lookups gained explicit guards,
+  and only provably in-range lockstep array reads use assertions. Under
+  `exactOptionalPropertyTypes`, input option bags document that they accept an
+  explicit `undefined`, while serialized records (baseline entries, findings,
+  scan results, package entry metadata) omit absent fields instead of writing
+  `undefined` into them.
 - Aborting a risky install now sets the exit code and returns instead of
   calling `process.exit()`, so the scan report printed immediately before the
   abort cannot be truncated. `scan`, `audit`, `rules`, `policy diff`,

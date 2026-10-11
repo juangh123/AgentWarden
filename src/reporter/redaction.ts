@@ -141,11 +141,15 @@ export function redactText(text: string): string {
 }
 
 function redactFinding(finding: Finding): Finding {
+  const snippet = finding.snippet === undefined ? undefined : redactText(finding.snippet);
+  const suggestion =
+    finding.suggestion === undefined ? undefined : redactText(finding.suggestion);
+
   return {
     ...finding,
     description: redactText(finding.description),
-    snippet: finding.snippet ? redactText(finding.snippet) : finding.snippet,
-    suggestion: finding.suggestion ? redactText(finding.suggestion) : finding.suggestion,
+    ...(snippet !== undefined ? { snippet } : {}),
+    ...(suggestion !== undefined ? { suggestion } : {}),
   };
 }
 
@@ -200,11 +204,13 @@ export function toReportScanResult(result: ScanResult, options: ReportOptions = 
     })),
   }) as ScanResult['parsedSkill'];
 
+  const suppressedFindings = result.suppressedFindings?.map(redactFinding);
+
   return {
     ...result,
     parsedSkill,
     findings: result.findings.map(redactFinding),
-    suppressedFindings: result.suppressedFindings?.map(redactFinding),
+    ...(suppressedFindings !== undefined ? { suppressedFindings } : {}),
   };
 }
 

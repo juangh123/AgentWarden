@@ -12,7 +12,7 @@ import { type ParsedArgs, usageError, VALID_FAIL_ON } from './args.ts';
 
 export interface BuiltConfig {
   config: SkillGuardConfig;
-  source?: string;
+  source?: string | undefined;
   sources: string[];
   explicit: boolean;
 }

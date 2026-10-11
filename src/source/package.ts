@@ -232,13 +232,11 @@ function mergeMetadata(
   current: TarEntryMetadata | undefined,
   next: TarEntryMetadata,
 ): TarEntryMetadata {
+  const mergedPath = next.path ?? current?.path;
+  const mergedSize = next.size ?? current?.size;
   return {
-    ...(current?.path !== undefined || next.path !== undefined
-      ? { path: next.path ?? current?.path }
-      : {}),
-    ...(current?.size !== undefined || next.size !== undefined
-      ? { size: next.size ?? current?.size }
-      : {}),
+    ...(mergedPath !== undefined ? { path: mergedPath } : {}),
+    ...(mergedSize !== undefined ? { size: mergedSize } : {}),
   };
 }
 
@@ -552,8 +550,9 @@ function parseTar(
     if (typeFlag === 'x') {
       const pax = parsePaxRecords(payload);
       const paxSize = pax.get('size');
+      const paxPath = pax.get('path');
       pendingMetadata = mergeMetadata(pendingMetadata, {
-        ...(pax.has('path') ? { path: pax.get('path') } : {}),
+        ...(paxPath !== undefined ? { path: paxPath } : {}),
         ...(paxSize !== undefined ? { size: Number.parseInt(paxSize, 10) } : {}),
       });
       if (

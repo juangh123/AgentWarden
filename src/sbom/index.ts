@@ -157,10 +157,12 @@ function inspectSingleFile(
   }
 
   try {
+    // Re-checking integrity must not suppress findings through the baseline.
+    const { baseline: _baseline, ...configWithoutBaseline } = config;
     const observedSha256 = scanSkillContent(
       fs.readFileSync(resolvedPath, 'utf8'),
       resolvedPath,
-      { ...config, baseline: undefined },
+      configWithoutBaseline,
       cwd,
     ).sha256;
     return {

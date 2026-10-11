@@ -59,7 +59,7 @@ export interface Rule {
 
 export interface RuleContext {
   /** Hostnames considered trusted; matches inside allowed domains are not flagged by network rules. */
-  allowedDomains?: string[];
+  allowedDomains?: string[] | undefined;
 }
 
 export interface ScanResult {

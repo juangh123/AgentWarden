@@ -32,8 +32,10 @@ const SKIPPED_DIRECTORIES = new Set([
 ]);
 
 export interface DiscoveryOptions {
-  include?: string[];
-  exclude?: string[];
+  // Explicit `undefined` is accepted and treated as "not set": callers pass
+  // values straight from a partially parsed config.
+  include?: string[] | undefined;
+  exclude?: string[] | undefined;
 }
 
 function toRelativePosix(filePath: string, cwd: string): string {

@@ -27,7 +27,7 @@ export class RemoteSkillError extends Error {
 export interface FetchRemoteSkillOptions {
   url: string;
   expectedSha256?: string;
-  allowHttp?: boolean;
+  allowHttp?: boolean | undefined;
   maxBytes?: number;
   timeoutMs?: number;
   fetchImpl?: typeof globalThis.fetch;
