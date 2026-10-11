@@ -2,6 +2,11 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 export type FindingCategory = 'credential' | 'destructive_command' | 'prompt_injection' | 'exfiltration' | 'mcp_misconfig';
 
+/**
+ * Reserved vocabulary: the parser classifies Markdown skills as 'skill' and MCP
+ * configuration as 'mcp'. `agent-instruction` is kept for agent instruction
+ * documents (AGENTS.md-style) that the parser does not classify yet.
+ */
 export type SkillKind = 'skill' | 'mcp' | 'agent-instruction';
 
 export interface CodeBlock {

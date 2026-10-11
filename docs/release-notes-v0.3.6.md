@@ -59,6 +59,9 @@ downgrades, and removes a destructive install path.
 - Ordering in lockfiles, baselines, CycloneDX documents, discovery results, and
   reports uses a locale-independent comparator, so artifacts are stable across
   machines.
+- `verify` honours `--format`/`--json` and emits a machine-readable verdict
+  (`verified`, `key`, `score`, hashes, publisher status, and a failure reason)
+  instead of ignoring the flag and printing the pretty report.
 - Unsupported options now fail with exit code `2` instead of being silently
   ignored, an empty scan scope exits `2` rather than `1`, and report paths set
   the exit code instead of calling `process.exit()` so output cannot be
