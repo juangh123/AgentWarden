@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+import fsMutable from 'node:fs';
 import { createTarGz, paxRecords } from './helpers/tar.ts';
 import {
   SkillPackageError,
@@ -495,6 +497,251 @@ describe('tar reader hardening', () => {
       fs.writeFileSync(markerPath, JSON.stringify(valid), 'utf8');
       assert.deepEqual(readSkillPackageMarker(dir), valid);
       assert.equal(isManagedSkillDirectory(dir), true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('transactional package writes and inspection limits', () => {
+  const skill = (name = 'txn') =>
+    extractSkillPackage(
+      createTarGz([{ path: 'SKILL.md', content: `---\nname: ${name}\nversion: 1.0.0\n---\n# ${name}\n` }]),
+    );
+  const expectedPackage = (name = 'txn') => {
+    const pkg = skill(name);
+    return { entryPath: pkg.entryPath, sha256: pkg.sha256, manifest: pkg.manifest };
+  };
+
+  it('refuses to commit twice and refuses to commit after a rollback', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-txn-'));
+    try {
+      const dest = path.join(dir, 'skill');
+      const prepared = prepareSkillPackageWrite(skill(), dest);
+      assert.equal(fs.existsSync(prepared.stagingPath ?? ''), true);
+      prepared.commit();
+      expectPackageError(() => prepared.commit(), 'INSTALL_FAILED', /already been committed/);
+      prepared.finalize();
+
+      const discarded = prepareSkillPackageWrite(skill(), path.join(dir, 'other'));
+      assert.equal(discarded.rollback(), true);
+      assert.equal(discarded.stagingPath, undefined);
+      assert.equal(fs.existsSync(path.join(dir, 'other')), false);
+      expectPackageError(() => discarded.commit(), 'INSTALL_FAILED', /no staged files/);
+      assert.equal(discarded.rollback(), false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('restores the previous directory when a committed write is rolled back', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-txn-restore-'));
+    try {
+      const dest = path.join(dir, 'skill');
+      writeSkillPackage(skill('first'), dest);
+      fs.writeFileSync(path.join(dest, 'user-added.txt'), 'keep me', 'utf8');
+
+      const prepared = prepareSkillPackageWrite(skill('second'), dest, { replaceExisting: true });
+      assert.ok(prepared.removedEntries.includes('user-added.txt'));
+      assert.ok(!prepared.removedEntries.includes('.agentwarden-skill.json'));
+
+      prepared.commit();
+      assert.equal(fs.existsSync(path.join(dest, 'user-added.txt')), false);
+
+      assert.equal(prepared.rollback(), true);
+      assert.equal(fs.readFileSync(path.join(dest, 'user-added.txt'), 'utf8'), 'keep me');
+      assert.equal(prepared.restore(), false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a failed replacement and leaves the previous install intact', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-txn-fail-'));
+    const originalRename = fsMutable.renameSync;
+    try {
+      const dest = path.join(dir, 'skill');
+      writeSkillPackage(skill('first'), dest);
+
+      fsMutable.renameSync = ((from: string, to: string) => {
+        if (String(from).includes('.staging-')) {
+          const error = new Error('target is locked') as NodeJS.ErrnoException;
+          error.code = 'EPERM';
+          throw error;
+        }
+        return originalRename(from, to);
+      }) as typeof fsMutable.renameSync;
+      syncBuiltinESMExports();
+
+      expectPackageError(
+        () => writeSkillPackage(skill('second'), dest, { replaceExisting: true }),
+        'INSTALL_FAILED',
+        /Unable to install skill package/,
+      );
+
+      const installed = fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8');
+      assert.match(installed, /name: first/);
+      assert.deepEqual(
+        fs.readdirSync(dir).filter((entry) => entry.includes('.staging-') || entry.includes('.backup-')),
+        [],
+      );
+    } finally {
+      fsMutable.renameSync = originalRename;
+      syncBuiltinESMExports();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports missing and non-directory installed packages', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-inspect-'));
+    try {
+      const missing = inspectInstalledSkillPackage(path.join(dir, 'missing'), expectedPackage());
+      assert.equal(missing.exists, false);
+      assert.equal(missing.packageMatch, false);
+      assert.deepEqual(missing.missingFiles, ['SKILL.md']);
+
+      const filePath = path.join(dir, 'not-a-directory');
+      fs.writeFileSync(filePath, 'x', 'utf8');
+      const notADirectory = inspectInstalledSkillPackage(filePath, expectedPackage());
+      assert.equal(notADirectory.exists, true);
+      assert.deepEqual(notADirectory.unsafePaths, ['.']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('validates inspection limits and enforces them', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-inspect-limits-'));
+    try {
+      const dest = path.join(dir, 'skill');
+      writeSkillPackage(skill(), dest);
+
+      const cases: Array<[Record<string, number>, string]> = [
+        [{ maxFiles: 0 }, 'maxFiles'],
+        [{ maxBytes: -1 }, 'maxBytes'],
+        [{ maxDepth: 1.5 }, 'maxDepth'],
+      ];
+      for (const [options, label] of cases) {
+        expectPackageError(
+          () => inspectInstalledSkillPackage(dest, expectedPackage(), options),
+          'INSTALLED_TOO_LARGE',
+          new RegExp(`${label} must be a positive integer`),
+        );
+      }
+
+      fs.mkdirSync(path.join(dest, 'a', 'b'), { recursive: true });
+      fs.writeFileSync(path.join(dest, 'a', 'b', 'deep.md'), 'deep', 'utf8');
+      expectPackageError(
+        () => inspectInstalledSkillPackage(dest, expectedPackage(), { maxDepth: 1 }),
+        'INSTALLED_TOO_LARGE',
+        /depth limit/,
+      );
+      expectPackageError(
+        () => inspectInstalledSkillPackage(dest, expectedPackage(), { maxFiles: 1 }),
+        'INSTALLED_TOO_LARGE',
+        /1-file limit/,
+      );
+      const byteLimited = path.join(dir, 'byte-limited');
+      fs.mkdirSync(byteLimited, { recursive: true });
+      fs.writeFileSync(path.join(byteLimited, 'a.md'), 'aaaa', 'utf8');
+      fs.writeFileSync(path.join(byteLimited, 'b.md'), 'bbbb', 'utf8');
+      expectPackageError(
+        () => inspectInstalledSkillPackage(byteLimited, expectedPackage(), { maxBytes: 4 }),
+        'INSTALLED_TOO_LARGE',
+        /4-byte limit/,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('malformed tar structures', () => {
+  const skillEntry = { path: 'SKILL.md', content: '---\nname: structure\nversion: 1.0.0\n---\n# S\n' };
+  const paxEntry = (content: string) => ({ path: 'pax-header-entry', content, typeFlag: 'x' });
+
+  it('rejects malformed PAX records', () => {
+    const cases: Array<[string, RegExp]> = [
+      ['nospace', /Malformed PAX header record/],
+      ['abc x=y\n', /Invalid PAX record length/],
+      ['99 x=y\n', /PAX record exceeds its header payload/],
+      ['6 abc\n', /Malformed PAX key\/value record/],
+    ];
+    for (const [content, pattern] of cases) {
+      expectPackageError(
+        () => extractSkillPackage(createTarGz([paxEntry(content), skillEntry])),
+        'INVALID_ARCHIVE',
+        pattern,
+      );
+    }
+  });
+
+  it('rejects a file entry whose path normalises to nothing', () => {
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: './', content: 'x' }])),
+      'UNSAFE_PATH',
+      /must not be empty/,
+    );
+  });
+
+  it('rejects unsupported entry types and layouts outside the SKILL.md root', () => {
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: 'odd', content: 'x', typeFlag: '7' }, skillEntry])),
+      'UNSUPPORTED_ENTRY',
+      /Unsupported tar entry type "7"/,
+    );
+    expectPackageError(
+      () =>
+        extractSkillPackage(
+          createTarGz([
+            { path: 'pkg/SKILL.md', content: skillEntry.content },
+            { path: 'outside.md', content: 'x' },
+          ]),
+        ),
+      'INVALID_LAYOUT',
+      /outside the SKILL.md root/,
+    );
+  });
+
+  it('rejects archives without an end marker or without any files', () => {
+    expectPackageError(
+      () => extractSkillPackage(createTarGz([{ path: 'SKILL.md', content: 'x', omitEndMarker: true }])),
+      'INVALID_ARCHIVE',
+      /missing its end marker/,
+    );
+
+    const directoryOnly = createTarGz([{ path: './', content: '', typeFlag: '5' }]);
+    expectPackageError(() => extractSkillPackage(directoryOnly), 'MISSING_ENTRY', /does not contain any files/);
+  });
+
+  it('extracts a package that carries explicit directory entries', () => {
+    const pkg = extractSkillPackage(
+      createTarGz([
+        { path: './', content: '', typeFlag: '5' },
+        { path: 'nested/', content: '', typeFlag: '5' },
+        { path: 'nested/SKILL.md', content: skillEntry.content },
+        { path: 'nested/extra.md', content: 'extra\n' },
+      ]),
+    );
+
+    assert.equal(pkg.entryPath, 'SKILL.md');
+    assert.deepEqual(pkg.files.map((file) => file.path), ['SKILL.md', 'extra.md']);
+  });
+
+  it('ignores marker files whose entry path is not portable', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentwarden-marker-path-'));
+    try {
+      const markerPath = path.join(dir, '.agentwarden-skill.json');
+      const base = {
+        schemaVersion: 1,
+        tool: 'agentwarden',
+        packageSha256: 'a'.repeat(64),
+        installedAt: '2026-10-11T00:00:00.000Z',
+      };
+      for (const entryPath of ['/absolute/SKILL.md', 'nested\\SKILL.md', 'nested/./SKILL.md', 'nested/SKILL\0.md']) {
+        fs.writeFileSync(markerPath, JSON.stringify({ ...base, entryPath }), 'utf8');
+        assert.equal(readSkillPackageMarker(dir), undefined, entryPath);
+      }
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

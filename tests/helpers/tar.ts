@@ -12,6 +12,8 @@ export interface TarFile {
   checksumOverride?: string;
   /** Skip block padding, for archives whose payload deliberately runs past the end. */
   omitPadding?: boolean;
+  /** Skip the trailing end-of-archive marker, for incomplete archives. */
+  omitEndMarker?: boolean;
 }
 
 function writeOctal(target: Buffer, offset: number, length: number, value: number): void {
@@ -70,6 +72,6 @@ export function createTarGz(files: TarFile[]): Buffer {
       blocks.push(data);
     }
   }
-  blocks.push(Buffer.alloc(1024, 0));
+  if (!files.some((file) => file.omitEndMarker)) blocks.push(Buffer.alloc(1024, 0));
   return zlib.gzipSync(Buffer.concat(blocks));
 }
