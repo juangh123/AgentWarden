@@ -1,6 +1,6 @@
 {
   "name": "agentwarden-cli",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Zero-dependency static security gate, integrity lock and provenance SBOM for AI Agent Skills and MCP configurations",
   "author": "juangh123",
   "homepage": "https://github.com/juangh123/AgentWarden#readme",
@@ -72,9 +72,13 @@
     "test:mvp": "npm run build && node scripts/mvp-acceptance.mjs",
     "test:release": "npm run build && node scripts/mvp-acceptance.mjs --verify-committed",
     "test:git-install": "node scripts/git-install-smoke.mjs",
+    "bench:cold-start": "npm run build && node scripts/cold-start-benchmark.mjs",
+    "bench:cold-start:network": "npm run build && node scripts/cold-start-benchmark.mjs --network",
+    "bench:cold-start:network:repeat": "npm run build && node scripts/cold-start-benchmark.mjs --network --network-runs=3",
+    "verify:local": "npm run typecheck && npm test && npm run smoke && npm run test:package && npm audit --audit-level=high && npm audit signatures",
     "start": "node --experimental-strip-types --no-warnings src/cli.ts",
     "prepare": "npm run build",
-    "prepublishOnly": "npm run typecheck && npm test && npm run smoke && npm run test:release"
+    "prepublishOnly": "npm run verify:local && npm run test:release"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",

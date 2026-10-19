@@ -39,11 +39,11 @@ Codex 浏览器扩展在 API Key 认证下不可用，但 2026-10-01 已改用�
 mkdir agentwarden-demo
 cd agentwarden-demo
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.6/examples/safe-skill.md
-npx --yes agentwarden-cli@0.3.6 scan safe-skill.md       # 期望退出码 0
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.7/examples/safe-skill.md
+npx --yes agentwarden-cli@0.3.7 scan safe-skill.md       # 期望退出码 0
 
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.6/examples/malicious-skill.md
-npx --yes agentwarden-cli@0.3.6 scan malicious-skill.md  # 期望退出码 1
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.7/examples/malicious-skill.md
+npx --yes agentwarden-cli@0.3.7 scan malicious-skill.md  # 期望退出码 1
 ```
 
 Windows PowerShell 用户把 `curl` 换成 `curl.exe`，并用 `$LASTEXITCODE` 查看退出码。
@@ -132,13 +132,16 @@ https://discord.com/channels/1312302100125843476/1544674994423074867/threads/155
 
 ## 渠道 F：开源目录 PR 跟进
 
-| 目录 | PR | 状态（2026-10-01） |
+| 目录 | PR | 状态（2026-10-15） |
 | :--- | :--- | :--- |
 | [Awesome MCP Security](https://github.com/Puliczek/awesome-mcp-security) | [#334](https://github.com/Puliczek/awesome-mcp-security/pull/334) | 开放、`mergeable_state=clean`、0 条评论 |
 | [Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools) | [#338](https://github.com/punkpeye/awesome-mcp-devtools/pull/338) | 开放、`mergeable_state=clean`、0 条评论 |
-| [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [#603](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) | 开放、`mergeable_state=clean`、0 条评论 |
+| [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [#603](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) | 已于 2026-10-15 由维护者 `yzfly` 合并，收录至 🔒 安全与分析 |
 
 规则：每条只提交一次，不催审；维护者要求改格式或分类时在原 PR 中处理。
+
+2026-10-15 复核：`Awesome-MCP-ZH` #603 无评论、无修改请求，由维护者直接合并，
+合并提交 `e174fb5`；README 中新增的收录行与 PR 提交内容一致。
 
 ## 发布后记录
 
@@ -166,9 +169,15 @@ https://discord.com/channels/1312302100125843476/1544674994423074867/threads/155
 
 | 出现形式 | 替换为 |
 | :--- | :--- |
-| `agentwarden-cli@<旧版本>` | `agentwarden-cli@0.3.6` |
-| `raw.githubusercontent.com/juangh123/AgentWarden/v<旧版本>/` | `.../v0.3.6/` |
-| `uses: juangh123/AgentWarden@v<旧版本>` | `@v0.3.6` |
+| `agentwarden-cli@<旧版本>` | `agentwarden-cli@0.3.7` |
+| `raw.githubusercontent.com/juangh123/AgentWarden/v<旧版本>/` | `.../v0.3.7/` |
+| `uses: juangh123/AgentWarden@v<旧版本>` | `@v0.3.7` |
+
+### v0.3.7（2026-10-20，发布候选）
+
+本地源码、版本元数据和发布 tarball 已准备，尚未推送 tag 或发布 npm。
+完成发布授权后，Reddit 与 Discord 只做现有正文的最小版本同步；V2EX 和
+Hacker News 仍需维护者本人登录并撰写首发内容。
 
 机械操作要点（2026-10-11 实操记录，替换完成后都要复核）：
 

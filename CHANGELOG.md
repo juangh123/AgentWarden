@@ -4,6 +4,31 @@ All notable changes to AgentWarden are documented here. The project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic
 versioning.
 
+## [0.3.7] - 2026-10-20
+
+### Added
+
+- CI now smoke-tests the exact minimum supported runtime, Node.js 22.6.0,
+  instead of relying only on the latest Node 22 release.
+- A scheduled cold-start benchmark records local and published-package latency
+  with independent npm caches. `--network-runs` supports repeatable samples.
+- CodeQL scans JavaScript/TypeScript with the `security-extended` query pack.
+- `npm run verify:local` provides one documented local health gate, backed by an
+  operational checklist for release, dependency, traffic, and security checks.
+
+### Changed
+
+- CLI command modules are imported only for the selected command, reducing
+  help and version startup work.
+
+### Security
+
+- Node 24 CI verifies registry signatures and fails on high-severity dependency
+  advisories.
+- Manual npm publishing now runs the full local health gate, including
+  vulnerability and registry-signature checks, before release-artifact
+  verification.
+
 ## [0.3.6] - 2026-10-11
 
 ### Fixed

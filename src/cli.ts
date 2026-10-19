@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { chalk } from './reporter/chalk.ts';
-import { SkillPackageError } from './source/package.ts';
 import { EXIT_FAIL, usageError } from './cli/args.ts';
 import { main } from './cli/main.ts';
 
 try {
   await main();
 } catch (err) {
+  const { SkillPackageError } = await import('./source/package.ts');
   // A refused install destination is a usage/path problem, not a security
   // finding: report it with the documented usage exit code.
   if (

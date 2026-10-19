@@ -1,5 +1,24 @@
 # AgentWarden 冷启动执行清单
 
+> 状态更新（2026-10-20）：完成 CLI 命令模块按需加载与运维门禁优化。在 Windows
+> Node 24.19.0 / npm 11.17.0 上，当前源码的本地 `--version` 与 `--help`
+> 中位数分别为 95 ms 与 97 ms，恶意样例扫描为 137 ms；对公开 `0.3.6`
+> 的三次独立 npm 缓存采样中，冷启动 `--version` 中位数 10.1 秒、
+> 首次阻断 9.1 秒、热启动 8.0 秒、离线 1.5 秒。
+> 新增精确 Node 22.6.0 CI、依赖审计/签名校验、CodeQL 与每周冷启动基准。
+> 当前本地发布候选为 `0.3.7`；在维护者授权并推送 tag 前，线上 npm `latest`
+> 仍是 `0.3.6`。
+>
+> 状态更新（2026-10-18）：完成一次冷启动复核。npm `latest` 仍为 `0.3.6`，
+> provenance 可用；在仓库外使用全新 npm 缓存首次执行
+> `npx --yes agentwarden-cli@0.3.6 --version` 用时 12.5–13.6 秒并返回 `0`，
+> 首次阻断演示用时 8.0–9.5 秒并返回 `1`，离线 `npx --version` 约 1.9 秒；
+> 本地 `dist/cli.js` 稳态启动约 0.14–0.18 秒。本清单中的“当前公开版本”、
+> 发布 tag 示例和首次运行指标
+> 已同步到 `0.3.6`。分发侧仍无自然增长信号：npm 最近一周 206 次下载，
+> Stars / Forks / Watchers 均为 0，`v0.3.6` Release 资产下载为 0，
+> 近 14 天仓库流量为 4 次浏览 / 2 个独立访客。
+>
 > 状态更新（2026-10-11）：`v0.3.6` 已正式发布。npm `agentwarden-cli@0.3.6`
 > 为 `latest`，由 Trusted Publisher 通过 OIDC 生成 provenance；GitHub Release
 > `v0.3.6` 附带 `agentwarden-cli-0.3.6.tgz` 与 `SHA256SUMS`，浮动标签 `v0.3`
@@ -91,6 +110,32 @@ npm run test:mvp
 npm run test:release
 ```
 
+冷启动基准可重复执行：
+
+```bash
+npm run bench:cold-start
+npm run bench:cold-start:network
+npm run bench:cold-start:network:repeat
+```
+
+第一条只测量本机构建产物，不访问 registry；第二条使用全新的临时 npm 缓存
+安装 `package.json` 中的版本，因此该版本必须已经发布。基准会校验版本输出、
+扫描发现和退出码，但只报告耗时，不设置硬性性能阈值，避免 registry 或 CI
+网络波动造成假失败。`--runs=N` 可调整本地重复次数（1–50），
+`--network-runs=N` 可用彼此独立的 npm 缓存重复联网测量（1–10 次），
+`--json` 可输出机器可读结果。`Cold Start Benchmark` workflow 每周运行三次
+联网样本并保存 JSON 报告，用于识别 registry 抖动与真实回归。
+
+CI 还会用 Node `22.6.0` 精确复测最低支持版本，并用 CodeQL 的
+`security-extended` 查询扫描 JavaScript/TypeScript 源码。Node 24 作业同时执行
+`npm audit` 与 `npm audit signatures`。
+
+日常本地巡检可运行：
+
+```bash
+npm run verify:local
+```
+
 `npm run test:mvp` 会生成并校验 `release/agentwarden-cli-<version>.tgz` 与
 `release/SHA256SUMS`，再把 tarball 安装到干净目录并验证完整命令链。发布分支必须
 一并提交重新生成的这两份文件。`npm run test:release` 校验仓库内已提交的产物与
@@ -117,12 +162,12 @@ workflow 发布的就是这份已提交产物，不再在 runner 上重新打包
 agentwarden-cli
 ```
 
-`agentwarden-cli@0.3.5` 是当前公开版本，发布于 2026-09-30。
-发布完成后验证 registry 状态：
+`agentwarden-cli@0.3.7` 是待发布候选；在当前公开版本仍为 `0.3.6` 时，
+不要把候选命令标成已发布。完成 tag 发布后验证 registry 状态：
 
 ```bash
-npm view agentwarden-cli@0.3.5 version dist.integrity
-npx --yes agentwarden-cli@0.3.5 --version
+npm view agentwarden-cli@0.3.7 version dist.integrity
+npx --yes agentwarden-cli@0.3.7 --version
 ```
 
 最初的 bootstrap 版本 `0.3.2` 没有 provenance。GitHub Actions Trusted
@@ -147,8 +192,8 @@ Release workflow 在 tag 推送后执行：
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.3.5 -m "AgentWarden v0.3.5"
-git push origin v0.3.5
+git tag -a v0.3.7 -m "AgentWarden v0.3.7"
+git push origin v0.3.7
 ```
 
 workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 tarball，
@@ -156,7 +201,7 @@ workflow 会再次验证 tag 与 package version 一致，校验 CI 产出的 ta
 发布后确认：
 
 ```bash
-gh release view v0.3.5 --repo juangh123/AgentWarden
+gh release view v0.3.7 --repo juangh123/AgentWarden
 npm view agentwarden-cli version dist.integrity
 ```
 
@@ -180,8 +225,9 @@ gh repo edit juangh123/AgentWarden \
 - GitHub Discussions 已启用，用于承接用法问题
 - Private vulnerability reporting 已启用
 - `main` 已保护：8 项 CI 检查必须通过，禁止 force push 和删除
+- 新增的 `min-node` 与 CodeQL 检查需要维护者在合并后决定是否加入必需检查列表
 - Dependabot security updates 与 secret scanning push protection 已启用
-- `v0.3.3` GitHub Release 已创建，并附带 tarball 与 `SHA256SUMS`
+- `v0.3.6` GitHub Release 已公开；`v0.3.7` 将在授权发布 tag 后创建
 - GitHub Action 已发布为 `AgentWarden Security Gate`，主分类为 `Security`
 
 仓库侧冷启动已无阻塞。接下来是首发内容分发、收集真实工作流反馈，并按周记录
@@ -192,15 +238,15 @@ gh repo edit juangh123/AgentWarden \
 ### 英文短帖
 
 ```text
-AgentWarden v0.3.5 is available as agentwarden-cli.
+AgentWarden v0.3.7 is available as agentwarden-cli.
 
 It scans AI Agent Skills and MCP configurations before execution, locks reviewed
 assets with SHA-256, verifies Ed25519 publisher provenance, emits redacted SARIF,
 and exports CycloneDX SBOMs.
 
 Try an intentionally unsafe example:
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/malicious-skill.md
-npx agentwarden-cli@0.3.5 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.7/examples/malicious-skill.md
+npx agentwarden-cli@0.3.7 scan malicious-skill.md
 
 It is a static gate, not a sandbox or a guarantee. Feedback and bypass reports
 are welcome.
@@ -209,14 +255,14 @@ are welcome.
 ### 中文短帖
 
 ```text
-AgentWarden v0.3.5 已发布，npm 包名为 agentwarden-cli。
+AgentWarden v0.3.7 已发布，npm 包名为 agentwarden-cli。
 
 它可在 Agent Skill / MCP 配置进入运行时前执行静态扫描，用 skills.lock 锁定
 SHA-256 完整性，验证 Ed25519 发布者来源，并输出脱敏 SARIF 与 CycloneDX SBOM。
 
 一条命令验证阻断行为：
-curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.5/examples/malicious-skill.md
-npx agentwarden-cli@0.3.5 scan malicious-skill.md
+curl -fsSLO https://raw.githubusercontent.com/juangh123/AgentWarden/v0.3.7/examples/malicious-skill.md
+npx agentwarden-cli@0.3.7 scan malicious-skill.md
 
 它是静态安全门禁，不是沙箱，也不承诺“零风险”。欢迎提交绕过案例和真实工作流反馈。
 ```
@@ -271,6 +317,7 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |
 | 2026-09-20 | Discord `Model Context Protocol > showcase` | [AgentWarden: a static security gate for Agent Skills and MCP configs](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | 公开可见；作者 `AgentWarden`；已使用 `Security`、`CLI` 标签；2026-10-01 登录复核仅原帖 1 条、0 条回复 |
 | 2026-10-11 | Reddit `r/mcp` / Discord `showcase` | [Reddit 首帖](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) / [Discord 主题](https://discord.com/channels/1312302100125843476/1544674994423074867/threads/1550914398879486072) | v0.3.6 发布后按最小改动同步正文版本引用：Reddit `v0.3.5`→`v0.3.6` 两处、Discord `v0.3.2`→`v0.3.6` 两处；经公开 RSS 与整页刷新复核通过；两处均无新评论/回复 |
+| 2026-10-15 | [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [🔒 安全与分析](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) 收录 AgentWarden | PR #603 由维护者 `yzfly` 合并，合并提交 `e174fb5`；README 收录行与提交内容一致，全程 0 条评论 |
 
 ### 开源目录收录 PR
 
@@ -279,7 +326,7 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 | 2026-09-19 | [Awesome MCP Security](https://github.com/Puliczek/awesome-mcp-security) | [Tools and code](https://github.com/Puliczek/awesome-mcp-security/pull/334) | PR #334 开放；提交内容可合并，等待维护者审核 |
 | 2026-09-19 | [Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools) | [Testing Tools](https://github.com/punkpeye/awesome-mcp-devtools/pull/338) | PR #338 开放；提交内容可合并，等待维护者确认分类和收录 |
 | 2026-09-19 | [Awesome Agent Skills Security](https://github.com/LLMSecurity/awesome-agent-skills-security) | [Tools & Frameworks](https://github.com/LLMSecurity/awesome-agent-skills-security/pull/67) | PR #67 已于 2026-09-20 合并；项目已正式收录至 Tools & Frameworks 分类 |
-| 2026-09-23 | [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [🔒 安全与分析](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) | PR #603 开放；中文核心 MCP 资源精选，分类与表格规范已对齐，等待审核 |
+| 2026-09-23 | [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH) | [🔒 安全与分析](https://github.com/yzfly/Awesome-MCP-ZH/pull/603) | PR #603 已于 2026-10-15 由维护者 `yzfly` 合并；项目已正式收录至 🔒 安全与分析 分类 |
 
 每条收录只提交一次，不催审、不要求点赞或转发。维护者提出格式、分类或事实修正时，
 优先在原 PR 中处理；PR 合并后再按目录影响力评估是否需要补充发布记录。
@@ -304,7 +351,7 @@ npx agentwarden-cli@0.3.5 scan malicious-skill.md
 | 指标 | 说明 |
 | :--- | :--- |
 | npm weekly downloads | 是否形成自然安装 |
-| First-run success rate | `npx --yes agentwarden-cli@0.3.5 --version` 与首次扫描成功率 |
+| First-run success rate | `npx --yes agentwarden-cli@0.3.7 --version` 与首次扫描成功率 |
 | Time to first blocked finding | 从打开 README 到得到退出码 `1` 的时间 |
 | Action adoption | 引用 Action 的公开仓库数 |
 | Issue conversion | 用法、误报和规则请求分别有多少 |
