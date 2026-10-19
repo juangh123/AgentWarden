@@ -6,8 +6,9 @@
 > 的三次独立 npm 缓存采样中，冷启动 `--version` 中位数 10.1 秒、
 > 首次阻断 9.1 秒、热启动 8.0 秒、离线 1.5 秒。
 > 新增精确 Node 22.6.0 CI、依赖审计/签名校验、CodeQL 与每周冷启动基准。
-> 当前本地发布候选为 `0.3.7`；在维护者授权并推送 tag 前，线上 npm `latest`
-> 仍是 `0.3.6`。
+> `v0.3.7` 已于 2026-10-20 发布。npm `latest` 和固定版本查询均为 `0.3.7`，
+> GitHub Release 与 `v0.3` 浮动标签已更新；npm 与 GitHub 制品摘要均为
+> `8275b0cc7d94a74fbdcefb0cb42a86e228116161a0f768ff1f52068ba71e9f2c`。
 >
 > 状态更新（2026-10-18）：完成一次冷启动复核。npm `latest` 仍为 `0.3.6`，
 > provenance 可用；在仓库外使用全新 npm 缓存首次执行
@@ -162,8 +163,8 @@ workflow 发布的就是这份已提交产物，不再在 runner 上重新打包
 agentwarden-cli
 ```
 
-`agentwarden-cli@0.3.7` 是待发布候选；在当前公开版本仍为 `0.3.6` 时，
-不要把候选命令标成已发布。完成 tag 发布后验证 registry 状态：
+`agentwarden-cli@0.3.7` 是当前公开版本，发布于 2026-10-20。
+发布后 registry 状态已验证：
 
 ```bash
 npm view agentwarden-cli@0.3.7 version dist.integrity
@@ -227,7 +228,7 @@ gh repo edit juangh123/AgentWarden \
 - `main` 已保护：8 项 CI 检查必须通过，禁止 force push 和删除
 - 新增的 `min-node` 与 CodeQL 检查需要维护者在合并后决定是否加入必需检查列表
 - Dependabot security updates 与 secret scanning push protection 已启用
-- `v0.3.6` GitHub Release 已公开；`v0.3.7` 将在授权发布 tag 后创建
+- `v0.3.7` GitHub Release 已公开，并附带 tarball 与 `SHA256SUMS`
 - GitHub Action 已发布为 `AgentWarden Security Gate`，主分类为 `Security`
 
 仓库侧冷启动已无阻塞。接下来是首发内容分发、收集真实工作流反馈，并按周记录
@@ -312,6 +313,7 @@ npx agentwarden-cli@0.3.7 scan malicious-skill.md
 
 | 日期 | 渠道 | 内容 | 状态 |
 | :--- | :--- | :--- | :--- |
+| 2026-10-20 | npm / GitHub Release | [`agentwarden-cli@0.3.7`](https://www.npmjs.com/package/agentwarden-cli/v/0.3.7) / [Release `v0.3.7`](https://github.com/juangh123/AgentWarden/releases/tag/v0.3.7) | `latest=0.3.7`；SLSA provenance 可用；Release 资产 SHA-256 与本地一致 |
 | 2026-09-15 | Reddit `r/mcp` | [AgentWarden: static security gate and integrity lock for MCP configs and agent skills](https://www.reddit.com/r/mcp/comments/1wh2kyb/agentwarden_static_security_gate_and_integrity/) | 公开可见；作者 `u/Basic_Support_9438`；2026-10-01 复核 1 upvote / 0 comments / 94 views；正文示例与命令已更新到 `v0.3.5` |
 | 2026-09-16 | 掘金 `人工智能` | [Agent Skill 和 MCP 配置也需要安全门禁：从扫描到可验证的供应链](https://juejin.cn/post/7685966048847790114) | 公开可见；原创；2026-09-23 为阅读 20、点赞 1、收藏 1、评论 0 |
 | 2026-09-19 | DEV | [Agent Skills and MCP Configs Need a Security Gate](https://dev.to/agentwarden/agent-skills-and-mcp-configs-need-a-security-gate-cdf) | 公开可见；作者 `AgentWarden`；已标注 `AI-assisted`；封面、四个标签、正文和链接已核对 |

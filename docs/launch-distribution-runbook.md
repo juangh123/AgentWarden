@@ -173,11 +173,11 @@ https://discord.com/channels/1312302100125843476/1544674994423074867/threads/155
 | `raw.githubusercontent.com/juangh123/AgentWarden/v<旧版本>/` | `.../v0.3.7/` |
 | `uses: juangh123/AgentWarden@v<旧版本>` | `@v0.3.7` |
 
-### v0.3.7（2026-10-20，发布候选）
+### v0.3.7（2026-10-20）逐渠道状态
 
-本地源码、版本元数据和发布 tarball 已准备，尚未推送 tag 或发布 npm。
-完成发布授权后，Reddit 与 Discord 只做现有正文的最小版本同步；V2EX 和
-Hacker News 仍需维护者本人登录并撰写首发内容。
+npm、GitHub Release 和浮动 `v0.3` 标签已完成发布；仓库外 `npx`、安全样例
+退出 `0`、恶意样例退出 `1` 均已复核。Reddit 与 Discord 仍需在现有正文中
+做最小版本同步；V2EX 和 Hacker News 仍需维护者本人登录并撰写首发内容。
 
 机械操作要点（2026-10-11 实操记录，替换完成后都要复核）：
 
