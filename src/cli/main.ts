@@ -1,17 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chalk, setColorEnabled } from '../reporter/chalk.ts';
-import { readLockfile } from '../manifest/lockfile.ts';
 import { parseArgs, EXIT_USAGE, VERSION, validateCommandOptions, resolveFormat, usageError } from './args.ts';
-import { printHelp } from './help.ts';
-import { cmdInit, resolveInitFormat, cmdSbom, cmdRules, cmdList, cmdUninstall } from './commands/misc.ts';
-import { scanTargets } from './commands/scan.ts';
-import { buildConfig, buildConfigDetails } from './config.ts';
-import { cmdInstall } from './commands/install.ts';
-import { cmdVerify } from './commands/verify.ts';
-import { cmdAudit } from './commands/audit.ts';
-import { cmdPolicyGuard, cmdPolicyDiff, cmdPolicy } from './commands/policy.ts';
-import { cmdBaselineStatus, cmdBaselineMaintenance, cmdBaseline } from './commands/baseline.ts';
 
 export async function main(): Promise<void> {
   const { positionals, options, errors } = parseArgs(process.argv.slice(2));
@@ -40,6 +30,7 @@ export async function main(): Promise<void> {
 
   const command = positionals[0];
   if (!command || command === 'help' || command === '--help' || command === '-h' || options.help) {
+    const { printHelp } = await import('./help.ts');
     printHelp();
     return;
   }
@@ -50,6 +41,7 @@ export async function main(): Promise<void> {
     if (positionals.length > 1) {
       usageError('init does not accept positional paths');
     }
+    const { cmdInit, resolveInitFormat } = await import('./commands/misc.ts');
     cmdInit(options, resolveInitFormat(options));
     return;
   }
@@ -57,6 +49,10 @@ export async function main(): Promise<void> {
   if (command === 'scan') {
     const targets = positionals.slice(1);
     if (targets.length === 0) usageError(`Missing file or directory path to scan. Usage: agentwarden scan <path> [--format pretty|json|sarif]`);
+    const [{ scanTargets }, { buildConfig }] = await Promise.all([
+      import('./commands/scan.ts'),
+      import('./config.ts'),
+    ]);
     scanTargets(targets, buildConfig(options), resolveFormat(options), options);
     return;
   }
@@ -64,6 +60,7 @@ export async function main(): Promise<void> {
   if (command === 'install') {
     const target = positionals[1];
     if (!target) usageError(`Missing skill path to install. Usage: agentwarden install <path/to/SKILL.md|https://url> --sha256 <digest>`);
+    const { cmdInstall } = await import('./commands/install.ts');
     await cmdInstall(target, options, resolveFormat(options));
     return;
   }
@@ -71,11 +68,19 @@ export async function main(): Promise<void> {
   if (command === 'verify') {
     const target = positionals[1];
     if (!target) usageError(`Missing skill path to verify. Usage: agentwarden verify <path/to/SKILL.md>`);
+    const [{ cmdVerify }, { buildConfig }] = await Promise.all([
+      import('./commands/verify.ts'),
+      import('./config.ts'),
+    ]);
     cmdVerify(target, buildConfig(options), resolveFormat(options));
     return;
   }
 
   if (command === 'audit') {
+    const [{ cmdAudit }, { buildConfig }] = await Promise.all([
+      import('./commands/audit.ts'),
+      import('./config.ts'),
+    ]);
     cmdAudit(options, buildConfig(options), resolveFormat(options));
     return;
   }
@@ -84,11 +89,16 @@ export async function main(): Promise<void> {
     if (positionals.length > 1) {
       usageError('sbom does not accept positional paths');
     }
+    const { cmdSbom } = await import('./commands/misc.ts');
     cmdSbom(options);
     return;
   }
 
   if (command === 'rules') {
+    const [{ cmdRules }, { buildConfig }] = await Promise.all([
+      import('./commands/misc.ts'),
+      import('./config.ts'),
+    ]);
     cmdRules(buildConfig(options), resolveFormat(options));
     return;
   }
@@ -103,6 +113,7 @@ export async function main(): Promise<void> {
       if (positionals.length > 3) {
         usageError('policy guard accepts exactly one base ref');
       }
+      const { cmdPolicyGuard } = await import('./commands/policy.ts');
       cmdPolicyGuard(baseRef, options, resolveFormat(options));
       return;
     }
@@ -115,17 +126,26 @@ export async function main(): Promise<void> {
       if (positionals.length > 4) {
         usageError('policy diff accepts exactly two comparison inputs');
       }
+      const { cmdPolicyDiff } = await import('./commands/policy.ts');
       cmdPolicyDiff(from, to, options, resolveFormat(options));
       return;
     }
     if (subcommand !== undefined) {
       usageError(`Unknown policy subcommand: "${subcommand}"`);
     }
+    const [{ cmdPolicy }, { buildConfigDetails }] = await Promise.all([
+      import('./commands/policy.ts'),
+      import('./config.ts'),
+    ]);
     cmdPolicy(buildConfigDetails(options), resolveFormat(options));
     return;
   }
 
   if (command === 'list') {
+    const [{ cmdList }, { readLockfile }] = await Promise.all([
+      import('./commands/misc.ts'),
+      import('../manifest/lockfile.ts'),
+    ]);
     cmdList(readLockfile(), resolveFormat(options));
     return;
   }
@@ -133,11 +153,15 @@ export async function main(): Promise<void> {
   if (command === 'uninstall') {
     const name = positionals[1];
     if (!name) usageError(`Missing skill name to uninstall. Usage: agentwarden uninstall <name>`);
+    const { cmdUninstall } = await import('./commands/misc.ts');
     cmdUninstall(name, resolveFormat(options));
     return;
   }
 
   if (command === 'baseline') {
+    const { cmdBaselineStatus, cmdBaselineMaintenance, cmdBaseline } = await import(
+      './commands/baseline.ts'
+    );
     const subcommand = positionals[1];
     if (subcommand === 'status') {
       const targets = positionals.length > 2 ? positionals.slice(2) : ['.'];
